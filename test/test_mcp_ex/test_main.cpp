@@ -37,6 +37,7 @@ struct Env {
   DeviceRegistry devices{blobs};
   ScriptLibrary scripts{blobs};
   AutomationEngine automations{clock, rng, scripts, blobs};
+  ScheduleEngine schedules{clock, controller, blobs};
   struct Link : BleLink {
     std::vector<std::string> bonded{"aa:bb:cc:dd:ee:01"}, connected;
     int disconnects = 0;
@@ -57,8 +58,10 @@ struct Env {
     controller.begin();
     devices.begin();
     automations.begin();
+    schedules.begin();
     bluetooth.begin();
     ctx.bluetooth = &bluetooth;
+    ctx.schedules = &schedules;
     ctx.network = &net;
     ctx.devices = &devices;
     ctx.scripts = &scripts;
@@ -106,7 +109,8 @@ void test_tools_list_includes_new_tools() {
                             "list_profiles", "get_devices", "set_devices", "list_scripts", "save_script",
                             "delete_script", "run_script", "get_automations", "set_automations", "press_key",
                             "type_text", "get_network", "set_network", "restart", "get_bluetooth", "start_pairing",
-                            "disconnect_bluetooth", "reconnect_bluetooth", "forget_computer"};
+                            "disconnect_bluetooth", "reconnect_bluetooth", "forget_computer",
+                            "get_schedules", "set_schedules"};
   const size_t n = sizeof(expected) / sizeof(expected[0]);
   TEST_ASSERT_EQUAL_UINT32(n, tools.size());
   for (size_t i = 0; i < n; i++) {
@@ -114,6 +118,20 @@ void test_tools_list_includes_new_tools() {
     TEST_ASSERT_TRUE(tools[i]["description"].is<const char*>());
     TEST_ASSERT_EQUAL_STRING("object", tools[i]["inputSchema"]["type"].as<const char*>());
   }
+}
+
+void test_schedule_tools() {
+  Env e;
+  TEST_ASSERT_FALSE(isError(e.tool("get_schedules")));
+  const std::string args =
+      "{\"timezone\":\"Europe/Rome\",\"schedules\":[{\"id\":\"work\",\"enabled\":true,\"days\":[\"mon\",\"tue\"],"
+      "\"start\":\"09:00\",\"durationMin\":480}]}";
+  McpReply set = e.tool("set_schedules", args);
+  TEST_ASSERT_FALSE(isError(set));
+  TEST_ASSERT_EQUAL_STRING("work", toolText(e.tool("get_schedules"))["schedules"][0]["id"].as<const char*>());
+  TEST_ASSERT_TRUE(isError(e.tool("set_schedules", "{\"schedules\":[{\"id\":\"x\",\"days\":[],\"start\":\"09:00\",\"durationMin\":5}]}")));
+  e.ctx.schedules = nullptr;
+  TEST_ASSERT_TRUE(parse(e.tool("get_schedules").body)["error"].is<JsonObject>());  // unknown tool without the service
 }
 
 void test_tools_without_services_are_not_listed() {
@@ -323,6 +341,7 @@ int main() {
   UNITY_BEGIN();
   RUN_TEST(test_tools_list_includes_new_tools);
   RUN_TEST(test_tools_without_services_are_not_listed);
+  RUN_TEST(test_schedule_tools);
   RUN_TEST(test_legacy_mcp_matches_ex_without_services);
   RUN_TEST(test_devices_tools);
   RUN_TEST(test_script_tools_roundtrip);

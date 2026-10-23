@@ -365,6 +365,19 @@ void test_script_routes() {
   TEST_ASSERT_EQUAL_INT(404, e.call("GET", "/api/scripts/x").status);
 }
 
+void test_there_is_no_way_to_right_click() {
+  Plan p;
+  // a script cannot ask for another button: the click step has no such field
+  TEST_ASSERT_TRUE(compile(script("{\"op\":\"click\",\"button\":\"right\"}"), p).has_value());
+  TEST_ASSERT_TRUE(compile(script("{\"op\":\"rightclick\"}"), p).has_value());
+  TEST_ASSERT_TRUE(compile(script("{\"op\":\"click\",\"buttons\":2}"), p).has_value());
+  // and a plain click is one step with no payload to carry a button choice
+  TEST_ASSERT_FALSE(compile(script("{\"op\":\"click\"}"), p).has_value());
+  size_t clicks = 0;
+  for (const Step& s : p.steps) clicks += s.kind == Step::Kind::Click;
+  TEST_ASSERT_EQUAL_UINT32(1, clicks);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_compile_ops_table);
@@ -380,5 +393,6 @@ int main() {
   RUN_TEST(test_library_limits);
   RUN_TEST(test_library_invalid_script_not_stored);
   RUN_TEST(test_script_routes);
+  RUN_TEST(test_there_is_no_way_to_right_click);
   return UNITY_END();
 }

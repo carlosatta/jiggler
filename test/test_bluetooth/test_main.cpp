@@ -289,7 +289,7 @@ void test_bluetooth_routes() {
   TEST_ASSERT_TRUE(parse(p.body)["pairing"]["open"].as<bool>());
   TEST_ASSERT_EQUAL_UINT32(90000, parse(p.body)["pairing"]["remainingMs"].as<uint32_t>());
   TEST_ASSERT_EQUAL_INT(200, a.call("POST", "/api/bluetooth/pairing").status);  // default window
-  TEST_ASSERT_EQUAL_UINT32(120000, parse(a.call("GET", "/api/bluetooth").body)["pairing"]["remainingMs"].as<uint32_t>());
+  TEST_ASSERT_EQUAL_UINT32(180000, parse(a.call("GET", "/api/bluetooth").body)["pairing"]["remainingMs"].as<uint32_t>());
   TEST_ASSERT_FALSE(parse(a.call("DELETE", "/api/bluetooth/pairing").body)["pairing"]["open"].as<bool>());
 
   HttpResponse bad = a.call("POST", "/api/bluetooth/pairing", "{\"seconds\":5}");
@@ -466,6 +466,80 @@ void test_refusal_policy() {
   TEST_ASSERT_TRUE(refuseNewPeer(false, true, kMaxPairedComputers));
 }
 
+void test_pairing_window_is_three_minutes_by_default() {
+  TEST_ASSERT_EQUAL_UINT32(180, kDefaultPairingSec);
+  Env e({kA});
+  TEST_ASSERT_TRUE(e.bt.startPairing(kDefaultPairingSec).ok);
+  TEST_ASSERT_EQUAL_UINT32(180000, *e.bt.status().pairingRemainingMs);
+}
+
+void test_window_closes_by_itself_when_a_computer_pairs() {
+  Env e({kA});
+  e.bt.startPairing(kDefaultPairingSec);
+  e.link.bonded.push_back(kB);  // a new computer finished pairing
+  e.bt.tick();
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_FALSE(s.pairingOpen);
+  TEST_ASSERT_FALSE(s.pairingRemainingMs.has_value());
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
+}
+
+void test_status_alone_also_notices_the_new_pairing() {
+  Env e({kA});
+  e.bt.startPairing(kDefaultPairingSec);
+  e.link.bonded.push_back(kB);
+  TEST_ASSERT_FALSE(e.bt.status().pairingOpen);  // no tick() in between: the dashboard polls status()
+}
+
+void test_window_stays_open_when_a_known_computer_reconnects() {
+  Env e({kA});
+  e.bt.startPairing(kDefaultPairingSec);
+  e.link.connected = {kA};
+  e.bt.tick();
+  TEST_ASSERT_TRUE(e.bt.status().pairingOpen);
+}
+
+void test_stopping_the_window_by_hand_still_works() {
+  Env e({kA});
+  e.bt.startPairing(kDefaultPairingSec);
+  TEST_ASSERT_TRUE(e.bt.stopPairing().ok);
+  TEST_ASSERT_FALSE(e.bt.status().pairingOpen);
+}
+
+void test_disconnect_hold_lasts_three_minutes_then_the_computer_can_reconnect() {
+  TEST_ASSERT_EQUAL_UINT32(180, kDisconnectHoldSec);
+  Env e({kA});
+  e.link.connected = {kA};
+  e.bt.disconnect();
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_TRUE(s.held);
+  TEST_ASSERT_EQUAL_UINT32(180000, *s.heldRemainingMs);
+  TEST_ASSERT_FALSE(e.link.advertising);
+  e.clock.now = 179999;
+  e.bt.tick();
+  TEST_ASSERT_TRUE(e.bt.status().held);
+  e.clock.now = 180000;
+  e.bt.tick();
+  s = e.bt.status();
+  TEST_ASSERT_FALSE(s.held);
+  TEST_ASSERT_FALSE(s.heldRemainingMs.has_value());
+  TEST_ASSERT_TRUE(e.link.advertising);  // visible again: the computer can be reconnected from its side
+}
+
+void test_hold_countdown_is_in_the_json() {
+  Env e({kA});
+  e.bt.disconnect();
+  JsonDocument d;
+  deserializeJson(d, bluetoothToJson(e.bt.status()));
+  TEST_ASSERT_EQUAL_UINT32(180000, d["heldRemainingMs"].as<uint32_t>());
+  JsonDocument s;
+  deserializeJson(s, bluetoothSummaryJson(e.bt.status()));
+  TEST_ASSERT_EQUAL_UINT32(180000, s["heldRemainingMs"].as<uint32_t>());
+  e.bt.reconnect();
+  deserializeJson(d, bluetoothToJson(e.bt.status()));
+  TEST_ASSERT_TRUE(d["heldRemainingMs"].isNull());
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_first_run_pairing_is_open_without_timeout);
@@ -494,5 +568,12 @@ int main() {
   RUN_TEST(test_forgetting_a_connected_computer_drops_its_link);
   RUN_TEST(test_forget_all_while_connected_drops_the_link_and_reopens_pairing);
   RUN_TEST(test_refusal_policy);
+  RUN_TEST(test_pairing_window_is_three_minutes_by_default);
+  RUN_TEST(test_window_closes_by_itself_when_a_computer_pairs);
+  RUN_TEST(test_status_alone_also_notices_the_new_pairing);
+  RUN_TEST(test_window_stays_open_when_a_known_computer_reconnects);
+  RUN_TEST(test_stopping_the_window_by_hand_still_works);
+  RUN_TEST(test_disconnect_hold_lasts_three_minutes_then_the_computer_can_reconnect);
+  RUN_TEST(test_hold_countdown_is_in_the_json);
   return UNITY_END();
 }

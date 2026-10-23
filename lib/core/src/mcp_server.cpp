@@ -61,8 +61,11 @@ void fillBaseTools(JsonArray tools) {
           "Get the jiggler status: run state, mouse/WiFi connection, time to next movement, movement count, last movement, config.",
           &schema);
   schema["properties"].to<JsonObject>();
-  addTool(tools, "start", "Start (or resume) the jiggler.", &schema);
-  schema["properties"].to<JsonObject>();
+  addTool(tools, "start",
+          "Start (or resume) the jiggler. With `minutes` it stops by itself after that long (1-1440); without it, it runs until stopped.",
+          &schema);
+  addNumberProp(schema["properties"].to<JsonObject>(), "minutes", "integer", 1, 1440,
+                "Stop by itself after this many minutes (optional).");
   addTool(tools, "pause", "Pause the jiggler; resuming keeps the remaining time.", &schema);
   schema["properties"].to<JsonObject>();
   addTool(tools, "stop", "Stop the jiggler completely.", &schema);
@@ -93,6 +96,7 @@ bool hasAutomations(const ApiContext& c) { return c.automations != nullptr; }
 bool hasNetwork(const ApiContext& c) { return c.network != nullptr; }
 bool hasRestart(const ApiContext& c) { return static_cast<bool>(c.restart); }
 bool hasBluetooth(const ApiContext& c) { return c.bluetooth != nullptr; }
+bool hasSchedules(const ApiContext& c) { return c.schedules != nullptr; }
 
 const ExtTool kExtTools[] = {
     {"list_profiles", hasDevices},   {"get_devices", hasDevices},         {"set_devices", hasDevices},
@@ -102,6 +106,7 @@ const ExtTool kExtTools[] = {
     {"set_network", hasNetwork},     {"restart", hasRestart},
     {"get_bluetooth", hasBluetooth}, {"start_pairing", hasBluetooth},     {"disconnect_bluetooth", hasBluetooth},
     {"reconnect_bluetooth", hasBluetooth}, {"forget_computer", hasBluetooth},
+    {"get_schedules", hasSchedules}, {"set_schedules", hasSchedules},
 };
 
 const ExtTool* findExtTool(const ApiContext& ctx, const std::string& name) {
@@ -184,6 +189,29 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
       addNumberProp(p, "maxIntervalSec", "integer", 5, 86400, "Maximum seconds between runs (>= min).");
       addProp(p, "enabled", "boolean", "Whether it runs.");
       schema["required"].add("automations");
+    } else if (name == "get_schedules") {
+      addTool(tools, t.name, "Get the weekly schedules (windows when the jiggler starts and stops by itself) and the timezone.", &schema);
+      schema["properties"].to<JsonObject>();
+    } else if (name == "set_schedules") {
+      addTool(tools, t.name,
+              "Replace the weekly schedules (max 8). While a window is open the jiggler runs; it starts at the start time and stops at the end. Needs the device clock to be synced (WiFi with internet).",
+              &schema);
+      JsonObject props = schema["properties"].to<JsonObject>();
+      addProp(props, "timezone", "string", "Timezone name, e.g. Europe/Rome, America/New_York, UTC (see get_schedules for the list).");
+      JsonObject items = props["schedules"].to<JsonObject>();
+      items["type"] = "array";
+      JsonObject item = items["items"].to<JsonObject>();
+      item["type"] = "object";
+      JsonObject p = item["properties"].to<JsonObject>();
+      addProp(p, "id", "string", "Unique id (a-z 0-9 _ -).");
+      addProp(p, "enabled", "boolean", "Whether the schedule is active (default true).");
+      JsonObject days = p["days"].to<JsonObject>();
+      days["type"] = "array";
+      days["items"]["type"] = "string";
+      days["description"] = "Days it applies to: mon, tue, wed, thu, fri, sat, sun.";
+      addProp(p, "start", "string", "Start time HH:MM in the schedule timezone, e.g. 09:00.");
+      addNumberProp(p, "durationMin", "integer", 1, 1440, "How long the window lasts, in minutes. It may run past midnight.");
+      schema["required"].add("schedules");
     } else if (name == "press_key") {
       addTool(tools, t.name, "Press a key (or combination such as Ctrl+C) on the keyboard now.", &schema);
       JsonObject p = schema["properties"].to<JsonObject>();
@@ -213,8 +241,8 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
       addTool(tools, t.name, "Get the Bluetooth state: which computer is connected and for how long, whether pairing is open, and the paired computers.", &schema);
       schema["properties"].to<JsonObject>();
     } else if (name == "start_pairing") {
-      addTool(tools, t.name, "Open the pairing window so a new computer can pair (default 120 s). While it is closed, new computers are refused.", &schema);
-      addNumberProp(schema["properties"].to<JsonObject>(), "seconds", "integer", 30, 600, "How long the window stays open (default 120).");
+      addTool(tools, t.name, "Open the pairing window so a new computer can pair (default 180 s). While it is closed, new computers are refused.", &schema);
+      addNumberProp(schema["properties"].to<JsonObject>(), "seconds", "integer", 30, 600, "How long the window stays open (default 180).");
     } else if (name == "disconnect_bluetooth") {
       addTool(tools, t.name, "Disconnect the computer and hide the device until reconnect_bluetooth (it stays powered and keeps its pairings).", &schema);
       schema["properties"].to<JsonObject>();
@@ -265,6 +293,8 @@ ToolOutput callExtTool(ApiContext& ctx, const std::string& name, JsonVariantCons
   if (name == "list_scripts") return viaRoute(ctx, "GET", "/api/scripts");
   if (name == "get_automations") return viaRoute(ctx, "GET", "/api/automations");
   if (name == "set_automations") return wrapArray(ctx, "automations", "/api/automations", args);
+  if (name == "get_schedules") return viaRoute(ctx, "GET", "/api/schedules");
+  if (name == "set_schedules") return viaRoute(ctx, "PUT", "/api/schedules", args.isNull() ? "{}" : serialize(args));
   if (name == "get_network") return viaRoute(ctx, "GET", "/api/network");
   if (name == "restart") return viaRoute(ctx, "POST", "/api/restart");
   if (name == "get_bluetooth") return viaRoute(ctx, "GET", "/api/bluetooth");
@@ -328,8 +358,14 @@ ToolOutput callExtTool(ApiContext& ctx, const std::string& name, JsonVariantCons
 
 ToolOutput callBaseTool(Controller& c, const std::string& name, JsonVariantConst args) {
   if (name == "get_status") return {statusToJson(c.status()), false};
-  if (name == "start") c.start();
-  else if (name == "pause") c.pause();
+  if (name == "start") {
+    std::optional<uint32_t> minutes;
+    ParseError perr;
+    if (!args.isNull() && !parseStartRequest(args.as<JsonObjectConst>(), minutes, perr))
+      return {errorJson(perr.code, perr.field, perr.message), true};
+    if (minutes) c.startFor(*minutes);
+    else c.start();
+  } else if (name == "pause") c.pause();
   else if (name == "stop") c.stop();
   else if (name == "move_now") {
     CmdResult r = c.moveNow();

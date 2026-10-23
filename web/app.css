@@ -79,6 +79,7 @@ details.block[open] summary{margin-bottom:var(--s2)}
 .hero-actions:empty{display:none}
 body.offline .hero{opacity:.55}
 .hero .msg:empty,.hero .note:empty{display:none}
+.runfor[hidden]{display:none}
 
 /* Movement block */
 .state{font-size:1.375rem;font-weight:650}
@@ -88,6 +89,23 @@ body.offline .hero{opacity:.55}
 .facts>div{display:flex;justify-content:space-between;gap:var(--s4);padding:var(--s2) 0;border-bottom:1px solid var(--line)}
 .facts dt{color:var(--muted)}
 .facts dd{font-variant-numeric:tabular-nums;text-align:right;overflow-wrap:anywhere}
+
+/* Run for */
+.runfor{display:flex;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s4);align-items:flex-end}
+.runfor .field{margin:0;min-width:10rem;flex:1 1 10rem}
+.runfor+.err{margin-top:var(--s1)}
+
+/* Schedules */
+#clockNote{margin-bottom:var(--s3)}
+.hint.lead{margin-top:0;margin-bottom:var(--s3)}
+.sched{border:1px solid var(--line);border-radius:10px;padding:var(--s3);margin-bottom:var(--s3);background:var(--surface)}
+.sched-head{display:flex;justify-content:space-between;align-items:center;gap:var(--s3);margin-bottom:var(--s2)}
+.sched-sum{font-weight:650}
+.sched-sum.off{color:var(--muted);font-weight:500}
+.days{display:flex;gap:var(--s1);flex-wrap:wrap;margin-bottom:var(--s3)}
+.days button{min-height:40px;min-width:44px;padding:0 var(--s2);border-radius:8px;font-size:.875rem;font-weight:600}
+.days button[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:transparent}
+.sched .row3{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
 
 /* Controls */
 button,select,textarea,input{font:inherit}

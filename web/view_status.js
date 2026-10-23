@@ -1,33 +1,36 @@
-// Stato: the connection hero (which computer, since when, disconnect/pair) and the jiggler controls.
+// Status: the connection hero (which computer, since when, disconnect/pair) and the run controls.
 (function () {
   'use strict';
   var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
   var fmtDuration = JigLib.fmtDuration, fmtAgo = JigLib.fmtAgo;
+  var CHOICE_KEY = 'jigglerRunChoice';
+
+  function fail(r) { return [tr(r.data && r.data.message) || 'That did not work.', 'bad']; }
   var ACTIONS = {
-    disconnect: { label: 'Disconnetti', primary: false, run: function () {
+    disconnect: { label: 'Disconnect', primary: false, run: function () {
       return App.call('POST', '/api/bluetooth/disconnect').then(function (r) {
-        return r.status === 200 ? ['Scollegato. Il dispositivo resta invisibile finché non premi Riconnetti.', 'good'] : fail(r);
+        return r.status === 200 ? ['Disconnected. The device stays hidden for 3 minutes, or until you press Reconnect.', 'good'] : fail(r);
       }); } },
-    reconnect: { label: 'Riconnetti', primary: true, run: function () {
+    reconnect: { label: 'Reconnect', primary: true, run: function () {
       return App.call('POST', '/api/bluetooth/reconnect').then(function (r) {
-        return r.status === 200 ? ['Di nuovo visibile: il computer si ricollega da solo.', 'good'] : fail(r);
+        return r.status === 200 ? ['Visible again: the computer reconnects by itself.', 'good'] : fail(r);
       }); } },
-    pair: { label: 'Abbina un computer', primary: true, run: function () {
-      return App.call('POST', '/api/bluetooth/pairing', { seconds: 120 }).then(function (r) {
-        return r.status === 200 ? ['Abbinamento aperto per 2 minuti.', 'good'] : fail(r);
+    pair: { label: 'Pair a computer', primary: true, run: function () {
+      return App.call('POST', '/api/bluetooth/pairing').then(function (r) {
+        return r.status === 200 ? ['Pairing is open for 3 minutes.', 'good'] : fail(r);
       }); } },
-    closePairing: { label: 'Chiudi abbinamento', primary: false, run: function () {
+    closePairing: { label: 'Stop pairing', primary: false, run: function () {
       return App.call('DELETE', '/api/bluetooth/pairing').then(function (r) {
-        return r.status === 200 ? ['Abbinamento chiuso.', 'good'] : fail(r);
+        return r.status === 200 ? ['Pairing stopped.', 'good'] : fail(r);
       }); } }
   };
-  function fail(r) { return [tr(r.data && r.data.message) || 'Operazione non riuscita.', 'bad']; }
 
-  var shownActions = "";
+  var shownActions = '';
 
   function adjusted(status, elapsed) {
     var bt = JSON.parse(JSON.stringify(status.bluetooth || { pairing: {}, peerCount: 0 }));
     if (bt.pairing && bt.pairing.remainingMs != null) bt.pairing.remainingMs = Math.max(0, bt.pairing.remainingMs - elapsed);
+    if (bt.heldRemainingMs != null) bt.heldRemainingMs = Math.max(0, bt.heldRemainingMs - elapsed);
     if (bt.computer) bt.computer.connectedForMs += elapsed;
     return bt;
   }
@@ -38,60 +41,116 @@
     $('heroTitle').textContent = v.title;
     $('heroDetail').textContent = v.detail;
     var key = v.actions.join(',');
-    if (key !== shownActions) {
-      shownActions = key;
-      var box = $('heroActions');
-      box.textContent = '';
-      v.actions.forEach(function (name) {
-        var a = ACTIONS[name];
-        var b = el('button', { text: a.label, class: a.primary ? 'primary' : '' });
-        b.onclick = function () {
-          b.disabled = true;
-          say('', '', 'heroMsg');
-          a.run().then(function (r) { say(r[0], r[1], 'heroMsg'); App.poll(); }).catch(function () {}).then(function () { b.disabled = false; });
-        };
-        box.appendChild(b);
-      });
-      $('heroNote').textContent = key.indexOf('disconnect') >= 0
-        ? 'Disconnetti non spegne il dispositivo: lo scollega e lo nasconde finché non lo riconnetti.' : '';
-    }
+    if (key === shownActions) return;
+    shownActions = key;
+    var box = $('heroActions');
+    box.textContent = '';
+    v.actions.forEach(function (name) {
+      var a = ACTIONS[name];
+      var b = el('button', { text: a.label, class: a.primary ? 'primary' : '' });
+      b.onclick = function () {
+        b.disabled = true;
+        say('', '', 'heroMsg');
+        a.run().then(function (r) { say(r[0], r[1], 'heroMsg'); App.poll(); }).catch(function () {}).then(function () { b.disabled = false; });
+      };
+      box.appendChild(b);
+    });
+    $('heroNote').textContent = key.indexOf('disconnect') >= 0
+      ? 'Disconnect does not power the device off: it drops the link and hides the device for 3 minutes. To disconnect for good, use the computer’s own Bluetooth menu.' : '';
   }
 
   function renderMotion(s, elapsed) {
-    $('state').textContent = s.state === 'running' ? 'In esecuzione' : 'Fermo';
+    var running = s.state === 'running';
+    $('state').textContent = running ? 'Running' : 'Stopped';
     var next = $('next');
-    if (s.state !== 'running') next.textContent = 'Nessun movimento programmato: premi Avvia.';
-    else if (!s.mouseConnected && s.msToNextMove === 0) next.textContent = 'In attesa che un computer si colleghi.';
-    else next.textContent = 'Prossimo movimento tra ' + fmtDuration(Math.max(0, s.msToNextMove - elapsed));
+    if (!running) next.textContent = 'No movement scheduled. Press Start.';
+    else {
+      var parts = [];
+      if (!s.mouseConnected && s.msToNextMove === 0) parts.push('Waiting for a computer to connect.');
+      else parts.push('Next movement in ' + fmtDuration(Math.max(0, s.msToNextMove - elapsed)));
+      if (s.stopsInMs != null) {
+        var left = Math.max(0, s.stopsInMs - elapsed);
+        parts.push('stops in ' + fmtDuration(left) + ' (at ' + JigLib.stopsAt(left, new Date()) + ')');
+      }
+      next.textContent = parts.join(' · ');
+    }
   }
 
   function renderFacts(s) {
     $('count').textContent = s.moveCount;
-    if (s.lastMoveAt !== null) $('last').textContent = new Date(s.lastMoveAt * 1000).toLocaleTimeString('it-IT');
+    if (s.lastMoveAt !== null) $('last').textContent = new Date(s.lastMoveAt * 1000).toLocaleTimeString('en-GB');
     else if (s.lastMoveAgoMs !== null) $('last').textContent = fmtAgo(s.lastMoveAgoMs);
-    else $('last').textContent = 'mai';
-    $('wifi').textContent = s.wifiConnected ? 'Collegato' : 'Non collegato';
+    else $('last').textContent = 'never';
+    $('wifi').textContent = s.wifiConnected ? 'Connected' : 'Not connected';
+    var sc = s.schedule;
+    if (!sc) $('clock').textContent = '—';
+    else if (!sc.timeSynced) $('clock').textContent = 'Not synced (needs internet)';
+    else $('clock').textContent = sc.localTime + ' · ' + sc.timezone + (sc.active ? ' · schedule open' : '');
     var running = s.state === 'running';
-    $('bToggle').textContent = running ? 'Ferma' : 'Avvia';
+    $('bToggle').textContent = running ? 'Stop' : 'Start';
     $('bToggle').className = running ? '' : 'primary';
+    $('runFor').hidden = running;
+    $('runErr').textContent = running ? '' : $('runErr').textContent;
     $('bMove').disabled = !s.mouseConnected;
   }
 
-  App.view('stato', {
+  App.view('status', {
     onStatus: function (s) { renderHero(s, 0); renderMotion(s, 0); renderFacts(s); },
     onTick: function (s, elapsed) { renderHero(s, elapsed); renderMotion(s, elapsed); }
   });
 
-  function control(method, path, okText) {
-    return App.call(method, path).then(function (res) {
-      if (res.status >= 400) say(res.data.error === 'mouse_not_connected' ? 'Nessun computer collegato: abbinane uno dalla sezione Computer.' : 'Operazione non riuscita.', 'bad');
+  // ---- run for ----
+  function readChoice() {
+    return { choice: $('runChoice').value, time: $('runUntil').value, custom: $('runCustom').value };
+  }
+  function showChoiceFields() {
+    var c = $('runChoice').value;
+    $('runUntilBox').hidden = c !== 'until';
+    $('runCustomBox').hidden = c !== 'custom';
+    $('runErr').textContent = '';
+  }
+  $('runChoice').addEventListener('change', function () {
+    showChoiceFields();
+    try { localStorage.setItem(CHOICE_KEY, JSON.stringify(readChoice())); } catch (e) {}
+  });
+  ['runUntil', 'runCustom'].forEach(function (id) {
+    $(id).addEventListener('input', function () {
+      $('runErr').textContent = '';
+      try { localStorage.setItem(CHOICE_KEY, JSON.stringify(readChoice())); } catch (e) {}
+    });
+  });
+  (function restoreChoice() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(CHOICE_KEY) || 'null');
+      if (saved && $('runChoice').querySelector('option[value="' + saved.choice + '"]')) {
+        $('runChoice').value = saved.choice;
+        $('runUntil').value = saved.time || '';
+        $('runCustom').value = saved.custom || '';
+      }
+    } catch (e) {}
+    showChoiceFields();
+  })();
+
+  function control(method, path, body, okText) {
+    return App.call(method, path, body).then(function (res) {
+      if (res.status >= 400) say(res.data.error === 'mouse_not_connected' ? 'No computer connected: pair one from the Computers section.' : tr(res.data.message) || 'That did not work.', 'bad');
       else say(okText, 'good');
       App.poll();
     }).catch(function () {});
   }
+
   $('bToggle').onclick = function () {
-    var running = App.status() && App.status().state === 'running';
-    control('POST', running ? '/api/stop' : '/api/start', running ? 'Fermato.' : 'Avviato.');
+    var s = App.status();
+    var running = s && s.state === 'running';
+    if (running) { control('POST', '/api/stop', undefined, 'Stopped.'); return; }
+    var minutes = JigLib.runForMinutes(readChoice(), new Date());
+    if (minutes === null) {
+      $('runErr').textContent = $('runChoice').value === 'until' ? 'Pick the time it should stop.' : 'Enter a whole number of minutes from 1 to 1440.';
+      return;
+    }
+    $('runErr').textContent = '';
+    if (minutes === 0) control('POST', '/api/start', undefined, 'Started.');
+    else control('POST', '/api/start', { minutes: minutes }, 'Started: it stops by itself in ' + JigLib.fmtSince(minutes * 60000) + '.');
   };
-  $('bMove').onclick = function () { control('POST', '/api/move', 'Movimento in corso.'); setTimeout(App.poll, 1500); };
+  $('bMove').onclick = function () { control('POST', '/api/move', undefined, 'Moving now.'); setTimeout(App.poll, 1500); };
 })();

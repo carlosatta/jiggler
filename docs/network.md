@@ -19,7 +19,7 @@ Time (for `lastMoveAt`) comes from NTP (`pool.ntp.org`, `time.google.com`) once 
 - SSID defaults to **`Jiggler`**. If no password is set, a random one is generated on first start, **saved and printed on the serial monitor**.
 - A DNS captive portal redirects every hostname to the dashboard at the AP address.
 - If no token is stored, the AP password is also used as the API token.
-- Switch mode via the dashboard (the "Rete" card), `PUT /api/network`, the `set_network` MCP tool, or by **holding the BOOT button (GPIO 0) for 3 seconds**, which toggles `auto`↔`ap` and restarts. Changes made through the API apply after a restart.
+- Switch mode via the dashboard (the "Network" card), `PUT /api/network`, the `set_network` MCP tool, or by **holding the BOOT button (GPIO 0) for 3 seconds**, which toggles `auto`↔`ap` and restarts. Changes made through the API apply after a restart.
 
 ## Authentication
 

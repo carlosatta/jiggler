@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -23,12 +24,23 @@ inline int32_t randRange(Rng& rng, int32_t lo, int32_t hi) {
   return static_cast<int32_t>(lo + static_cast<int64_t>(rng.next() % span));
 }
 
+// Wall-clock time in the device's timezone. weekday: 0 = Monday ... 6 = Sunday.
+struct LocalTime {
+  uint8_t weekday = 0;
+  uint16_t minuteOfDay = 0;  // 0..1439
+};
+
 struct Platform {
   virtual ~Platform() = default;
   virtual uint32_t nowMs() const = 0;
   virtual uint32_t unixSeconds() const = 0;  // 0 = clock not synced
   virtual bool mouseConnected() const = 0;
   virtual bool wifiConnected() const = 0;
+  // `posixTz` is a POSIX TZ string such as "CET-1CEST,M3.5.0,M10.5.0/3". nullopt = clock not synced.
+  virtual std::optional<LocalTime> localTime(const std::string& posixTz) const {
+    (void)posixTz;
+    return std::nullopt;
+  }
 };
 
 struct MouseSink {

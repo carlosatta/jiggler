@@ -9,6 +9,7 @@
 #include "controller.h"
 #include "devices.h"
 #include "network_settings.h"
+#include "schedule.h"
 #include "script.h"
 
 namespace jig {
@@ -27,6 +28,7 @@ struct ApiContext {
   ScriptLibrary* scripts = nullptr;
   AutomationEngine* automations = nullptr;
   BluetoothManager* bluetooth = nullptr;
+  ScheduleEngine* schedules = nullptr;
   TokenVault* tokens = nullptr;
   DeviceInfo info;  // shown in /api/status when its version is set
   std::function<void()> restart;

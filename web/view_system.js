@@ -18,11 +18,11 @@
       if (res.status === 200) {
         App.setToken(next);
         $('tokCurrent').value = $('tokNew').value = $('tokConfirm').value = '';
-        say('Token cambiato. Questo browser usa già quello nuovo; ricordati di aggiornare gli altri client e le configurazioni MCP.', 'good', 'tokMsg');
+        say('Token changed. This browser already uses the new one; remember to update other clients and MCP configurations.', 'good', 'tokMsg');
         return;
       }
       var d = res.data;
-      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Cambio non riuscito.', 'bad', 'tokMsg');
+      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Could not change the token.', 'bad', 'tokMsg');
     }).catch(function () {});
   });
 
@@ -35,17 +35,17 @@
     }).catch(function () {});
   }
   function saveNetwork(restart) {
-    var root = $('view-sistema');
+    var root = $('view-system');
     ['mode', 'apSsid', 'apPassword'].forEach(function (k) { root.querySelector('[data-err="' + k + '"]').textContent = ''; });
     say('', '', 'netMsg');
     App.call('PUT', '/api/network', { mode: $('netMode').value, apSsid: $('netSsid').value, apPassword: $('netPass').value }).then(function (res) {
       if (res.status === 200) {
-        say(restart ? 'Salvato. Riavvio…' : 'Salvato: vale dal prossimo riavvio.', 'good', 'netMsg');
+        say(restart ? 'Saved. Restarting…' : 'Saved: applies after the next restart.', 'good', 'netMsg');
         if (restart) App.restartDevice();
         return;
       }
       var d = res.data;
-      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Salvataggio non riuscito.', 'bad', 'netMsg');
+      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Could not save.', 'bad', 'netMsg');
     }).catch(function () {});
   }
   $('netSave').onclick = function () { saveNetwork(false); };
@@ -67,27 +67,27 @@
     card.querySelector('[data-k=manufacturer]').placeholder = p.manufacturer;
     card.querySelector('[data-k=vid]').placeholder = hex4(p.vid);
     card.querySelector('[data-k=pid]').placeholder = hex4(p.pid);
-    card.querySelector('[data-k=mac]').placeholder = p.oui ? p.oui + ':xx:xx:xx (il resto dal chip)' : 'indirizzo del chip (nessuna sostituzione)';
+    card.querySelector('[data-k=mac]').placeholder = p.oui ? p.oui + ':xx:xx:xx (the rest comes from the chip)' : 'the chip’s own address (no override)';
   }
   function renderDevices() {
     var box = $('devList');
     box.textContent = '';
     devices.forEach(function (d, i) {
       var card = el('div', { class: 'dev' });
-      card.appendChild(el('h3', { text: d.kind === 'mouse' ? 'Mouse (' + d.id + ')' : 'Tastiera (' + d.id + ')' }));
+      card.appendChild(el('h3', { text: d.kind === 'mouse' ? 'Mouse (' + d.id + ')' : 'Keyboard (' + d.id + ')' }));
       var enabled = el('input', { type: 'checkbox' });
       enabled.setAttribute('data-k', 'enabled');
       enabled.checked = d.enabled;
-      card.appendChild(el('div', { class: 'field' }, [el('label', { class: 'inline' }, [enabled, el('span', { text: 'Abilitato' })])]));
+      card.appendChild(el('div', { class: 'field' }, [el('label', { class: 'inline' }, [enabled, el('span', { text: 'Enabled' })])]));
       var sel = el('select');
       sel.setAttribute('data-k', 'profileId');
       profiles.profiles.filter(function (p) { return p.kind === d.kind; }).forEach(function (p) {
         sel.appendChild(el('option', { value: p.id, text: p.label }));
       });
-      sel.appendChild(el('option', { value: 'custom', text: 'Personalizzato' }));
+      sel.appendChild(el('option', { value: 'custom', text: 'Custom' }));
       sel.value = d.profileId;
-      card.appendChild(labeled('Profilo', sel, 'devices[' + i + '].profileId'));
-      [['name', 'Nome Bluetooth'], ['manufacturer', 'Produttore'], ['vid', 'VID'], ['pid', 'PID'], ['mac', 'Indirizzo Bluetooth (MAC)']].forEach(function (f) {
+      card.appendChild(labeled('Profile', sel, 'devices[' + i + '].profileId'));
+      [['name', 'Bluetooth name'], ['manufacturer', 'Manufacturer'], ['vid', 'VID'], ['pid', 'PID'], ['mac', 'Bluetooth address (MAC)']].forEach(function (f) {
         var inp = el('input', { autocomplete: 'off' });
         inp.setAttribute('data-k', f[0]);
         var cur = d[f[0]];
@@ -106,7 +106,7 @@
       renderDevices();
     }).catch(function () {});
   }
-  App.confirmInline($('devSave'), 'Conferma: salva e riavvia', function () {
+  App.confirmInline($('devSave'), 'Confirm: save and restart', function () {
     var root = $('devList');
     clearErrors(root);
     say('', '', 'devMsg');
@@ -129,9 +129,9 @@
     });
     if (bad) return;
     App.call('PUT', '/api/devices', { devices: out }).then(function (res) {
-      if (res.status === 200) { say('Salvato. Riavvio…', 'good', 'devMsg'); return App.restartDevice(); }
-      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Salvataggio non riuscito.', 'bad', 'devMsg');
-      else say('Controlla i campi evidenziati.', 'bad', 'devMsg');
+      if (res.status === 200) { say('Saved. Restarting…', 'good', 'devMsg'); return App.restartDevice(); }
+      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Could not save.', 'bad', 'devMsg');
+      else say('Check the highlighted fields.', 'bad', 'devMsg');
     }).catch(function () {});
   });
   $('devBox').addEventListener('toggle', function () { if ($('devBox').open) loadDevices(); });
@@ -143,9 +143,9 @@
     $('infoName').textContent = s.device.bleName;
     $('infoAddress').textContent = s.device.bleAddress;
   }
-  App.confirmInline($('restartBtn'), 'Conferma: riavvia', function () { say('', '', 'sysMsg'); App.restartDevice(); });
+  App.confirmInline($('restartBtn'), 'Confirm: restart', function () { say('', '', 'sysMsg'); App.restartDevice(); });
 
-  App.view('sistema', {
+  App.view('system', {
     load: function () { loadNetwork(); if ($('devBox').open) loadDevices(); if (App.status()) renderInfo(App.status()); },
     onStatus: renderInfo
   });

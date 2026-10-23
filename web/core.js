@@ -68,7 +68,7 @@ var App = (function () {
       opts.body = typeof body === 'string' ? body : JSON.stringify(body);
     }
     return fetch(path, opts).then(function (r) {
-      if (r.status === 401) { setToken(''); showLogin('Token non valido.'); throw new Error('unauthorized'); }
+      if (r.status === 401) { setToken(''); showLogin('Invalid token.'); throw new Error('unauthorized'); }
       return r.json().catch(function () { return {}; }).then(function (data) {
         failures = 0;
         document.body.classList.remove('offline');
@@ -79,7 +79,7 @@ var App = (function () {
       failures++;
       if (!restarting && failures >= 2) {
         document.body.classList.add('offline');
-        banner('Dispositivo non raggiungibile. Riprovo da solo.', 'bad');
+        banner('Device not reachable. Retrying.', 'bad');
         offlineShown = true;
       }
       throw e;
@@ -109,8 +109,8 @@ var App = (function () {
   function reloadCurrent() { if (views[current] && views[current].load && token) views[current].load(); }
 
   function route() {
-    var name = (location.hash || '#stato').slice(1);
-    if (!views[name]) name = 'stato';
+    var name = (location.hash || '#status').slice(1);
+    if (!views[name]) name = 'status';
     var changed = name !== current;
     current = name;
     document.querySelectorAll('.view').forEach(function (v) { v.hidden = v.id !== 'view-' + name; });
@@ -145,7 +145,7 @@ var App = (function () {
   // ---- restart ----------------------------------------------------------------------------
   function waitForDevice() {
     restarting = true;
-    banner('Riavvio in corso… la pagina torna da sola.', '');
+    banner('Restarting… the page reconnects by itself.', '');
     var started = performance.now();
     function probe() {
       fetch('/api/status', { headers: { 'Authorization': 'Bearer ' + token } }).then(function (r) {
@@ -153,7 +153,7 @@ var App = (function () {
           restarting = false;
           failures = 0;
           document.body.classList.remove('offline');
-          banner('Dispositivo di nuovo online.', 'good', 4000);
+          banner('Device is back online.', 'good', 4000);
           reloadCurrent();
           poll();
         } else { again(); }
@@ -162,7 +162,7 @@ var App = (function () {
     function again() {
       if (performance.now() - started > 60000) {
         restarting = false;
-        banner('Il dispositivo non risponde. Controlla alimentazione e rete, poi ricarica la pagina.', 'bad');
+        banner('The device is not responding. Check its power and your network, then reload the page.', 'bad');
         return;
       }
       setTimeout(probe, 1500);

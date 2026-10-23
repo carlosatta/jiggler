@@ -106,6 +106,16 @@ void test_call_state_tools() {
   TEST_ASSERT_EQUAL_STRING("stopped", toolText(m.tool("stop"))["state"].as<const char*>());
 }
 
+void test_start_tool_accepts_minutes() {
+  Mcp m;
+  m.tool("stop");
+  McpReply r = m.tool("start", "{\"minutes\":10}");
+  TEST_ASSERT_FALSE(isError(r));
+  TEST_ASSERT_EQUAL_UINT32(600000, toolText(r)["stopsInMs"].as<uint32_t>());
+  TEST_ASSERT_TRUE(isError(m.tool("start", "{\"minutes\":5000}")));
+  TEST_ASSERT_TRUE(isError(m.tool("start", "{\"minutes\":\"x\"}")));
+}
+
 void test_call_move_now() {
   Mcp m;
   McpReply ok = m.tool("move_now");
@@ -211,5 +221,6 @@ int main() {
   RUN_TEST(test_protocol_errors);
   RUN_TEST(test_parse_error_reply_has_null_id);
   RUN_TEST(test_oversized_body_rejected);
+  RUN_TEST(test_start_tool_accepts_minutes);
   return UNITY_END();
 }

@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What the project is
 
-An ESP32 (classic `esp32dev`) that keeps a computer awake by acting as a BLE mouse presenting as a Logitech MX Master 3S, with control and status over WiFi: web dashboard, REST API and MCP server. [features.md](features.md) is the functional spec and the source of truth for requirements; the implementation plan is in `docs/superpowers/plans/`. Documentation is in English; dashboard UI strings are in Italian (the design history in `docs/superpowers/` is also Italian).
+An ESP32 (classic `esp32dev`) that keeps a computer awake by acting as a BLE mouse presenting as a Logitech MX Master 3S, with control and status over WiFi: web dashboard, REST API and MCP server. [features.md](features.md) is the functional spec and the source of truth for requirements; the implementation plan is in `docs/superpowers/plans/`. Documentation and the dashboard UI are in English (only the historic design notes in `docs/superpowers/` are in Italian).
 
 ## Commands
 
 PlatformIO (`pipx install platformio`; `pio` lives in `~/.local/bin`).
 
 - Host unit tests (no board needed): `pio test -e native`
-- One suite: `pio test -e native -f test_controller` (suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_devices`, `test_keyboard`, `test_script`, `test_automation`, `test_mcp_ex`)
+- One suite: `pio test -e native -f test_controller` (suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_schedule`, `test_devices`, `test_keyboard`, `test_script`, `test_automation`, `test_mcp_ex`)
 - Build firmware: `pio run -e esp32`
 - Flash: `pio run -e esp32 -t upload --upload-port /dev/cu.usbserial-0001`
 - Serial monitor: `pio device monitor` (115200 baud)
@@ -36,6 +36,8 @@ All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio
 - **Router entry points.** `handleApiEx(ApiContext&)` / `handleMcpEx(ApiContext&)` add routes/tools (`/api/profiles|devices|scripts|automations|network|restart`, MCP tools for the same) and fall back to the original `handleApi` / the original six tools; services in `ApiContext` are optional (missing = 404 / tool not listed). Body caps: `kMaxBodyBytes` 4096 transport (scripts, MCP), `kMaxSmallBodyBytes` 1024 (config, network), `kMaxMediumBodyBytes` 2048 (devices, automations).
 - **Network modes.** `auto` = home WiFi with the `Jiggler-Setup` portal fallback; `ap` = own WPA2 network (default SSID `Jiggler`, generated password printed on serial) with a DNS captive portal redirecting to the dashboard. In AP mode the token defaults to the AP password. BOOT (GPIO0): hold 3 s toggles the mode and restarts, a short tap opens a pairing window (`ButtonGesture`).
 - **Bluetooth policy.** `BluetoothManager` (`bluetooth.*`, blob key `peers` for labels) owns pairing windows, "disconnect = drop link + hide", forget and labels; it only talks to the stack through `BleLink`, implemented by `BleMouse` (bond list via `NimBLEDevice::getBondedAddress`, refusal in `linkIdentified`, advertising held off with `advertiseOnDisconnect(false)`). First run (no bond) keeps pairing open; with a bond it is closed unless a window is open. `PUT /api/token` goes through `TokenVault`.
+- **Timed runs and schedules.** `Controller::startFor(minutes)` stops by itself (deadline in `millis`, wrap-safe); a plain start/pause/stop clears it. `ScheduleEngine` (`schedule.*`, blob key `schedules`) holds up to 8 weekly windows (days bitmask, start minute, duration, may cross midnight) plus a timezone from a built-in table mapped to POSIX TZ strings; `tick()` (once a second from `loop()`) is edge-driven: it starts/stops the controller when a window opens/closes, except for the first look at the clock after boot, when the schedule is authoritative. Saving never starts or stops anything. The clock comes from `Platform::localTime(posixTz)` (`ArduinoPlatform`, SNTP-backed; nullopt until synced).
+- **Pairing windows** last 3 minutes by default and close by themselves when a new bond appears; "disconnect" hides the device for 3 minutes (`kDisconnectHoldSec`), then advertising resumes.
 - `NvsBlobStore` hashes keys to short NVS names and keeps an index blob, so blob keys can be long (`script/<name>`).
 
 ## Gotchas

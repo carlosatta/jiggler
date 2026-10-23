@@ -1,4 +1,4 @@
-// Computer: pairing window and the list of paired computers (rename, forget).
+// Computers: pairing window and the list of paired computers (rename, forget).
 (function () {
   'use strict';
   var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
@@ -6,7 +6,7 @@
 
   function reply(res, okText, id) {
     if (res.status === 200) { say(okText, 'good', id); return true; }
-    say(tr(res.data && res.data.message) || 'Operazione non riuscita.', 'bad', id);
+    say(tr(res.data && res.data.message) || 'That did not work.', 'bad', id);
     return false;
   }
 
@@ -15,28 +15,29 @@
     if (!bt) return;
     var p = bt.pairing || {};
     var timed = p.open && p.remainingMs != null;
-    var firstRun = bt.peerCount === 0;
-    if (timed) $('pairInfo').textContent = 'Abbinamento aperto: scade tra ' + JigLib.fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '.';
-    else if (p.open) $('pairInfo').textContent = 'Nessun computer abbinato: l’abbinamento resta aperto finché non ne colleghi uno.';
-    else $('pairInfo').textContent = 'Abbinamento chiuso: nessun nuovo computer può collegarsi.';
+    var info;
+    if (timed) info = 'Pairing is open: closes in ' + JigLib.fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It also closes as soon as a computer pairs.';
+    else if (p.open) info = 'No computer paired yet: pairing stays open until you connect one.';
+    else info = 'Pairing is closed: no new computer can connect.';
+    if (bt.held && bt.heldRemainingMs != null) info += ' The device is hidden for another ' + JigLib.fmtDuration(Math.max(0, bt.heldRemainingMs - elapsed)) + ' (disconnected).';
+    $('pairInfo').textContent = info;
     $('pairOpen').disabled = busy || (p.open && !timed);
-    $('pairOpen').textContent = timed ? 'Riapri (' + ($('pairDur').selectedOptions[0].text) + ')' : 'Apri abbinamento';
+    $('pairOpen').textContent = timed ? 'Restart the 3 minutes' : 'Open pairing for 3 minutes';
     $('pairClose').disabled = busy || !timed;
-    $('pairDur').disabled = firstRun && p.open;
   }
 
   function peerRow(p) {
     var li = el('li');
     if (editing === p.id) {
-      var input = el('input', { autocomplete: 'off', 'aria-label': 'Nome del computer', maxlength: '32' });
+      var input = el('input', { autocomplete: 'off', 'aria-label': 'Computer name', maxlength: '32' });
       input.value = p.label;
-      var save = el('button', { class: 'primary', text: 'Salva' });
-      var cancel = el('button', { text: 'Annulla' });
+      var save = el('button', { class: 'primary', text: 'Save' });
+      var cancel = el('button', { text: 'Cancel' });
       var err = el('div', { class: 'err' });
       function done() { editing = null; shown = ''; draw(); }
       function commit() {
         var name = input.value.trim();
-        if (!name) { err.textContent = 'Scrivi un nome.'; return; }
+        if (!name) { err.textContent = 'Enter a name.'; return; }
         App.call('PUT', '/api/bluetooth/peers/' + p.id, { label: name }).then(function (res) {
           if (res.status === 200) { done(); load(); } else err.textContent = tr(res.data && res.data.message);
         }).catch(function () {});
@@ -50,15 +51,15 @@
       return li;
     }
     var meta = el('div', { class: 'peer-meta' });
-    if (p.connected) meta.appendChild(el('span', { class: 'peer-live', text: 'Collegato adesso' }));
-    else meta.appendChild(document.createTextNode('Abbinato'));
+    if (p.connected) meta.appendChild(el('span', { class: 'peer-live', text: 'Connected now' }));
+    else meta.appendChild(document.createTextNode('Paired'));
     meta.appendChild(document.createTextNode(' · ' + p.address));
-    var rename = el('button', { class: 'link', text: 'Rinomina' });
+    var rename = el('button', { class: 'link', text: 'Rename' });
     rename.onclick = function () { editing = p.id; shown = ''; draw(); };
-    var forget = el('button', { class: 'link danger', text: 'Dimentica' });
-    App.confirmInline(forget, 'Conferma: dimentica', function () {
+    var forget = el('button', { class: 'link danger', text: 'Forget' });
+    App.confirmInline(forget, 'Confirm: forget', function () {
       App.call('DELETE', '/api/bluetooth/peers/' + p.id).then(function (res) {
-        reply(res, '«' + p.label + '» dimenticato. Per usarlo di nuovo va abbinato daccapo.', 'peersMsg');
+        reply(res, '“' + p.label + '” forgotten. To use it again, pair it from scratch (and remove the device in that computer’s Bluetooth settings).', 'peersMsg');
         load(); App.poll();
       }).catch(function () {});
     });
@@ -93,30 +94,30 @@
     }).catch(function () {});
   }
 
-  App.view('computer', {
+  App.view('computers', {
     load: load,
     onStatus: function (s) {
       renderPairing(s, 0);
-      if (!$('view-computer').hidden && performance.now() - lastFetch > 2000) load();
+      if (!$('view-computers').hidden && performance.now() - lastFetch > 2000) load();
     },
     onTick: function (s, elapsed) { renderPairing(s, elapsed); }
   });
 
   $('pairOpen').onclick = function () {
     busy = true; renderPairing(App.status(), 0);
-    App.call('POST', '/api/bluetooth/pairing', { seconds: Number($('pairDur').value) }).then(function (res) {
-      reply(res, 'Abbinamento aperto. Sul computer scegli il dispositivo dall’elenco Bluetooth.', 'pairMsg');
+    App.call('POST', '/api/bluetooth/pairing').then(function (res) {
+      reply(res, 'Pairing is open. On the computer, choose the device in the Bluetooth list.', 'pairMsg');
     }).catch(function () {}).then(function () { busy = false; App.poll(); });
   };
   $('pairClose').onclick = function () {
     busy = true; renderPairing(App.status(), 0);
     App.call('DELETE', '/api/bluetooth/pairing').then(function (res) {
-      reply(res, 'Abbinamento chiuso.', 'pairMsg');
+      reply(res, 'Pairing stopped.', 'pairMsg');
     }).catch(function () {}).then(function () { busy = false; App.poll(); });
   };
-  App.confirmInline($('forgetAll'), 'Conferma: dimentica tutti', function () {
+  App.confirmInline($('forgetAll'), 'Confirm: forget all', function () {
     App.call('DELETE', '/api/bluetooth/peers').then(function (res) {
-      reply(res, 'Tutti i computer sono stati dimenticati. L’abbinamento è di nuovo aperto.', 'peersMsg');
+      reply(res, 'All computers forgotten. Pairing is open again.', 'peersMsg');
       load(); App.poll();
     }).catch(function () {});
   });

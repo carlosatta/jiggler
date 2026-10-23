@@ -14,6 +14,7 @@
 #include "nvs_blob_store.h"
 #include "nvs_config_store.h"
 #include "nvs_network_store.h"
+#include "schedule.h"
 #include "script.h"
 #include "token_store.h"
 #include "wifi_setup.h"
@@ -41,6 +42,7 @@ jig::ScriptLibrary scripts(blobs);
 TokenStore tokens;
 jig::Controller controller(platform, rng, store);
 jig::AutomationEngine automations(platform, rng, scripts, blobs);
+jig::ScheduleEngine schedules(platform, controller, blobs);
 jig::ApiContext api{controller};
 WifiSetup wifi(tokens, networkStore);
 HttpServer http(api, tokens);
@@ -50,6 +52,7 @@ jig::BluetoothManager bluetooth(platform, ble, blobs);
 bool pairingOpen = true;
 bool held = false;
 uint32_t lastBluetoothTick = 0;
+uint32_t lastScheduleTick = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -66,12 +69,14 @@ void setup() {
   bluetooth.begin();
   controller.begin();
   automations.begin();
+  schedules.begin();
   startMovementTask(controller, automations, ble, platform);  // from here on the mouse works without WiFi
   api.network = &networkStore;
   api.devices = &devices;
   api.scripts = &scripts;
   api.automations = &automations;
   api.bluetooth = &bluetooth;
+  api.schedules = &schedules;
   api.tokens = &tokens;
   api.info = {JIG_VERSION, ble.name(), ble.address()};
   api.restart = scheduleRestart;
@@ -87,6 +92,10 @@ void loop() {
     const jig::BluetoothStatus bt = bluetooth.status();
     pairingOpen = bt.pairingOpen;
     held = bt.held;
+  }
+  if (now - lastScheduleTick >= 1000) {
+    lastScheduleTick = now;
+    schedules.tick();
   }
   led.update(controller.status(), pairingOpen, held, now);
   if (wifi.loop()) http.begin(wifi.apMode());

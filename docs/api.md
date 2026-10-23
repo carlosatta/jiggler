@@ -47,12 +47,12 @@ Body size caps: 4096 bytes for scripts and MCP, 2048 for devices and automations
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/status` | Full status |
-| POST | `/api/start` | Start (or resume) |
+| POST | `/api/start` | Start (or resume). Optional body `{"minutes": 1..1440}`: it then stops by itself after that long; without it, it runs until stopped |
 | POST | `/api/pause` | Pause; resuming keeps the remaining time |
 | POST | `/api/stop` | Stop completely |
 | POST | `/api/move` | Queue one movement now. `202 {"queued":true}`, or `409 mouse_not_connected` |
 
-`start`, `pause` and `stop` return the new status.
+`start`, `pause` and `stop` return the new status. A plain `start`, `pause` or `stop` clears any time limit. Bad `minutes` answer `400 invalid_minutes`.
 
 ```json
 {
@@ -60,6 +60,7 @@ Body size caps: 4096 bytes for scripts and MCP, 2048 for devices and automations
   "mouseConnected": true,
   "wifiConnected": true,
   "msToNextMove": 41250,
+  "stopsInMs": null,
   "moveCount": 17,
   "lastMoveAgoMs": 12000,
   "lastMoveAt": 1792750000,
@@ -68,22 +69,37 @@ Body size caps: 4096 bytes for scripts and MCP, 2048 for devices and automations
 }
 ```
 
-`state` is `running`, `paused` or `stopped`. `msToNextMove`, `lastMoveAgoMs` and `lastMoveAt` (Unix time, needs NTP) are `null` when unknown.
+`state` is `running`, `paused` or `stopped`. `stopsInMs` is the time left before a timed run stops by itself (`null` when there is no limit). `msToNextMove`, `lastMoveAgoMs` and `lastMoveAt` (Unix time, needs NTP) are `null` when unknown.
 
 ## Bluetooth
 
-See [bluetooth.md](bluetooth.md) for the pairing policy. `GET /api/status` also carries a compact `"bluetooth"` object (`connected`, `held`, `pairing{open, remainingMs}`, `computer{label, connectedForMs}`, `peerCount`) and a `"device"` object (`version`, `bleName`, `bleAddress`).
+See [bluetooth.md](bluetooth.md) for the pairing policy. `GET /api/status` also carries a compact `"bluetooth"` object (`connected`, `held`, `heldRemainingMs`, `pairing{open, remainingMs}`, `computer{label, connectedForMs}`, `peerCount`) and a `"device"` object (`version`, `bleName`, `bleAddress`).
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/bluetooth` | Full state: connection, pairing window (`firstRun` when no computer is paired), `computer`, and `peers[]` (`id`, `address`, `label`, `connected`) |
-| POST | `/api/bluetooth/pairing` | Open a pairing window. Body `{"seconds":120}` (30–600, optional) |
+| POST | `/api/bluetooth/pairing` | Open a pairing window. Optional body `{"seconds":180}` (30–600; default 180). It closes by itself when a computer pairs |
 | DELETE | `/api/bluetooth/pairing` | Close the window |
-| POST | `/api/bluetooth/disconnect` | Drop the link and hide the device until reconnect |
+| POST | `/api/bluetooth/disconnect` | Drop the link and hide the device for 3 minutes (or until reconnect) |
 | POST | `/api/bluetooth/reconnect` | Make the device visible again |
 | PUT | `/api/bluetooth/peers/<id>` | Rename a paired computer: `{"label":"MacBook"}` (1–32 chars) |
 | DELETE | `/api/bluetooth/peers/<id>` | Forget one computer (`404 not_found` if unknown) |
 | DELETE | `/api/bluetooth/peers` | Forget all computers and reopen pairing |
+
+## Schedules
+
+See [schedules.md](schedules.md). `GET /api/status` also carries `"schedule": {timeSynced, localTime, weekday, active, enabledCount, timezone}`.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/schedules` | `{"timezone", "schedules":[...], "timezones":[...]}` (the last is the list of accepted zones) |
+| PUT | `/api/schedules` | Replace the schedules (max 8) and/or set the timezone; keys you omit keep their value. `400 invalid_schedule` with the offending `field` |
+
+```json
+{ "timezone": "Europe/Rome",
+  "schedules": [ { "id": "workdays", "enabled": true, "days": ["mon","tue","wed","thu","fri"],
+                   "start": "09:00", "durationMin": 480 } ] }
+```
 
 ## API token
 

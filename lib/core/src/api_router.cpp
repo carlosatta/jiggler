@@ -73,8 +73,13 @@ HttpResponse handleApi(Controller& c, const std::string& method, const std::stri
   if (!methodOk) return json(405, errorJson("method_not_allowed"));
 
   if (path == "/api/status") return json(200, statusToJson(c.status()));
-  if (path == "/api/start") c.start();
-  else if (path == "/api/stop") c.stop();
+  if (path == "/api/start") {
+    std::optional<uint32_t> minutes;
+    ParseError perr;
+    if (!parseStartRequest(body, minutes, perr)) return json(400, errorJson(perr.code, perr.field, perr.message));
+    if (minutes) c.startFor(*minutes);
+    else c.start();
+  } else if (path == "/api/stop") c.stop();
   else if (path == "/api/pause") c.pause();
   else if (path == "/api/move") {
     CmdResult r = c.moveNow();

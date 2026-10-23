@@ -6,6 +6,7 @@
 | [architecture.md](architecture.md) | How the firmware is structured, tasks, gotchas |
 | [api.md](api.md) | REST API reference |
 | [bluetooth.md](bluetooth.md) | Pairing policy, which computer is connected, disconnect, forget |
+| [schedules.md](schedules.md) | Timed runs and weekly schedules |
 | [mcp.md](mcp.md) | MCP server and tools |
 | [scripting.md](scripting.md) | Script format, key names, limits, automations |
 | [devices.md](devices.md) | Devices, profiles, Bluetooth identity and its limits |

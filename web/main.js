@@ -7,7 +7,7 @@
   $('loginForm').addEventListener('submit', function (ev) {
     ev.preventDefault();
     var t = $('tokenInput').value.trim();
-    if (!t) { $('loginErr').textContent = 'Inserisci il token.'; return; }
+    if (!t) { $('loginErr').textContent = 'Enter the token.'; return; }
     App.setToken(t);
     $('login').hidden = true;
     App.poll();

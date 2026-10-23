@@ -14,7 +14,8 @@ namespace jig {
 
 constexpr uint32_t kMinPairingSec = 30;
 constexpr uint32_t kMaxPairingSec = 600;
-constexpr uint32_t kDefaultPairingSec = 120;
+constexpr uint32_t kDefaultPairingSec = 180;  // the one length the dashboard and the BOOT button use
+constexpr uint32_t kDisconnectHoldSec = 180;
 constexpr size_t kMaxPeerLabelLen = 32;
 // The stack keeps kStackBondSlots bonds and, when full, silently evicts the OLDEST one to make room. Refused
 // pairings briefly occupy a slot (the bond is written before we learn who it is), so the owner's computers are
@@ -58,6 +59,7 @@ struct BluetoothStatus {
   bool pairingOpen = false;
   bool firstRun = false;                            // no computer paired yet: pairing stays open
   std::optional<uint32_t> pairingRemainingMs;       // only while a timed window is open
+  std::optional<uint32_t> heldRemainingMs;          // only while held: when the device becomes visible again
   std::optional<std::string> connectedLabel;
   std::optional<uint32_t> connectedForMs;
   std::vector<Peer> peers;                          // paired computers
@@ -66,7 +68,8 @@ struct BluetoothStatus {
 // Pairing policy and bookkeeping for the computers that use the device.
 //  - No bond yet: pairing is open (a new device must be usable out of the box).
 //  - With a bond: pairing is closed unless a timed window is opened by the owner.
-//  - "Disconnect" drops the link and hides the device until "reconnect" (or a pairing window).
+//  - A window closes by itself when its time is up, when someone pairs, or when the owner stops it.
+//  - "Disconnect" drops the link and hides the device for kDisconnectHoldSec, or until "reconnect" (or a window).
 // Thread-safe. The firmware enforces `setPairingOpen`/`setAdvertising` on the real stack.
 class BluetoothManager {
  public:
@@ -87,6 +90,7 @@ class BluetoothManager {
  private:
   struct Locked;  // helpers that expect mutex_ to be held
   void applyLocked();
+  void expireLocked();  // closes a finished/used pairing window, ends an expired hold
   bool pairingOpenLocked();
   std::string labelForLocked(const std::string& id);
   bool saveLabelsLocked();
@@ -101,6 +105,8 @@ class BluetoothManager {
   bool held_ = false;
   bool windowOpen_ = false;
   uint32_t windowUntilMs_ = 0;
+  uint32_t heldUntilMs_ = 0;
+  std::vector<std::string> bondedAtOpen_;  // bonds when the window opened: a new one means someone paired
 };
 
 std::string peerId(const std::string& address);  // "AA:BB:.." -> "aabb.."

@@ -92,7 +92,7 @@ void WifiSetup::begin() {
   wm.setConfigPortalTimeout(0);
   wm.setConnectTimeout(15);
   impl_->tokenParam.reset(new WiFiManagerParameter(
-      "apitoken", "Token API (per dashboard, REST e MCP; annotalo)", initialToken(impl_->tokens).c_str(), 40));
+      "apitoken", "API token (for the dashboard, REST and MCP; write it down)", initialToken(impl_->tokens).c_str(), 40));
   wm.addParameter(impl_->tokenParam.get());
   wm.setSaveConfigCallback([this] { impl_->persistToken(); });
   wm.setSaveParamsCallback([this] { impl_->persistToken(); });

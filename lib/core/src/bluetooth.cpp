@@ -64,8 +64,27 @@ void BluetoothManager::begin() {
 void BluetoothManager::tick() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (labelsDirty_ && saveLabelsLocked()) labelsDirty_ = false;
-  if (windowOpen_ && static_cast<int32_t>(platform_.nowMs() - windowUntilMs_) >= 0) windowOpen_ = false;
+  expireLocked();
   applyLocked();
+}
+
+void BluetoothManager::expireLocked() {
+  const uint32_t now = platform_.nowMs();
+  bool changed = false;
+  if (windowOpen_) {
+    bool someonePaired = false;
+    for (const std::string& a : link_.bondedAddresses())
+      if (std::find(bondedAtOpen_.begin(), bondedAtOpen_.end(), a) == bondedAtOpen_.end()) someonePaired = true;
+    if (someonePaired || static_cast<int32_t>(now - windowUntilMs_) >= 0) {
+      windowOpen_ = false;
+      changed = true;
+    }
+  }
+  if (held_ && static_cast<int32_t>(now - heldUntilMs_) >= 0) {
+    held_ = false;
+    changed = true;
+  }
+  if (changed) applyLocked();
 }
 
 bool BluetoothManager::pairingOpenLocked() { return link_.bondedAddresses().empty() || windowOpen_; }
@@ -102,16 +121,14 @@ bool BluetoothManager::saveLabelsLocked() {
 
 BluetoothStatus BluetoothManager::status() {
   std::lock_guard<std::mutex> lock(mutex_);
+  expireLocked();
   const uint32_t now = platform_.nowMs();
-  if (windowOpen_ && static_cast<int32_t>(now - windowUntilMs_) >= 0) {
-    windowOpen_ = false;
-    applyLocked();
-  }
 
   BluetoothStatus s;
   const std::vector<std::string> bonded = link_.bondedAddresses();
   const std::vector<std::string> connected = link_.connectedAddresses();
   s.held = held_;
+  if (held_) s.heldRemainingMs = static_cast<uint32_t>(heldUntilMs_ - now);
   s.firstRun = bonded.empty();
   s.pairingOpen = s.firstRun || windowOpen_;
   if (windowOpen_) s.pairingRemainingMs = static_cast<uint32_t>(windowUntilMs_ - now);
@@ -148,6 +165,7 @@ CmdResult BluetoothManager::startPairing(uint32_t seconds) {
   held_ = false;
   windowOpen_ = true;
   windowUntilMs_ = platform_.nowMs() + seconds * 1000;
+  bondedAtOpen_ = link_.bondedAddresses();
   applyLocked();
   return ok();
 }
@@ -162,6 +180,7 @@ CmdResult BluetoothManager::stopPairing() {
 CmdResult BluetoothManager::disconnect() {
   std::lock_guard<std::mutex> lock(mutex_);
   held_ = true;
+  heldUntilMs_ = platform_.nowMs() + kDisconnectHoldSec * 1000;
   windowOpen_ = false;  // a hidden device cannot be paired with, so an open window would only lie
   link_.disconnectAll();
   connectedSince_.clear();
@@ -240,6 +259,8 @@ std::string bluetoothToJson(const BluetoothStatus& s) {
   JsonDocument doc;
   doc["connected"] = s.connected;
   doc["held"] = s.held;
+  if (s.heldRemainingMs) doc["heldRemainingMs"] = *s.heldRemainingMs;
+  else doc["heldRemainingMs"] = nullptr;
   fillPairing(doc["pairing"].to<JsonObject>(), s);
   doc["pairing"]["firstRun"] = s.firstRun;
   if (s.connected) fillComputer(doc["computer"].to<JsonObject>(), s);
@@ -261,6 +282,8 @@ std::string bluetoothSummaryJson(const BluetoothStatus& s) {
   JsonDocument doc;
   doc["connected"] = s.connected;
   doc["held"] = s.held;
+  if (s.heldRemainingMs) doc["heldRemainingMs"] = *s.heldRemainingMs;
+  else doc["heldRemainingMs"] = nullptr;
   fillPairing(doc["pairing"].to<JsonObject>(), s);
   if (s.connected) fillComputer(doc["computer"].to<JsonObject>(), s);
   else doc["computer"] = nullptr;

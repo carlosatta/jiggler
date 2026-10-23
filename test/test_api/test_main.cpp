@@ -243,6 +243,37 @@ void test_reject_body() {  // final review, Important (curl -d sends form-encode
   TEST_ASSERT_EQUAL_STRING("unsupported_media_type", parse(form->body)["error"].as<const char*>());
 }
 
+void test_start_with_minutes_sets_a_time_limit() {
+  Api a;
+  a.call("POST", "/api/stop");
+  HttpResponse r = a.call("POST", "/api/start", "{\"minutes\":30}");
+  TEST_ASSERT_EQUAL_INT(200, r.status);
+  JsonDocument d = parse(r.body);
+  TEST_ASSERT_EQUAL_STRING("running", d["state"].as<const char*>());
+  TEST_ASSERT_EQUAL_UINT32(1800000, d["stopsInMs"].as<uint32_t>());
+  // and it shows in status, as null once there is no limit
+  TEST_ASSERT_EQUAL_UINT32(1800000, parse(a.call("GET", "/api/status").body)["stopsInMs"].as<uint32_t>());
+  a.call("POST", "/api/start");
+  TEST_ASSERT_TRUE(contains(a.call("GET", "/api/status").body, "\"stopsInMs\":null"));
+}
+
+void test_start_rejects_bad_minutes_and_bodies() {
+  Api a;
+  a.call("POST", "/api/stop");
+  for (const char* body : {"{\"minutes\":0}", "{\"minutes\":1441}", "{\"minutes\":-5}"}) {
+    HttpResponse r = a.call("POST", "/api/start", body);
+    TEST_ASSERT_EQUAL_INT(400, r.status);
+    TEST_ASSERT_TRUE(contains(r.body, "invalid_minutes"));
+  }
+  HttpResponse notInt = a.call("POST", "/api/start", "{\"minutes\":\"30\"}");
+  TEST_ASSERT_EQUAL_INT(400, notInt.status);
+  HttpResponse unknown = a.call("POST", "/api/start", "{\"hours\":1}");
+  TEST_ASSERT_EQUAL_INT(400, unknown.status);
+  HttpResponse notJson = a.call("POST", "/api/start", "nope");
+  TEST_ASSERT_EQUAL_INT(400, notJson.status);
+  TEST_ASSERT_TRUE(parse(a.call("GET", "/api/status").body)["state"].as<std::string>() == "stopped");  // nothing started
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_copy_body_chunk_never_writes_past_total);
@@ -261,5 +292,7 @@ int main() {
   RUN_TEST(test_put_config_empty_object_is_noop);
   RUN_TEST(test_routing_errors);
   RUN_TEST(test_authorized);
+  RUN_TEST(test_start_with_minutes_sets_a_time_limit);
+  RUN_TEST(test_start_rejects_bad_minutes_and_bodies);
   return UNITY_END();
 }

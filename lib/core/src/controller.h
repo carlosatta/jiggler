@@ -13,11 +13,14 @@ namespace jig {
 
 enum class RunState { Stopped, Running, Paused };
 
+constexpr uint32_t kMaxRunMinutes = 1440;
+
 struct Status {
   RunState runState = RunState::Stopped;
   bool mouseConnected = false;
   bool wifiConnected = false;
   std::optional<uint32_t> msToNextMove;  // only while Running
+  std::optional<uint32_t> msToAutoStop;  // only while Running with a time limit
   uint32_t moveCount = 0;
   std::optional<uint32_t> lastMoveAgoMs;
   std::optional<uint32_t> lastMoveUnix;  // only when the wall clock is synced
@@ -38,7 +41,8 @@ class Controller {
 
   void begin();
   Status status() const;
-  void start();
+  void start();                        // run until told otherwise (clears any time limit)
+  CmdResult startFor(uint32_t minutes);  // run, then stop by itself; 1..kMaxRunMinutes (invalid_minutes)
   void pause();
   void stop();
   CmdResult moveNow();
@@ -48,6 +52,7 @@ class Controller {
   std::optional<Plan> tick();
 
  private:
+  void startLocked();
   void scheduleNextLocked();
   uint32_t remainingMsLocked() const;
   std::optional<Plan> fireLocked();
@@ -60,6 +65,8 @@ class Controller {
   Config config_;
   RunState state_ = RunState::Stopped;
   uint32_t dueMs_ = 0;
+  uint32_t stopAtMs_ = 0;
+  bool hasStopAt_ = false;
   uint32_t pausedRemainingMs_ = 0;
   bool pendingMoveNow_ = false;
   uint32_t moveCount_ = 0;

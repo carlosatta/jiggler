@@ -12,7 +12,7 @@ disconnect it or pair another computer?* Everything else (scripts, automations, 
 occasional and lives out of the way.
 
 ## Register
-Operate: a tool, not a brochure. Scannability and honest state beat decoration. Italian UI, plain words, no
+Operate: a tool, not a brochure. Scannability and honest state beat decoration. English UI, plain words, no
 jargon on the first screen.
 
 ## Principles

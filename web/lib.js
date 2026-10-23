@@ -1,111 +1,149 @@
-// Pure helpers (no DOM): inlined before app.js in the page and loaded as a module by the node tests.
+// Pure helpers (no DOM): inlined before core.js in the page and loaded as a module by the node tests.
 var JigLib = (function () {
   'use strict';
-  var MESSAGES = {
-    'must be between 5 and 3600': 'Deve essere tra 5 e 3600.',
-    'must be between 5 and 600': 'Deve essere tra 5 e 600.',
-    'must be between 0 and 1': 'Deve essere tra 0 e 100.',
-    'maxIntervalSec must be >= minIntervalSec': 'Il massimo non può essere minore del minimo.',
-    'must be >= minIntervalSec': 'Il massimo non può essere minore del minimo.',
-    'must be an integer': 'Inserisci un numero intero.',
-    'must be a number': 'Inserisci un numero.',
-    'must look like AA:BB:CC:DD:EE:FF': 'Formato AA:BB:CC:DD:EE:FF.',
-    'must be a unicast address (first byte even)': 'Indirizzo unicast: il primo byte deve essere pari.',
-    'must be 1 to 29 characters': 'Da 1 a 29 caratteri.',
-    'must be 1 to 32 characters': 'Da 1 a 32 caratteri.',
-    'unknown profile': 'Profilo sconosciuto.',
-    'profile is for a different device kind': 'Profilo di un altro tipo di dispositivo.',
-    'at least one device must be enabled': 'Abilita almeno un dispositivo.',
-    'duplicate id': 'Id duplicato.',
-    'must be an integer from 0 to 65535': 'Intero da 0 a 65535.',
-    'unknown script': 'Script inesistente.',
-    'must be between 5 and 86400': 'Tra 5 e 86400 secondi.',
-    'must be empty or 8 to 63 printable ASCII characters': 'Vuota (generata) oppure 8-63 caratteri ASCII.',
-    'the built-in script cannot be changed': 'Lo script predefinito non si può modificare.',
-    'the built-in script cannot be removed': 'Lo script predefinito non si può eliminare.',
-    'at most 8 user scripts': 'Massimo 8 script utente.',
-    'at most 4 automations': 'Massimo 4 automazioni.',
-    'must be 1 to 24 characters of a-z 0-9 _ -': 'Da 1 a 24 caratteri, solo lettere minuscole, cifre, trattino e trattino basso.',
-    'must be auto or ap': 'Scegli Auto o Rete propria.',
-    'at least one mouse must be enabled (the jiggler needs it)': 'Abilita almeno un mouse: il jiggler ne ha bisogno.',
-    'could not save the devices (storage full?)': 'Memoria piena: impossibile salvare.',
-    'could not save the script (storage full?)': 'Memoria piena: impossibile salvare lo script.',
-    'could not save the automations (storage full?)': 'Memoria piena: impossibile salvare.',
-    'script is too complex (max 10000 operations)': 'Script troppo complesso (massimo 10000 operazioni).',
-    'script is too large (max 3000 bytes)': 'Script troppo grande.',
-    'the pairing window must last between 30 and 600 seconds': 'L’abbinamento deve durare tra 30 e 600 secondi.',
-    'no such paired computer': 'Questo computer non è più abbinato.',
-    'the name must be 1 to 32 characters': 'Il nome deve avere da 1 a 32 caratteri.',
-    'the name must not contain control characters': 'Il nome non può contenere caratteri di controllo.',
-    'the current token is not correct': 'Il token attuale non è corretto.',
-    'the current token is required': 'Inserisci il token attuale.',
-    'must be 8 to 40 printable characters without spaces': 'Da 8 a 40 caratteri, senza spazi.',
-    'could not save the token (storage full?)': 'Memoria piena: token non salvato.',
-    'could not save the name (storage full?)': 'Memoria piena: nome non salvato.'
-  };
 
-  function tr(message) { return MESSAGES[message] || message || 'Valore non valido.'; }
+  var DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  var DAY_LABELS = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+
+  // Server messages are short English fragments ("must be between 5 and 3600"); show them as sentences.
+  function tr(message) {
+    if (!message) return 'Invalid value.';
+    var s = String(message);
+    s = s.charAt(0).toUpperCase() + s.slice(1);
+    return /[.!?]$/.test(s) ? s : s + '.';
+  }
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
 
   function fmtDuration(ms) {
     var s = Math.ceil(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-    return h > 0 ? h + ':' + pad(m) + ':' + pad(sec) : m + ':' + pad(sec);
+    return h > 0 ? h + ':' + pad2(m) + ':' + pad2(sec) : m + ':' + pad2(sec);
   }
+
   function fmtAgo(ms) {
     var m = Math.floor(ms / 60000);
-    if (m < 1) return 'meno di un minuto fa';
-    return m === 1 ? '1 minuto fa' : m + ' minuti fa';
+    if (m < 1) return 'less than a minute ago';
+    return plural(m, 'minute', 'minutes') + ' ago';
   }
 
-  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
-
-  // A duration, as in "da 12 minuti" / "da 1 ora e 5 min".
+  // A length of time, as in "for 12 minutes" / "for 1 hour 5 min".
   function fmtSince(ms) {
     var m = Math.floor(ms / 60000);
-    if (m < 1) return 'meno di un minuto';
-    if (m < 60) return plural(m, 'minuto', 'minuti');
+    if (m < 1) return 'less than a minute';
+    if (m < 60) return plural(m, 'minute', 'minutes');
     var h = Math.floor(m / 60), rest = m % 60;
-    return plural(h, 'ora', 'ore') + (rest ? ' e ' + rest + ' min' : '');
-  }
-
-  // What the Stato page says about the Bluetooth link, from /api/status. Pure so the wording is testable.
-  function connectionView(bt, device) {
-    var name = (device && device.bleName) || 'il dispositivo';
-    var pairing = bt.pairing || {};
-    var timed = pairing.open && pairing.remainingMs !== null && pairing.remainingMs !== undefined;
-    var window_ = timed ? ' Abbinamento aperto, scade tra ' + fmtDuration(pairing.remainingMs) + '.' : '';
-    if (bt.connected && bt.computer) {
-      var actions = ['disconnect'];
-      if (timed) actions.push('closePairing');
-      return { tone: 'ok', title: 'Collegato a ' + bt.computer.label,
-        detail: 'da ' + fmtSince(bt.computer.connectedForMs) + ' · ' + name + '.' + window_, actions: actions };
-    }
-    if (bt.held) {
-      return { tone: 'warn', title: 'Scollegato',
-        detail: 'Il dispositivo è invisibile: nessun computer può collegarsi finché non lo riconnetti.', actions: ['reconnect'] };
-    }
-    if (pairing.open && !timed) {
-      return { tone: 'open', title: 'Pronto per l’abbinamento',
-        detail: 'Sul computer apri le impostazioni Bluetooth e scegli «' + name + '».', actions: [] };
-    }
-    if (timed) {
-      return { tone: 'open', title: 'Abbinamento aperto',
-        detail: 'Scade tra ' + fmtDuration(pairing.remainingMs) + '. Sul computer scegli «' + name + '».', actions: ['closePairing'] };
-    }
-    return { tone: 'idle', title: 'Nessun computer collegato',
-      detail: 'Si ricollega da solo quando il computer abbinato è acceso e vicino.', actions: ['pair'] };
-  }
-
-  function checkNewToken(next, confirm) {
-    if (next.length < 8 || next.length > 40 || /\s/.test(next)) return 'Da 8 a 40 caratteri, senza spazi.';
-    if (next !== confirm) return 'I due token non coincidono.';
-    return '';
+    return plural(h, 'hour', 'hours') + (rest ? ' ' + rest + ' min' : '');
   }
 
   function hex4(n) { return '0x' + ('0000' + n.toString(16).toUpperCase()).slice(-4); }
 
-  return { MESSAGES: MESSAGES, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, fmtSince: fmtSince,
-    connectionView: connectionView, checkNewToken: checkNewToken, hex4: hex4 };
+  // What the Status page says about the Bluetooth link, from /api/status. Pure so the wording is testable.
+  function connectionView(bt, device) {
+    var name = (device && device.bleName) || 'the device';
+    var pairing = bt.pairing || {};
+    var timed = pairing.open && pairing.remainingMs !== null && pairing.remainingMs !== undefined;
+    var windowNote = timed ? ' Pairing is open for ' + fmtDuration(pairing.remainingMs) + '.' : '';
+    if (bt.connected && bt.computer) {
+      var actions = ['disconnect'];
+      if (timed) actions.push('closePairing');
+      return { tone: 'ok', title: 'Connected to ' + bt.computer.label,
+        detail: 'For ' + fmtSince(bt.computer.connectedForMs) + ' · ' + name + '.' + windowNote, actions: actions };
+    }
+    if (bt.held) {
+      var left = bt.heldRemainingMs !== null && bt.heldRemainingMs !== undefined ? fmtDuration(bt.heldRemainingMs) : '';
+      return { tone: 'warn', title: 'Disconnected',
+        detail: (left ? 'Hidden from computers for another ' + left + '; after that your computer can reconnect.' : 'Hidden from computers.') +
+          ' Press Reconnect to show the device now.', actions: ['reconnect'] };
+    }
+    if (pairing.open && !timed) {
+      return { tone: 'open', title: 'Ready to pair',
+        detail: 'On the computer, open the Bluetooth settings and choose “' + name + '”.', actions: [] };
+    }
+    if (timed) {
+      return { tone: 'open', title: 'Pairing is open',
+        detail: 'Closes in ' + fmtDuration(pairing.remainingMs) + '. On the computer, choose “' + name + '”.', actions: ['closePairing'] };
+    }
+    return { tone: 'idle', title: 'No computer connected',
+      detail: 'It reconnects by itself when a paired computer is on and nearby.', actions: ['pair'] };
+  }
+
+  function checkNewToken(next, confirm) {
+    if (next.length < 8 || next.length > 40 || /\s/.test(next)) return '8 to 40 characters, no spaces.';
+    if (next !== confirm) return 'The two tokens do not match.';
+    return '';
+  }
+
+  // ---- run for / until a time ----------------------------------------------------------------
+
+  // Minutes from `now` to the next occurrence of "HH:MM" local time (1..1440); null if malformed.
+  function minutesUntil(hhmm, now) {
+    var m = /^(\d{2}):(\d{2})$/.exec(hhmm || '');
+    if (!m || +m[1] > 23 || +m[2] > 59) return null;
+    var target = new Date(now.getTime());
+    target.setHours(+m[1], +m[2], 0, 0);
+    var diff = target.getTime() - now.getTime();
+    if (diff <= 0) diff += 24 * 3600000;
+    return Math.min(1440, Math.max(1, Math.ceil(diff / 60000)));
+  }
+
+  // 0 = no limit, a positive number = minutes, null = the choice is not valid yet.
+  function runForMinutes(sel, now) {
+    if (sel.choice === 'forever') return 0;
+    if (sel.choice === 'until') return minutesUntil(sel.time, now);
+    if (sel.choice === 'custom') {
+      if (!/^\d+$/.test(String(sel.custom || '').trim())) return null;
+      var n = parseInt(sel.custom, 10);
+      return n >= 1 && n <= 1440 ? n : null;
+    }
+    var preset = parseInt(sel.choice, 10);
+    return preset >= 1 && preset <= 1440 ? preset : null;
+  }
+
+  // The wall-clock moment a run that stops in `ms` ends, e.g. "14:40" or "00:30 tomorrow".
+  function stopsAt(ms, now) {
+    var end = new Date(now.getTime() + ms);
+    var label = pad2(end.getHours()) + ':' + pad2(end.getMinutes());
+    var sameDay = end.getFullYear() === now.getFullYear() && end.getMonth() === now.getMonth() && end.getDate() === now.getDate();
+    return sameDay ? label : label + ' tomorrow';
+  }
+
+  // ---- schedules -----------------------------------------------------------------------------
+
+  function describeDays(days) {
+    var set = {};
+    days.forEach(function (d) { set[d] = true; });
+    var idx = DAYS.filter(function (d) { return set[d]; });
+    if (idx.length === 0) return 'No days';
+    if (idx.length === 7) return 'Every day';
+    var runs = [], start = 0;
+    for (var i = 1; i <= idx.length; i++) {
+      if (i === idx.length || DAYS.indexOf(idx[i]) !== DAYS.indexOf(idx[i - 1]) + 1) {
+        runs.push(idx.slice(start, i));
+        start = i;
+      }
+    }
+    return runs.map(function (r) {
+      if (r.length >= 3) return DAY_LABELS[r[0]] + '–' + DAY_LABELS[r[r.length - 1]];
+      return r.map(function (d) { return DAY_LABELS[d]; }).join(', ');
+    }).join(', ');
+  }
+
+  function scheduleEnd(start, durationMin) {
+    var m = /^(\d{2}):(\d{2})$/.exec(start);
+    var total = (+m[1]) * 60 + (+m[2]) + durationMin;
+    var day = total >= 1440;
+    var t = total % 1440;
+    return pad2(Math.floor(t / 60)) + ':' + pad2(t % 60) + (day ? ' next day' : '');
+  }
+
+  function scheduleSummary(s) {
+    return describeDays(s.days) + ', ' + s.start + ' to ' + scheduleEnd(s.start, s.durationMin);
+  }
+
+  return { DAYS: DAYS, DAY_LABELS: DAY_LABELS, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, fmtSince: fmtSince, hex4: hex4,
+    connectionView: connectionView, checkNewToken: checkNewToken, minutesUntil: minutesUntil, runForMinutes: runForMinutes,
+    stopsAt: stopsAt, describeDays: describeDays, scheduleEnd: scheduleEnd, scheduleSummary: scheduleSummary };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = JigLib;

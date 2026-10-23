@@ -8,6 +8,7 @@
 #include "controller.h"
 #include "bluetooth.h"
 #include "dashboard_html.h"
+#include "schedule.h"
 #include "web_assets.h"
 #include "fakes.h"
 
@@ -56,6 +57,7 @@ struct Route {
 const Route kPageRoutes[] = {
     {"GET", "/api/status", ""},
     {"POST", "/api/start", ""},
+    {"POST", "/api/start", "{\"minutes\":30}"},
     {"POST", "/api/stop", ""},
     {"POST", "/api/move", ""},
     {"PUT", "/api/config", "{}"},
@@ -69,6 +71,8 @@ const Route kPageRoutes[] = {
     {"DELETE", "/api/scripts/demo", ""},
     {"GET", "/api/automations", ""},
     {"PUT", "/api/automations", "{\"automations\":[]}"},
+    {"GET", "/api/schedules", ""},
+    {"PUT", "/api/schedules", "{\"timezone\":\"Europe/Rome\",\"schedules\":[]}"},
     {"GET", "/api/network", ""},
     {"PUT", "/api/network", "{}"},
     {"GET", "/api/bluetooth", ""},
@@ -120,6 +124,8 @@ void test_dashboard_only_references_real_routes() {
   ScriptLibrary scripts(blobs);
   AutomationEngine automations(clock, rng, scripts, blobs);
   automations.begin();
+  ScheduleEngine schedules(clock, controller, blobs);
+  schedules.begin();
   FakeLink link;
   MemBlobStore peerBlobs;
   BluetoothManager bluetooth(clock, link, peerBlobs);
@@ -128,6 +134,7 @@ void test_dashboard_only_references_real_routes() {
   int restarts = 0;
   ApiContext ctx{controller};
   ctx.bluetooth = &bluetooth;
+  ctx.schedules = &schedules;
   ctx.tokens = &tokens;
   ctx.network = &net;
   ctx.devices = &devices;

@@ -21,6 +21,10 @@ Status Controller::status() const {
   s.mouseConnected = platform_.mouseConnected();
   s.wifiConnected = platform_.wifiConnected();
   if (state_ == RunState::Running) s.msToNextMove = remainingMsLocked();
+  if (state_ == RunState::Running && hasStopAt_) {
+    const int32_t left = static_cast<int32_t>(stopAtMs_ - platform_.nowMs());
+    s.msToAutoStop = left > 0 ? static_cast<uint32_t>(left) : 0;
+  }
   s.moveCount = moveCount_;
   if (hasMoved_) {
     const uint32_t ago = platform_.nowMs() - lastMoveMs_;
@@ -34,6 +38,27 @@ Status Controller::status() const {
 
 void Controller::start() {
   std::lock_guard<std::mutex> lock(mutex_);
+  startLocked();
+  hasStopAt_ = false;
+}
+
+CmdResult Controller::startFor(uint32_t minutes) {
+  CmdResult r;
+  if (minutes < 1 || minutes > kMaxRunMinutes) {
+    r.error = "invalid_minutes";
+    r.field = "minutes";
+    r.message = "must be between 1 and 1440";
+    return r;
+  }
+  std::lock_guard<std::mutex> lock(mutex_);
+  startLocked();
+  stopAtMs_ = platform_.nowMs() + minutes * 60000u;
+  hasStopAt_ = true;
+  r.ok = true;
+  return r;
+}
+
+void Controller::startLocked() {
   if (state_ == RunState::Running) return;
   if (state_ == RunState::Paused) {
     dueMs_ = platform_.nowMs() + pausedRemainingMs_;
@@ -49,11 +74,13 @@ void Controller::pause() {
   if (state_ != RunState::Running) return;
   pausedRemainingMs_ = remainingMsLocked();
   state_ = RunState::Paused;
+  hasStopAt_ = false;
 }
 
 void Controller::stop() {
   std::lock_guard<std::mutex> lock(mutex_);
   state_ = RunState::Stopped;
+  hasStopAt_ = false;
 }
 
 CmdResult Controller::moveNow() {
@@ -90,6 +117,10 @@ CmdResult Controller::updateConfig(const ConfigPatch& patch) {
 
 std::optional<Plan> Controller::tick() {
   std::lock_guard<std::mutex> lock(mutex_);
+  if (hasStopAt_ && static_cast<int32_t>(platform_.nowMs() - stopAtMs_) >= 0) {
+    state_ = RunState::Stopped;
+    hasStopAt_ = false;
+  }
   if (pendingMoveNow_) {
     pendingMoveNow_ = false;
     if (platform_.mouseConnected()) return fireLocked();

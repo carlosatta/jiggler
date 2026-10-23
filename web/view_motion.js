@@ -1,4 +1,4 @@
-// Movimento: random-movement configuration, scripts and automations.
+// Movement: weekly schedules, random-movement configuration, scripts and automations.
 (function () {
   'use strict';
   var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
@@ -27,19 +27,19 @@
     var body = {}, invalid = false;
     FIELDS.forEach(function (f) {
       var raw = $(f.id).value.trim().replace(',', '.');
-      if (raw === '') { fieldError(f.id, 'Campo obbligatorio.'); invalid = true; return; }
+      if (raw === '') { fieldError(f.id, 'This field is required.'); invalid = true; return; }
       var n = Number(raw);
-      if (!isFinite(n)) { fieldError(f.id, 'Inserisci un numero.'); invalid = true; return; }
+      if (!isFinite(n)) { fieldError(f.id, 'Enter a number.'); invalid = true; return; }
       if (n !== Math.round(config[f.id] * f.scale)) body[f.id] = n / f.scale;
     });
     if (invalid) return;
     say('', '', 'cfgMsg');
-    if (Object.keys(body).length === 0) { say('Nessuna modifica da salvare.', '', 'cfgMsg'); return; }
+    if (Object.keys(body).length === 0) { say('Nothing to save.', '', 'cfgMsg'); return; }
     App.call('PUT', '/api/config', body).then(function (res) {
-      if (res.status === 200) { dirty = {}; say('Configurazione salvata.', 'good', 'cfgMsg'); App.poll(); return; }
+      if (res.status === 200) { dirty = {}; say('Configuration saved.', 'good', 'cfgMsg'); App.poll(); return; }
       var d = res.data;
       if (d.field && $('e_' + d.field)) { fieldError(d.field, tr(d.message)); $(d.field).setAttribute('aria-invalid', 'true'); }
-      else say('Salvataggio non riuscito.', 'bad', 'cfgMsg');
+      else say('Could not save.', 'bad', 'cfgMsg');
     }).catch(function () {});
   });
 
@@ -56,12 +56,12 @@
   function renderScriptSelect(selected) {
     var sel = $('scrSelect');
     sel.textContent = '';
-    scriptList.forEach(function (s) { sel.appendChild(el('option', { value: s.name, text: s.name + (s.builtin ? ' (predefinito)' : '') })); });
+    scriptList.forEach(function (s) { sel.appendChild(el('option', { value: s.name, text: s.name + (s.builtin ? ' (built in)' : '') })); });
     if (selected) sel.value = selected;
   }
   function openScript(name) {
     App.call('GET', '/api/scripts/' + encodeURIComponent(name)).then(function (res) {
-      if (res.status !== 200) { say('Script non trovato.', 'bad', 'scrMsg'); return; }
+      if (res.status !== 200) { say('Script not found.', 'bad', 'scrMsg'); return; }
       isNew = false;
       builtin = res.data.builtin;
       $('scrName').value = res.data.name;
@@ -98,22 +98,22 @@
     var name = $('scrName').value.trim();
     say('', '', 'scrMsg');
     clearErrors($('scriptsBox'));
-    if (!name) { $('e_scrName').textContent = 'Inserisci un nome.'; return; }
+    if (!name) { $('e_scrName').textContent = 'Enter a name.'; return; }
     App.call('PUT', '/api/scripts/' + encodeURIComponent(name), $('scrBody').value).then(function (res) {
-      if (res.status === 200) { isNew = false; say('Script salvato.', 'good', 'scrMsg'); loadScripts(name); }
+      if (res.status === 200) { isNew = false; say('Script saved.', 'good', 'scrMsg'); loadScripts(name); }
       else scriptError(res);
     }).catch(function () {});
   };
   $('scrRun').onclick = function () {
     App.call('POST', '/api/scripts/' + encodeURIComponent($('scrName').value.trim()) + '/run').then(function (res) {
-      if (res.status === 202) say('Script avviato.', 'good', 'scrMsg');
-      else say(res.data.error === 'mouse_not_connected' ? 'Nessun computer collegato.' : 'Esecuzione non riuscita.', 'bad', 'scrMsg');
+      if (res.status === 202) say('Script started.', 'good', 'scrMsg');
+      else say(res.data.error === 'mouse_not_connected' ? 'No computer connected.' : 'Could not run it.', 'bad', 'scrMsg');
     }).catch(function () {});
   };
-  App.confirmInline($('scrDelete'), 'Conferma: elimina', function () {
+  App.confirmInline($('scrDelete'), 'Confirm: delete', function () {
     App.call('DELETE', '/api/scripts/' + encodeURIComponent($('scrName').value.trim())).then(function (res) {
-      if (res.status === 200) { isNew = false; say('Script eliminato.', 'good', 'scrMsg'); loadScripts(); }
-      else say(tr(res.data.message) || 'Eliminazione non riuscita.', 'bad', 'scrMsg');
+      if (res.status === 200) { isNew = false; say('Script deleted.', 'good', 'scrMsg'); loadScripts(); }
+      else say(tr(res.data.message) || 'Could not delete.', 'bad', 'scrMsg');
     }).catch(function () {});
   });
 
@@ -127,15 +127,15 @@
       var id = el('input', { autocomplete: 'off' });
       id.setAttribute('data-k', 'id');
       id.value = a.id;
-      row.appendChild(labeled('Nome', id, 'automations[' + i + '].id'));
+      row.appendChild(labeled('Name', id, 'automations[' + i + '].id'));
       var sel = el('select');
       sel.setAttribute('data-k', 'script');
       scriptList.forEach(function (s) { sel.appendChild(el('option', { value: s.name, text: s.name })); });
-      if (!scriptList.some(function (s) { return s.name === a.script; })) sel.appendChild(el('option', { value: a.script, text: a.script + ' (mancante)' }));
+      if (!scriptList.some(function (s) { return s.name === a.script; })) sel.appendChild(el('option', { value: a.script, text: a.script + ' (missing)' }));
       sel.value = a.script;
       row.appendChild(labeled('Script', sel, 'automations[' + i + '].script'));
       var pair = el('div', { class: 'row' });
-      [['minIntervalSec', 'Minimo (s)'], ['maxIntervalSec', 'Massimo (s)']].forEach(function (f) {
+      [['minIntervalSec', 'Minimum (s)'], ['maxIntervalSec', 'Maximum (s)']].forEach(function (f) {
         var inp = el('input', { inputmode: 'numeric', autocomplete: 'off' });
         inp.setAttribute('data-k', f[0]);
         inp.value = String(a[f[0]]);
@@ -145,8 +145,8 @@
       var en = el('input', { type: 'checkbox' });
       en.setAttribute('data-k', 'enabled');
       en.checked = a.enabled;
-      row.appendChild(el('div', { class: 'field' }, [el('label', { class: 'inline' }, [en, el('span', { text: 'Attiva' })])]));
-      var rm = el('button', { class: 'danger', text: 'Rimuovi' });
+      row.appendChild(el('div', { class: 'field' }, [el('label', { class: 'inline' }, [en, el('span', { text: 'Enabled' })])]));
+      var rm = el('button', { class: 'danger', text: 'Remove' });
       rm.onclick = function () { collectAutos(); autos.splice(i, 1); renderAutos(); };
       row.appendChild(rm);
       box.appendChild(row);
@@ -182,21 +182,159 @@
     clearErrors(root);
     say('', '', 'autoMsg');
     App.call('PUT', '/api/automations', { automations: collectAutos() }).then(function (res) {
-      if (res.status === 200) { autos = res.data.automations; renderAutos(); say('Automazioni salvate.', 'good', 'autoMsg'); return; }
-      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Salvataggio non riuscito.', 'bad', 'autoMsg');
-      else say('Controlla i campi evidenziati.', 'bad', 'autoMsg');
+      if (res.status === 200) { autos = res.data.automations; renderAutos(); say('Automations saved.', 'good', 'autoMsg'); return; }
+      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Could not save.', 'bad', 'autoMsg');
+      else say('Check the highlighted fields.', 'bad', 'autoMsg');
     }).catch(function () {});
   };
 
   $('scriptsBox').addEventListener('toggle', function () { if ($('scriptsBox').open) loadScripts(); });
   $('autoBox').addEventListener('toggle', function () { if ($('autoBox').open) loadAutos(); });
 
-  App.view('movimento', {
+  // ---- Schedules ----
+  var sched = { timezone: 'Europe/Rome', schedules: [] };
+  var MAX_SCHEDULES = 8;
+
+  function readSchedules() {
+    var out = [];
+    $('schedList').querySelectorAll('.sched').forEach(function (card) {
+      var days = [];
+      card.querySelectorAll('.days button').forEach(function (b) { if (b.getAttribute('aria-pressed') === 'true') days.push(b.getAttribute('data-day')); });
+      out.push({
+        id: card.querySelector('[data-k=id]').value.trim(),
+        enabled: card.querySelector('[data-k=enabled]').checked,
+        days: days,
+        start: card.querySelector('[data-k=start]').value,
+        durationMin: Number(card.querySelector('[data-k=durationMin]').value)
+      });
+    });
+    return out;
+  }
+
+  function refreshSummary(card) {
+    var start = card.querySelector('[data-k=start]').value;
+    var dur = Number(card.querySelector('[data-k=durationMin]').value);
+    var days = [];
+    card.querySelectorAll('.days button').forEach(function (b) { if (b.getAttribute('aria-pressed') === 'true') days.push(b.getAttribute('data-day')); });
+    var sum = card.querySelector('.sched-sum');
+    var ok = /^\d{2}:\d{2}$/.test(start) && dur >= 1 && dur <= 1440 && Number.isInteger(dur);
+    sum.textContent = ok ? JigLib.scheduleSummary({ days: days, start: start, durationMin: dur }) : JigLib.describeDays(days) + ', set a start time and a duration';
+    sum.className = 'sched-sum' + (card.querySelector('[data-k=enabled]').checked ? '' : ' off');
+  }
+
+  function renderSchedules() {
+    var box = $('schedList');
+    box.textContent = '';
+    sched.schedules.forEach(function (sc, i) {
+      var card = el('div', { class: 'sched' });
+      var sum = el('span', { class: 'sched-sum' });
+      var en = el('input', { type: 'checkbox' });
+      en.setAttribute('data-k', 'enabled');
+      en.checked = sc.enabled;
+      en.addEventListener('change', function () { refreshSummary(card); });
+      card.appendChild(el('div', { class: 'sched-head' }, [sum, el('label', { class: 'inline' }, [en, el('span', { text: 'On' })])]));
+
+      var id = el('input', { autocomplete: 'off', placeholder: 'a-z 0-9 _ -' });
+      id.setAttribute('data-k', 'id');
+      id.value = sc.id;
+      card.appendChild(labeled('Name', id, 'schedules[' + i + '].id'));
+
+      var days = el('div', { class: 'days', role: 'group', 'aria-label': 'Days' });
+      JigLib.DAYS.forEach(function (d) {
+        var b = el('button', { type: 'button', text: JigLib.DAY_LABELS[d] });
+        b.setAttribute('data-day', d);
+        b.setAttribute('aria-pressed', sc.days.indexOf(d) >= 0 ? 'true' : 'false');
+        b.addEventListener('click', function () {
+          b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+          refreshSummary(card);
+        });
+        days.appendChild(b);
+      });
+      card.appendChild(days);
+      var dayErr = el('div', { class: 'err' });
+      dayErr.setAttribute('data-err', 'schedules[' + i + '].days');
+      card.appendChild(dayErr);
+
+      var start = el('input', { type: 'time' });
+      start.setAttribute('data-k', 'start');
+      start.value = sc.start;
+      start.addEventListener('input', function () { refreshSummary(card); });
+      var dur = el('input', { inputmode: 'numeric', autocomplete: 'off' });
+      dur.setAttribute('data-k', 'durationMin');
+      dur.value = String(sc.durationMin);
+      dur.addEventListener('input', function () { refreshSummary(card); });
+      card.appendChild(el('div', { class: 'row3' }, [labeled('Starts at', start, 'schedules[' + i + '].start'), labeled('Lasts (minutes)', dur, 'schedules[' + i + '].durationMin')]));
+
+      var rm = el('button', { class: 'danger', type: 'button', text: 'Remove' });
+      rm.onclick = function () { sched.schedules = readSchedules(); sched.schedules.splice(i, 1); renderSchedules(); };
+      card.appendChild(el('div', { class: 'actions' }, [rm]));
+      box.appendChild(card);
+      refreshSummary(card);
+    });
+    $('schedEmpty').hidden = sched.schedules.length > 0;
+    $('schedAdd').disabled = sched.schedules.length >= MAX_SCHEDULES;
+  }
+
+  function fillTimezones(list) {
+    var sel = $('tzSelect');
+    if (sel.options.length === list.length) return;
+    sel.textContent = '';
+    list.forEach(function (z) { sel.appendChild(el('option', { value: z, text: z.replace('_', ' ') })); });
+  }
+
+  function loadSchedules() {
+    App.call('GET', '/api/schedules').then(function (res) {
+      if (res.status !== 200) return;
+      sched = { timezone: res.data.timezone, schedules: res.data.schedules };
+      fillTimezones(res.data.timezones);
+      $('tzSelect').value = sched.timezone;
+      renderSchedules();
+    }).catch(function () {});
+  }
+
+  $('schedAdd').onclick = function () {
+    sched.schedules = readSchedules();
+    sched.timezone = $('tzSelect').value;
+    var n = 1;
+    while (sched.schedules.some(function (x) { return x.id === 'schedule-' + n; })) n++;
+    sched.schedules.push({ id: 'schedule-' + n, enabled: true, days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '09:00', durationMin: 480 });
+    renderSchedules();
+  };
+
+  $('schedSave').onclick = function () {
+    var root = $('view-movement');
+    clearErrors($('schedList'));
+    root.querySelector('[data-err="timezone"]').textContent = '';
+    say('', '', 'schedMsg');
+    App.call('PUT', '/api/schedules', { timezone: $('tzSelect').value, schedules: readSchedules() }).then(function (res) {
+      if (res.status === 200) {
+        sched = { timezone: res.data.timezone, schedules: res.data.schedules };
+        renderSchedules();
+        say('Schedules saved. Saving never starts or stops the jiggler by itself; the next window edge does.', 'good', 'schedMsg');
+        App.poll();
+        return;
+      }
+      var d = res.data;
+      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Could not save.', 'bad', 'schedMsg');
+      else say('Check the highlighted fields.', 'bad', 'schedMsg');
+    }).catch(function () {});
+  };
+
+  function renderClock(s) {
+    var sc = s.schedule;
+    var note = $('clockNote');
+    if (!sc) { note.textContent = ''; return; }
+    if (!sc.timeSynced) note.textContent = 'The device clock is not set yet: schedules start working once it has internet access.';
+    else note.textContent = 'Device clock: ' + sc.localTime + (sc.active ? ' · a schedule window is open now.' : '.');
+  }
+
+  App.view('movement', {
     load: function () {
-      if (App.status()) populate(App.status());
+      if (App.status()) { populate(App.status()); renderClock(App.status()); }
+      loadSchedules();
       if ($('scriptsBox').open) loadScripts();
       if ($('autoBox').open) loadAutos();
     },
-    onStatus: function (s) { populate(s); }
+    onStatus: function (s) { populate(s); renderClock(s); }
   });
 })();

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -24,23 +24,23 @@
 <span>Jiggler</span>
 </header>
 
-<nav class="nav" id="nav" aria-label="Sezioni">
-<a href="#stato" data-view="stato"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg><span>Stato</span></a>
-<a href="#computer" data-view="computer"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="11" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg><span>Computer</span></a>
-<a href="#movimento" data-view="movimento"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg><span>Movimento</span></a>
-<a href="#sistema" data-view="sistema"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="8" cy="17" r="1.6"/></svg><span>Sistema</span></a>
+<nav class="nav" id="nav" aria-label="Sections">
+<a href="#status" data-view="status"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg><span>Status</span></a>
+<a href="#computers" data-view="computers"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="11" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg><span>Computers</span></a>
+<a href="#movement" data-view="movement"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg><span>Movement</span></a>
+<a href="#system" data-view="system"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="8" cy="17" r="1.6"/></svg><span>System</span></a>
 </nav>
 
 <main id="main">
 <div id="banner" class="banner" role="status" aria-live="polite" hidden></div>
 
-<section class="view" id="view-stato" aria-labelledby="h-stato">
-<h1 class="sr" id="h-stato">Stato</h1>
+<section class="view" id="view-status" aria-labelledby="h-status">
+<h1 class="sr" id="h-status">Status</h1>
 <div class="hero" id="hero" data-tone="idle">
 <div class="hero-head">
 <span class="pulse" aria-hidden="true"></span>
 <div>
-<p class="hero-title" id="heroTitle">Connessione…</p>
+<p class="hero-title" id="heroTitle">Connecting…</p>
 <p class="hero-detail" id="heroDetail">&nbsp;</p>
 </div>
 </div>
@@ -50,134 +50,160 @@
 </div>
 
 <div class="block">
-<h2>Movimento</h2>
+<h2>Movement</h2>
 <p class="state" id="state">—</p>
 <p class="sub" id="next">&nbsp;</p>
+<div class="runfor" id="runFor">
+<div class="field"><label for="runChoice">Run for</label>
+<select id="runChoice">
+<option value="forever">Until I stop it</option>
+<option value="5">5 minutes</option>
+<option value="10">10 minutes</option>
+<option value="30">30 minutes</option>
+<option value="60">1 hour</option>
+<option value="until">Until a time…</option>
+<option value="custom">Custom…</option>
+</select></div>
+<div class="field" id="runUntilBox" hidden><label for="runUntil">Until</label><input id="runUntil" type="time"></div>
+<div class="field" id="runCustomBox" hidden><label for="runCustom">Minutes</label><input id="runCustom" inputmode="numeric" autocomplete="off" placeholder="1 to 1440"></div>
+</div>
+<div class="err" id="runErr"></div>
 <div class="actions">
-<button id="bToggle" class="primary">Avvia</button>
-<button id="bMove">Muovi ora</button>
+<button id="bToggle" class="primary">Start</button>
+<button id="bMove">Move now</button>
 </div>
 <p class="msg" id="msg" role="status" aria-live="polite"></p>
 <dl class="facts">
-<div><dt>Ultimo movimento</dt><dd id="last">—</dd></div>
-<div><dt>Movimenti eseguiti</dt><dd id="count">0</dd></div>
+<div><dt>Last movement</dt><dd id="last">—</dd></div>
+<div><dt>Movements made</dt><dd id="count">0</dd></div>
+<div><dt>Device clock</dt><dd id="clock">—</dd></div>
 <div><dt>WiFi</dt><dd id="wifi">—</dd></div>
 </dl>
 </div>
 </section>
 
-<section class="view" id="view-computer" aria-labelledby="h-computer" hidden>
-<h1 id="h-computer">Computer</h1>
+<section class="view" id="view-computers" aria-labelledby="h-computers" hidden>
+<h1 id="h-computers">Computers</h1>
 <div class="block">
-<h2>Abbinamento</h2>
+<h2>Pairing</h2>
 <p id="pairInfo">&nbsp;</p>
-<div class="inline-form">
-<div class="field"><label for="pairDur">Durata</label>
-<select id="pairDur"><option value="60">1 minuto</option><option value="120" selected>2 minuti</option><option value="300">5 minuti</option><option value="600">10 minuti</option></select></div>
-<button class="primary" id="pairOpen">Apri abbinamento</button>
-<button id="pairClose">Chiudi</button>
+<div class="actions">
+<button class="primary" id="pairOpen">Open pairing for 3 minutes</button>
+<button id="pairClose">Stop pairing</button>
 </div>
 <p class="msg" id="pairMsg" role="status" aria-live="polite"></p>
-<p class="hint">Con un computer già abbinato il dispositivo rifiuta i nuovi abbinamenti, così nessun altro può collegarsi. Si apre da qui oppure con un tocco breve sul pulsante BOOT della scheda (il LED lampeggia veloce).</p>
+<p class="hint">Once a computer is paired, the device refuses new pairings, so nobody else can connect. Open the window here, or tap BOOT once on the board (the LED blinks fast). It closes by itself after 3 minutes or as soon as a computer pairs.</p>
 </div>
 
 <div class="block">
-<h2>Computer abbinati</h2>
+<h2>Paired computers</h2>
 <ul class="list" id="peers"></ul>
-<p class="empty" id="peersEmpty" hidden>Nessun computer abbinato. Sul computer apri le impostazioni Bluetooth e scegli il dispositivo.</p>
-<div class="actions"><button class="danger" id="forgetAll">Dimentica tutti</button></div>
+<p class="empty" id="peersEmpty" hidden>No computer paired yet. On the computer, open the Bluetooth settings and choose the device.</p>
+<div class="actions"><button class="danger" id="forgetAll">Forget all</button></div>
 <p class="msg" id="peersMsg" role="status" aria-live="polite"></p>
-<p class="hint">Il Bluetooth non comunica il nome del computer, perciò vengono numerati. Per riconoscere quale è quale: scollega, osserva quale computer perde il mouse e rinominalo qui.</p>
+<p class="hint">Bluetooth does not tell the device a computer’s name, so they are numbered. To tell them apart: disconnect, see which computer loses the mouse, and rename it here. Up to 3 computers can be paired.</p>
 </div>
 </section>
 
-<section class="view" id="view-movimento" aria-labelledby="h-movimento" hidden>
-<h1 id="h-movimento">Movimento</h1>
+<section class="view" id="view-movement" aria-labelledby="h-movement" hidden>
+<h1 id="h-movement">Movement</h1>
+
 <div class="block">
-<h2>Configurazione</h2>
+<h2>Schedules</h2>
+<p class="hint lead">While a schedule’s window is open the jiggler runs by itself; it stops when the window ends. Stopping or starting it by hand is respected until the next window opens or closes.</p>
+<div class="field"><label for="tzSelect">Timezone</label><select id="tzSelect"></select><div class="err" data-err="timezone"></div></div>
+<p class="sub" id="clockNote">&nbsp;</p>
+<div id="schedList"></div>
+<p class="empty" id="schedEmpty" hidden>No schedules. Add one to start and stop the jiggler on certain days and hours.</p>
+<div class="actions"><button id="schedAdd">Add schedule</button><button class="primary" id="schedSave">Save schedules</button></div>
+<p id="schedMsg" class="msg" role="status" aria-live="polite"></p>
+</div>
+
+<div class="block">
+<h2>Configuration</h2>
 <form id="cfg" novalidate>
 <div class="row">
-<div class="field"><label for="minIntervalSec">Intervallo minimo (s)</label><input id="minIntervalSec" inputmode="numeric" autocomplete="off"><div class="err" id="e_minIntervalSec"></div></div>
-<div class="field"><label for="maxIntervalSec">Intervallo massimo (s)</label><input id="maxIntervalSec" inputmode="numeric" autocomplete="off"><div class="err" id="e_maxIntervalSec"></div></div>
+<div class="field"><label for="minIntervalSec">Minimum interval (s)</label><input id="minIntervalSec" inputmode="numeric" autocomplete="off"><div class="err" id="e_minIntervalSec"></div></div>
+<div class="field"><label for="maxIntervalSec">Maximum interval (s)</label><input id="maxIntervalSec" inputmode="numeric" autocomplete="off"><div class="err" id="e_maxIntervalSec"></div></div>
 </div>
-<div class="field"><label for="amplitudePx">Ampiezza movimento (px)</label><input id="amplitudePx" inputmode="numeric" autocomplete="off"><div class="err" id="e_amplitudePx"></div></div>
+<div class="field"><label for="amplitudePx">Movement size (px)</label><input id="amplitudePx" inputmode="numeric" autocomplete="off"><div class="err" id="e_amplitudePx"></div></div>
 <div class="row">
-<div class="field"><label for="clickProbability">Click casuali (%)</label><input id="clickProbability" inputmode="decimal" autocomplete="off"><div class="err" id="e_clickProbability"></div></div>
-<div class="field"><label for="scrollProbability">Scroll casuali (%)</label><input id="scrollProbability" inputmode="decimal" autocomplete="off"><div class="err" id="e_scrollProbability"></div></div>
+<div class="field"><label for="clickProbability">Random clicks (%)</label><input id="clickProbability" inputmode="decimal" autocomplete="off"><div class="err" id="e_clickProbability"></div></div>
+<div class="field"><label for="scrollProbability">Random scrolls (%)</label><input id="scrollProbability" inputmode="decimal" autocomplete="off"><div class="err" id="e_scrollProbability"></div></div>
 </div>
-<p class="hint">Intervalli 5–3600 s, ampiezza 5–600 px. Un click casuale può attivare ciò che si trova sotto il cursore: lascia 0% se non serve.</p>
-<div class="actions"><button class="primary" type="submit">Salva</button></div>
+<p class="hint">Intervals 5–3600 s, size 5–600 px. A random click is always a left click, and it can activate whatever is under the cursor: leave it at 0% if you do not need it.</p>
+<div class="actions"><button class="primary" type="submit">Save</button></div>
 <p id="cfgMsg" class="msg" role="status" aria-live="polite"></p>
 </form>
 </div>
 
 <details class="block" id="scriptsBox">
-<summary><h2>Script</h2></summary>
-<p class="hint">Uno script è un elenco di passi: <b>move</b> (dx, dy), <b>click</b>, <b>scroll</b> (notches), <b>key</b> (es. F15, Ctrl+Alt+Delete), <b>type</b> (text, ASCII), <b>wait</b> (ms, oppure minMs e maxMs) e <b>repeat</b> (times, steps). Tastiera layout US.</p>
+<summary><h2>Scripts</h2></summary>
+<p class="hint">A script is a list of steps: <b>move</b> (dx, dy), <b>click</b>, <b>scroll</b> (notches), <b>key</b> (e.g. F15, Ctrl+Alt+Delete), <b>type</b> (text, ASCII), <b>wait</b> (ms, or minMs and maxMs) and <b>repeat</b> (times, steps). US keyboard layout.</p>
 <div class="field"><label for="scrSelect">Script</label><select id="scrSelect"></select></div>
-<div class="field"><label for="scrName">Nome</label><input id="scrName" autocomplete="off" placeholder="a-z 0-9 _ -"><div class="err" id="e_scrName"></div></div>
-<div class="field"><label for="scrBody">Contenuto (JSON)</label><textarea id="scrBody" spellcheck="false"></textarea><div class="err" id="e_scrBody"></div></div>
+<div class="field"><label for="scrName">Name</label><input id="scrName" autocomplete="off" placeholder="a-z 0-9 _ -"><div class="err" id="e_scrName"></div></div>
+<div class="field"><label for="scrBody">Content (JSON)</label><textarea id="scrBody" spellcheck="false"></textarea><div class="err" id="e_scrBody"></div></div>
 <div class="actions">
-<button class="primary" id="scrSave">Salva</button>
-<button id="scrRun">Esegui ora</button>
-<button id="scrNew">Nuovo</button>
-<button class="danger" id="scrDelete">Elimina</button>
+<button class="primary" id="scrSave">Save</button>
+<button id="scrRun">Run now</button>
+<button id="scrNew">New</button>
+<button class="danger" id="scrDelete">Delete</button>
 </div>
 <p id="scrMsg" class="msg" role="status" aria-live="polite"></p>
 </details>
 
 <details class="block" id="autoBox">
-<summary><h2>Automazioni</h2></summary>
-<p class="hint">Un’automazione esegue uno script a intervalli casuali, solo mentre il jiggler è avviato (massimo 4).</p>
+<summary><h2>Automations</h2></summary>
+<p class="hint">An automation runs a script at random intervals, only while the jiggler is running (up to 4). Use it for extras such as tapping F15; schedules decide when the jiggler runs at all.</p>
 <div id="autoList"></div>
-<div class="actions"><button id="autoAdd">Aggiungi</button><button class="primary" id="autoSave">Salva</button></div>
+<div class="actions"><button id="autoAdd">Add</button><button class="primary" id="autoSave">Save</button></div>
 <p id="autoMsg" class="msg" role="status" aria-live="polite"></p>
 </details>
 </section>
 
-<section class="view" id="view-sistema" aria-labelledby="h-sistema" hidden>
-<h1 id="h-sistema">Sistema</h1>
+<section class="view" id="view-system" aria-labelledby="h-system" hidden>
+<h1 id="h-system">System</h1>
 
 <div class="block">
-<h2>Sicurezza</h2>
-<p>Il token protegge dashboard, API e MCP. Cambialo se è stato condiviso.</p>
+<h2>Security</h2>
+<p>The token protects the dashboard, the API and MCP. Change it if it has been shared.</p>
 <form id="tokenForm" novalidate>
-<div class="field"><label for="tokCurrent">Token attuale</label><input id="tokCurrent" type="password" autocomplete="current-password"><div class="err" data-err="current"></div></div>
-<div class="field"><label for="tokNew">Nuovo token</label><input id="tokNew" type="password" autocomplete="new-password"><div class="err" data-err="token"></div></div>
-<div class="field"><label for="tokConfirm">Ripeti il nuovo token</label><input id="tokConfirm" type="password" autocomplete="new-password"><div class="err" data-err="confirm"></div></div>
-<div class="actions"><button class="primary" type="submit">Cambia token</button></div>
+<div class="field"><label for="tokCurrent">Current token</label><input id="tokCurrent" type="password" autocomplete="current-password"><div class="err" data-err="current"></div></div>
+<div class="field"><label for="tokNew">New token</label><input id="tokNew" type="password" autocomplete="new-password"><div class="err" data-err="token"></div></div>
+<div class="field"><label for="tokConfirm">Repeat the new token</label><input id="tokConfirm" type="password" autocomplete="new-password"><div class="err" data-err="confirm"></div></div>
+<div class="actions"><button class="primary" type="submit">Change token</button></div>
 <p id="tokMsg" class="msg" role="status" aria-live="polite"></p>
 </form>
 </div>
 
 <div class="block">
-<h2>Rete</h2>
-<p class="hint"><b>Auto</b>: si collega al WiFi di casa e, se non ci riesce, apre la rete di configurazione. <b>Rete propria</b>: crea una rete WiFi protetta con questa dashboard (indirizzo 192.168.4.1), utile dove non c’è WiFi. Tenendo premuto BOOT per 3 secondi si passa da una modalità all’altra. Le modifiche valgono dopo il riavvio.</p>
-<div class="field"><label for="netMode">Modalità</label><select id="netMode"><option value="auto">Auto (WiFi di casa)</option><option value="ap">Rete propria</option></select><div class="err" data-err="mode"></div></div>
-<div class="field"><label for="netSsid">Nome della rete propria</label><input id="netSsid" autocomplete="off"><div class="err" data-err="apSsid"></div></div>
-<div class="field"><label for="netPass">Password della rete propria</label><input id="netPass" autocomplete="off" placeholder="vuota = generata al primo avvio"><div class="err" data-err="apPassword"></div></div>
-<div class="actions"><button id="netSave">Salva</button><button class="primary" id="netSaveRestart">Salva e riavvia</button></div>
+<h2>Network</h2>
+<p class="hint"><b>Auto</b>: connects to your home WiFi and, if it cannot, opens the setup network. <b>Own network</b>: creates a protected WiFi network that serves this dashboard (address 192.168.4.1), for places without WiFi. Holding BOOT for 3 seconds switches between the two. Changes apply after a restart. Schedules need the home WiFi with internet access to know the time.</p>
+<div class="field"><label for="netMode">Mode</label><select id="netMode"><option value="auto">Auto (home WiFi)</option><option value="ap">Own network</option></select><div class="err" data-err="mode"></div></div>
+<div class="field"><label for="netSsid">Own network name</label><input id="netSsid" autocomplete="off"><div class="err" data-err="apSsid"></div></div>
+<div class="field"><label for="netPass">Own network password</label><input id="netPass" autocomplete="off" placeholder="empty = generated on first boot"><div class="err" data-err="apPassword"></div></div>
+<div class="actions"><button id="netSave">Save</button><button class="primary" id="netSaveRestart">Save and restart</button></div>
 <p id="netMsg" class="msg" role="status" aria-live="polite"></p>
 </div>
 
 <details class="block" id="devBox">
-<summary><h2>Identità Bluetooth</h2></summary>
-<p class="hint">Il computer vede un solo dispositivo Bluetooth: nome, produttore, VID/PID e indirizzo sono quelli del primo dispositivo abilitato; gli altri aggiungono solo la loro funzione (mouse o tastiera). Lascia vuoti i campi per usare i valori del profilo. Dopo il salvataggio il dispositivo si riavvia e i computer già abbinati potrebbero non riconoscerlo più: dovrai abbinarli di nuovo.</p>
+<summary><h2>Bluetooth identity</h2></summary>
+<p class="hint">The computer sees a single Bluetooth device: its name, vendor, VID/PID and address are those of the first enabled device below; the others only add their function (mouse or keyboard). Leave fields empty to use the profile’s values. After saving, the device restarts, and computers already paired may not recognise it: you will need to pair them again.</p>
 <div id="devList"></div>
-<div class="actions"><button class="primary" id="devSave">Salva e riavvia</button></div>
+<div class="actions"><button class="primary" id="devSave">Save and restart</button></div>
 <p id="devMsg" class="msg" role="status" aria-live="polite"></p>
 </details>
 
 <div class="block">
-<h2>Dispositivo</h2>
+<h2>Device</h2>
 <dl class="facts">
-<div><dt>Versione</dt><dd id="infoVersion">—</dd></div>
-<div><dt>Nome Bluetooth</dt><dd id="infoName">—</dd></div>
-<div><dt>Indirizzo Bluetooth</dt><dd id="infoAddress">—</dd></div>
+<div><dt>Version</dt><dd id="infoVersion">—</dd></div>
+<div><dt>Bluetooth name</dt><dd id="infoName">—</dd></div>
+<div><dt>Bluetooth address</dt><dd id="infoAddress">—</dd></div>
 </dl>
-<div class="actions"><button id="restartBtn">Riavvia</button></div>
+<div class="actions"><button id="restartBtn">Restart</button></div>
 <p id="sysMsg" class="msg" role="status" aria-live="polite"></p>
-<p class="hint" id="installHint">Per averla come app: dal menu del browser scegli “Aggiungi a schermata Home”. Sul telefono si apre a tutto schermo; l’installazione completa richiede HTTPS, che una scheda in rete locale non offre.</p>
+<p class="hint" id="installHint">To use it as an app, choose “Add to Home Screen” in your browser’s menu. On a phone it then opens full screen; full installation needs HTTPS, which a board on a local network cannot offer.</p>
 </div>
 </section>
 </main>
@@ -185,11 +211,11 @@
 
 <div id="login" class="login" role="dialog" aria-modal="true" aria-labelledby="loginTitle" hidden>
 <form class="panel" id="loginForm">
-<h2 id="loginTitle">Accedi</h2>
-<p class="hint">Inserisci il token API. È quello scelto durante la configurazione; in modalità rete propria è la password della rete WiFi del dispositivo.</p>
-<div class="field"><label for="tokenInput">Token API</label><input id="tokenInput" type="password" autocomplete="current-password"><div class="err" id="loginErr"></div></div>
-<label class="inline"><input type="checkbox" id="tokenShow"> Mostra il token</label>
-<div class="actions"><button class="primary" type="submit">Entra</button></div>
+<h2 id="loginTitle">Sign in</h2>
+<p class="hint">Enter the API token. It is the one you chose during setup; in own-network mode it is the device’s WiFi password.</p>
+<div class="field"><label for="tokenInput">API token</label><input id="tokenInput" type="password" autocomplete="current-password"><div class="err" id="loginErr"></div></div>
+<label class="inline"><input type="checkbox" id="tokenShow"> Show the token</label>
+<div class="actions"><button class="primary" type="submit">Sign in</button></div>
 </form>
 </div>
 

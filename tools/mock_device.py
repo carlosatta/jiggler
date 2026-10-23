@@ -50,6 +50,11 @@ class Device:
         self.devices = [{"id": "mouse", "kind": "mouse", "enabled": True, "profileId": "logitech-mx-master-3s"},
                         {"id": "keyboard", "kind": "keyboard", "enabled": False, "profileId": "custom"}]
         self.network = {"mode": "auto", "apSsid": "Jiggler", "apPassword": "mockpassw0rd"}
+        self.stop_at = None
+        self.held_until = None
+        self.bonded_at_open = None
+        self.tz = "Europe/Rome"
+        self.schedules = [{"id": "weekdays", "enabled": True, "days": ["mon", "tue", "wed", "thu", "fri"], "start": "09:00", "durationMin": 480}]
         self.scenario("connected")
 
     def scenario(self, name):
@@ -58,6 +63,8 @@ class Device:
         self.window_until = None
         self.connected_since = None
         self.peers = []
+        self.held_until = None
+        self.bonded_at_open = None
         if name == "firstrun":
             pass
         elif name in ("connected", "held", "pairing", "idle", "many"):
@@ -69,11 +76,23 @@ class Device:
                 self.connected_since = now - 12 * 60 - 20
             if name == "held":
                 self.held = True
+                self.held_until = now + 140
             if name == "pairing":
                 self.window_until = now + 95
         else:
             return False
         return True
+
+    def expire(self):
+        now = time.time()
+        if self.window_until and (now >= self.window_until or (self.bonded_at_open is not None and len(self.peers) > self.bonded_at_open)):
+            self.window_until = None
+        if self.held and self.held_until and now >= self.held_until:
+            self.held = False
+            self.held_until = None
+        if self.state == "running" and self.stop_at and now >= self.stop_at:
+            self.state = "stopped"
+            self.stop_at = None
 
     def pid(self, address):
         return address.replace(":", "")
@@ -83,12 +102,12 @@ class Device:
 
     def bluetooth(self):
         now = time.time()
-        if self.window_until and now >= self.window_until:
-            self.window_until = None
+        self.expire()
         first = not self.peers
         open_ = first or bool(self.window_until)
         connected = self.connected_addr() is not None
         out = {"connected": connected, "held": self.held,
+               "heldRemainingMs": int((self.held_until - now) * 1000) if self.held and self.held_until else None,
                "pairing": {"open": open_, "remainingMs": int((self.window_until - now) * 1000) if self.window_until else None, "firstRun": first},
                "computer": None, "peers": []}
         if connected:
@@ -101,7 +120,7 @@ class Device:
     def status(self):
         now = time.time()
         bt = self.bluetooth()
-        summary = {k: bt[k] for k in ("connected", "held", "pairing", "computer")}
+        summary = {k: bt[k] for k in ("connected", "held", "heldRemainingMs", "pairing", "computer")}
         summary["pairing"] = {"open": bt["pairing"]["open"], "remainingMs": bt["pairing"]["remainingMs"]}
         summary["peerCount"] = len(bt["peers"])
         if self.state == "running" and now >= self.next_move_at:
@@ -110,9 +129,12 @@ class Device:
             self.next_move_at = now + 30 + (self.moves % 7) * 5
         return {"state": self.state, "mouseConnected": bt["connected"], "wifiConnected": True,
                 "msToNextMove": int((self.next_move_at - now) * 1000) if self.state == "running" else None,
+                "stopsInMs": int((self.stop_at - now) * 1000) if self.state == "running" and self.stop_at else None,
+                "schedule": {"timeSynced": True, "localTime": time.strftime("%H:%M"), "weekday": time.strftime("%a").lower(),
+                             "active": False, "enabledCount": sum(1 for s in self.schedules if s["enabled"]), "timezone": self.tz},
                 "moveCount": self.moves, "lastMoveAgoMs": int((now - self.last_move) * 1000), "lastMoveAt": int(self.last_move),
                 "config": self.config, "bluetooth": summary,
-                "device": {"version": "0.2.0", "bleName": "MX Master 3S", "bleAddress": "00:1f:20:fd:3b:76"}}
+                "device": {"version": "0.3.0", "bleName": "MX Master 3S", "bleAddress": "00:1f:20:fd:3b:76"}}
 
 
 DEV = None
@@ -189,14 +211,18 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/status" and method == "GET":
             return self.send(200, d.status())
         if path == "/api/start":
+            minutes = (body or {}).get("minutes") if isinstance(body, dict) else None
+            if minutes is not None and (not isinstance(minutes, int) or not 1 <= minutes <= 1440):
+                return self.err(400, "invalid_minutes", "minutes", "must be between 1 and 1440")
             d.state = "running"; d.next_move_at = time.time() + 30
-            return self.send(200, {"state": d.state})
+            d.stop_at = time.time() + minutes * 60 if minutes else None
+            return self.send(200, d.status())
         if path == "/api/pause":
-            d.state = "paused"
-            return self.send(200, {"state": d.state})
+            d.state = "paused"; d.stop_at = None
+            return self.send(200, d.status())
         if path == "/api/stop":
-            d.state = "stopped"
-            return self.send(200, {"state": d.state})
+            d.state = "stopped"; d.stop_at = None
+            return self.send(200, d.status())
         if path == "/api/move":
             if not d.connected_addr():
                 return self.err(409, "mouse_not_connected")
@@ -222,6 +248,17 @@ class Handler(BaseHTTPRequestHandler):
             if method == "PUT":
                 d.network.update(body)
             return self.send(200, d.network)
+        if path == "/api/schedules":
+            zones = ["UTC", "Europe/London", "Europe/Rome", "Europe/Paris", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Asia/Tokyo"]
+            if method == "PUT":
+                b = body or {}
+                if "timezone" in b:
+                    d.tz = b["timezone"]
+                for i, s in enumerate(b.get("schedules", d.schedules)):
+                    if not s.get("days"):
+                        return self.err(400, "invalid_schedule", "schedules[%d].days" % i, "pick at least one day")
+                d.schedules = b.get("schedules", d.schedules)
+            return self.send(200, {"timezone": d.tz, "schedules": d.schedules, "timezones": zones})
         if path == "/api/automations":
             if method == "PUT":
                 d.autos = body["automations"]
@@ -256,13 +293,13 @@ class Handler(BaseHTTPRequestHandler):
             if method == "DELETE":
                 d.window_until = None
                 return self.send(200, d.bluetooth())
-            seconds = (body or {}).get("seconds", 120)
+            seconds = (body or {}).get("seconds", 180)
             if not 30 <= seconds <= 600:
                 return self.err(400, "invalid_seconds", "seconds", "the pairing window must last between 30 and 600 seconds")
-            d.window_until = time.time() + seconds; d.held = False
+            d.window_until = time.time() + seconds; d.held = False; d.bonded_at_open = len(d.peers)
             return self.send(200, d.bluetooth())
         if path == "/api/bluetooth/disconnect":
-            d.held = True; d.window_until = None
+            d.held = True; d.held_until = time.time() + 180; d.window_until = None
             return self.send(200, d.bluetooth())
         if path == "/api/bluetooth/reconnect":
             d.held = False

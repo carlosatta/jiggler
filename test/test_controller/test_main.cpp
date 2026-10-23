@@ -219,6 +219,68 @@ void test_last_move_unix_null_when_clock_unsynced() {
   TEST_ASSERT_EQUAL_UINT32(1760000000 - 2, *s.lastMoveUnix);
 }
 
+void test_start_for_stops_by_itself() {
+  Fixture f(10, 10);
+  f.c.stop();
+  TEST_ASSERT_TRUE(f.c.startFor(5).ok);
+  Status s = f.c.status();
+  TEST_ASSERT_TRUE(s.runState == RunState::Running);
+  TEST_ASSERT_TRUE(s.msToAutoStop.has_value());
+  TEST_ASSERT_EQUAL_UINT32(300000, *s.msToAutoStop);
+  f.clock.now = 299999;
+  f.c.tick();
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Running);
+  f.clock.now = 300000;
+  f.c.tick();
+  s = f.c.status();
+  TEST_ASSERT_TRUE(s.runState == RunState::Stopped);
+  TEST_ASSERT_FALSE(s.msToAutoStop.has_value());
+}
+
+void test_start_for_replaces_a_running_deadline() {
+  Fixture f(10, 10);
+  f.c.startFor(5);
+  f.clock.now = 120000;
+  f.c.startFor(30);
+  TEST_ASSERT_EQUAL_UINT32(30u * 60000u, *f.c.status().msToAutoStop);
+}
+
+void test_plain_start_stop_and_pause_clear_the_deadline() {
+  Fixture f(10, 10);
+  f.c.startFor(5);
+  f.c.start();
+  TEST_ASSERT_FALSE(f.c.status().msToAutoStop.has_value());  // "start" means: run until told otherwise
+  f.c.startFor(5);
+  f.c.stop();
+  TEST_ASSERT_FALSE(f.c.status().msToAutoStop.has_value());
+  f.c.startFor(5);
+  f.c.pause();
+  TEST_ASSERT_FALSE(f.c.status().msToAutoStop.has_value());
+}
+
+void test_start_for_rejects_out_of_range_minutes() {
+  Fixture f(10, 10);
+  f.c.stop();
+  CmdResult zero = f.c.startFor(0);
+  TEST_ASSERT_FALSE(zero.ok);
+  TEST_ASSERT_EQUAL_STRING("invalid_minutes", zero.error.c_str());
+  TEST_ASSERT_FALSE(f.c.startFor(1441).ok);
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Stopped);  // nothing changed
+  TEST_ASSERT_TRUE(f.c.startFor(1440).ok);
+}
+
+void test_start_for_deadline_survives_the_millis_wraparound() {
+  Fixture f(10, 10);
+  f.clock.now = 0xFFFFFF00u;
+  f.c.startFor(1);
+  f.clock.now = 0xFFFFFF00u + 59999u;
+  f.c.tick();
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Running);
+  f.clock.now = 0xFFFFFF00u + 60000u;
+  f.c.tick();
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Stopped);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_begin_is_running_with_interval_in_bounds);
@@ -236,5 +298,10 @@ int main() {
   RUN_TEST(test_update_config_invalid_changes_nothing);
   RUN_TEST(test_update_config_valid_saves_and_reschedules);
   RUN_TEST(test_last_move_unix_null_when_clock_unsynced);
+  RUN_TEST(test_start_for_stops_by_itself);
+  RUN_TEST(test_start_for_replaces_a_running_deadline);
+  RUN_TEST(test_plain_start_stop_and_pause_clear_the_deadline);
+  RUN_TEST(test_start_for_rejects_out_of_range_minutes);
+  RUN_TEST(test_start_for_deadline_survives_the_millis_wraparound);
   return UNITY_END();
 }

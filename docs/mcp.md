@@ -27,7 +27,7 @@ Tool failures are returned as a normal result with `isError: true` and a JSON er
 | Tool | Arguments | What it does |
 |---|---|---|
 | `get_status` | – | Run state, mouse/WiFi connection, time to next movement, move count, last movement, config |
-| `start` | – | Start or resume |
+| `start` | `minutes` (1–1440, optional) | Start or resume; with `minutes` it stops by itself after that long |
 | `pause` | – | Pause, keeping the remaining time |
 | `stop` | – | Stop |
 | `move_now` | – | Queue a test movement; fails if the mouse is not connected |
@@ -51,9 +51,11 @@ Tool failures are returned as a normal result with `isError: true` and a JSON er
 | `get_network` | – | Network mode and AP settings |
 | `set_network` | `mode`, `apSsid`, `apPassword` (optional) | Change network settings. Needs restart |
 | `restart` | – | Restart the device |
+| `get_schedules` | – | Weekly schedules and the timezone |
+| `set_schedules` | `timezone`, `schedules[]` (`id`, `enabled`, `days`, `start`, `durationMin`) | Replace the schedules (max 8) |
 | `get_bluetooth` | – | Connection, pairing window and paired computers |
-| `start_pairing` | `seconds` (30–600, optional) | Open a pairing window |
-| `disconnect_bluetooth` | – | Drop the link and hide the device until `reconnect_bluetooth` |
+| `start_pairing` | `seconds` (30–600, default 180, optional) | Open a pairing window |
+| `disconnect_bluetooth` | – | Drop the link and hide the device for 3 minutes, or until `reconnect_bluetooth` |
 | `reconnect_bluetooth` | – | Make the device visible again |
 | `forget_computer` | `id` | Forget one paired computer |
 
@@ -64,4 +66,6 @@ A tool is only listed when its service is available on the device.
 - "Is the jiggler active? How long until the next movement?" → `get_status`
 - "Move every 20 to 45 seconds with small movements." → `set_config`
 - "Pause it for now." → `pause`
+- "Keep it on for the next 30 minutes." → `start` with `minutes: 30`
+- "Run it Monday to Friday, 9 to 6." → `set_schedules`
 - "Press F15 on the computer." → `press_key`

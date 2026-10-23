@@ -36,6 +36,8 @@ std::string statusToJson(const Status& s) {
   doc["wifiConnected"] = s.wifiConnected;
   if (s.msToNextMove) doc["msToNextMove"] = *s.msToNextMove;
   else doc["msToNextMove"] = nullptr;
+  if (s.msToAutoStop) doc["stopsInMs"] = *s.msToAutoStop;
+  else doc["stopsInMs"] = nullptr;
   doc["moveCount"] = s.moveCount;
   if (s.lastMoveAgoMs) doc["lastMoveAgoMs"] = *s.lastMoveAgoMs;
   else doc["lastMoveAgoMs"] = nullptr;
@@ -87,6 +89,28 @@ bool parseConfigPatch(JsonObjectConst obj, ConfigPatch& out, ParseError& err) {
   }
   out = patch;
   return true;
+}
+
+bool parseStartRequest(JsonObjectConst obj, std::optional<uint32_t>& minutes, ParseError& err) {
+  minutes.reset();
+  for (JsonPairConst kv : obj) {
+    const std::string key = kv.key().c_str();
+    if (key != "minutes") return fail(err, "invalid_start", key, "unknown field");
+    JsonVariantConst v = kv.value();
+    if (!v.is<int64_t>()) return fail(err, "invalid_minutes", key, "must be an integer");
+    const int64_t n = v.as<int64_t>();
+    if (n < 1 || n > kMaxRunMinutes) return fail(err, "invalid_minutes", key, "must be between 1 and 1440");
+    minutes = static_cast<uint32_t>(n);
+  }
+  return true;
+}
+
+bool parseStartRequest(const std::string& body, std::optional<uint32_t>& minutes, ParseError& err) {
+  minutes.reset();
+  if (body.empty()) return true;
+  JsonDocument doc;
+  if (deserializeJson(doc, body) || !doc.is<JsonObject>()) return fail(err, "bad_json", "", "body must be a JSON object");
+  return parseStartRequest(doc.as<JsonObjectConst>(), minutes, err);
 }
 
 bool parseConfigPatch(const std::string& body, ConfigPatch& out, ParseError& err) {

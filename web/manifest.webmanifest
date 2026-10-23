@@ -1,8 +1,8 @@
 {
   "name": "Jiggler",
   "short_name": "Jiggler",
-  "description": "Tiene sveglio il computer: mouse Bluetooth controllato da qui.",
-  "lang": "it",
+  "description": "Keeps a computer awake: a Bluetooth mouse you control from here.",
+  "lang": "en",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

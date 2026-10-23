@@ -93,6 +93,7 @@ HttpResponse statusWithExtras(ApiContext& ctx, HttpResponse base) {
   if (base.status != 200 || base.body.empty() || base.body.back() != '}') return base;
   std::string extra;
   if (ctx.bluetooth) extra += ",\"bluetooth\":" + bluetoothSummaryJson(ctx.bluetooth->status());
+  if (ctx.schedules) extra += ",\"schedule\":" + scheduleStatusToJson(ctx.schedules->status());
   if (!ctx.info.version.empty()) {
     JsonDocument doc;
     doc["version"] = ctx.info.version;
@@ -147,6 +148,20 @@ HttpResponse automationsRoute(ApiContext& ctx, const std::string& method, const 
   CmdResult r = ctx.automations->replace(automations);
   if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
   return json(200, automationsToJson(ctx.automations->list()));
+}
+
+HttpResponse schedulesRoute(ApiContext& ctx, const std::string& method, const std::string& body) {
+  if (!ctx.schedules) return json(404, errorJson("not_found"));
+  if (method == "GET") return json(200, schedulesToJson(ctx.schedules->settings()));
+  if (method != "PUT") return json(405, errorJson("method_not_allowed"));
+  if (body.size() > kMaxMediumBodyBytes) return json(413, errorJson("payload_too_large"));
+
+  ScheduleSettings settings = ctx.schedules->settings();
+  ParseError err;
+  if (!parseSchedules(body, settings, err)) return json(400, errorJson(err.code, err.field, err.message));
+  CmdResult r = ctx.schedules->replace(settings);
+  if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
+  return json(200, schedulesToJson(ctx.schedules->settings()));
 }
 
 HttpResponse scriptsRoute(ApiContext& ctx, const std::string& method, const std::string& path, const std::string& body) {
@@ -215,6 +230,7 @@ HttpResponse handleApiEx(ApiContext& ctx, const std::string& method, const std::
   if (path == "/api/network") return networkRoute(ctx, method, body);
   if (path == "/api/devices") return devicesRoute(ctx, method, body);
   if (path == "/api/automations") return automationsRoute(ctx, method, body);
+  if (path == "/api/schedules") return schedulesRoute(ctx, method, body);
   if (path == "/api/scripts" || path.rfind("/api/scripts/", 0) == 0) return scriptsRoute(ctx, method, path, body);
   if (path == "/api/profiles") {
     if (!ctx.devices) return json(404, errorJson("not_found"));
