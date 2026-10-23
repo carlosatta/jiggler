@@ -104,11 +104,6 @@ body.offline .hero{opacity:.55}
 .state{font-size:1.375rem;font-weight:650}
 .sub{color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px}
 .actions{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s3)}
-.seg{display:flex}
-.seg button{border-radius:0;margin-left:-1px}
-.seg button:first-child{border-radius:10px 0 0 10px;margin-left:0}
-.seg button:last-child{border-radius:0 10px 10px 0}
-.seg button.primary{position:relative;z-index:1}
 .facts{margin-top:var(--s4);display:grid;gap:var(--s2)}
 .facts>div{display:flex;justify-content:space-between;gap:var(--s4);padding:var(--s2) 0;border-bottom:1px solid var(--line)}
 .facts dt{color:var(--muted)}
@@ -201,11 +196,7 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <p class="state" id="state">—</p>
 <p class="sub" id="next">&nbsp;</p>
 <div class="actions">
-<div class="seg" role="group" aria-label="Controllo del movimento">
-<button id="bStart" class="primary">Avvia</button>
-<button id="bPause">Pausa</button>
-<button id="bStop">Ferma</button>
-</div>
+<button id="bToggle" class="primary">Avvia</button>
 <button id="bMove">Muovi ora</button>
 </div>
 <p class="msg" id="msg" role="status" aria-live="polite"></p>
@@ -703,10 +694,9 @@ var App = (function () {
   }
 
   function renderMotion(s, elapsed) {
-    $('state').textContent = { running: 'In esecuzione', paused: 'In pausa', stopped: 'Fermo' }[s.state] || s.state;
+    $('state').textContent = s.state === 'running' ? 'In esecuzione' : 'Fermo';
     var next = $('next');
-    if (s.state === 'paused') next.textContent = 'Il movimento riprende con Avvia.';
-    else if (s.state === 'stopped') next.textContent = 'Nessun movimento programmato.';
+    if (s.state !== 'running') next.textContent = 'Nessun movimento programmato: premi Avvia.';
     else if (!s.mouseConnected && s.msToNextMove === 0) next.textContent = 'In attesa che un computer si colleghi.';
     else next.textContent = 'Prossimo movimento tra ' + fmtDuration(Math.max(0, s.msToNextMove - elapsed));
   }
@@ -717,9 +707,9 @@ var App = (function () {
     else if (s.lastMoveAgoMs !== null) $('last').textContent = fmtAgo(s.lastMoveAgoMs);
     else $('last').textContent = 'mai';
     $('wifi').textContent = s.wifiConnected ? 'Collegato' : 'Non collegato';
-    $('bStart').disabled = s.state === 'running';
-    $('bPause').disabled = s.state !== 'running';
-    $('bStop').disabled = s.state === 'stopped';
+    var running = s.state === 'running';
+    $('bToggle').textContent = running ? 'Ferma' : 'Avvia';
+    $('bToggle').className = running ? '' : 'primary';
     $('bMove').disabled = !s.mouseConnected;
   }
 
@@ -735,9 +725,10 @@ var App = (function () {
       App.poll();
     }).catch(function () {});
   }
-  $('bStart').onclick = function () { control('POST', '/api/start', 'Avviato.'); };
-  $('bPause').onclick = function () { control('POST', '/api/pause', 'In pausa.'); };
-  $('bStop').onclick = function () { control('POST', '/api/stop', 'Fermato.'); };
+  $('bToggle').onclick = function () {
+    var running = App.status() && App.status().state === 'running';
+    control('POST', running ? '/api/stop' : '/api/start', running ? 'Fermato.' : 'Avviato.');
+  };
   $('bMove').onclick = function () { control('POST', '/api/move', 'Movimento in corso.'); setTimeout(App.poll, 1500); };
 })();
 

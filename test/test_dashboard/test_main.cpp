@@ -56,7 +56,6 @@ struct Route {
 const Route kPageRoutes[] = {
     {"GET", "/api/status", ""},
     {"POST", "/api/start", ""},
-    {"POST", "/api/pause", ""},
     {"POST", "/api/stop", ""},
     {"POST", "/api/move", ""},
     {"PUT", "/api/config", "{}"},

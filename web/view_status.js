@@ -58,10 +58,9 @@
   }
 
   function renderMotion(s, elapsed) {
-    $('state').textContent = { running: 'In esecuzione', paused: 'In pausa', stopped: 'Fermo' }[s.state] || s.state;
+    $('state').textContent = s.state === 'running' ? 'In esecuzione' : 'Fermo';
     var next = $('next');
-    if (s.state === 'paused') next.textContent = 'Il movimento riprende con Avvia.';
-    else if (s.state === 'stopped') next.textContent = 'Nessun movimento programmato.';
+    if (s.state !== 'running') next.textContent = 'Nessun movimento programmato: premi Avvia.';
     else if (!s.mouseConnected && s.msToNextMove === 0) next.textContent = 'In attesa che un computer si colleghi.';
     else next.textContent = 'Prossimo movimento tra ' + fmtDuration(Math.max(0, s.msToNextMove - elapsed));
   }
@@ -72,9 +71,9 @@
     else if (s.lastMoveAgoMs !== null) $('last').textContent = fmtAgo(s.lastMoveAgoMs);
     else $('last').textContent = 'mai';
     $('wifi').textContent = s.wifiConnected ? 'Collegato' : 'Non collegato';
-    $('bStart').disabled = s.state === 'running';
-    $('bPause').disabled = s.state !== 'running';
-    $('bStop').disabled = s.state === 'stopped';
+    var running = s.state === 'running';
+    $('bToggle').textContent = running ? 'Ferma' : 'Avvia';
+    $('bToggle').className = running ? '' : 'primary';
     $('bMove').disabled = !s.mouseConnected;
   }
 
@@ -90,8 +89,9 @@
       App.poll();
     }).catch(function () {});
   }
-  $('bStart').onclick = function () { control('POST', '/api/start', 'Avviato.'); };
-  $('bPause').onclick = function () { control('POST', '/api/pause', 'In pausa.'); };
-  $('bStop').onclick = function () { control('POST', '/api/stop', 'Fermato.'); };
+  $('bToggle').onclick = function () {
+    var running = App.status() && App.status().state === 'running';
+    control('POST', running ? '/api/stop' : '/api/start', running ? 'Fermato.' : 'Avviato.');
+  };
   $('bMove').onclick = function () { control('POST', '/api/move', 'Movimento in corso.'); setTimeout(App.poll, 1500); };
 })();
