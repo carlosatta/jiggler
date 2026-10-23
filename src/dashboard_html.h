@@ -197,13 +197,15 @@ input{width:100%;font:inherit;min-height:44px;padding:8px 10px;border-radius:10p
     }
   }
 
+  var inFlight = false;
   function poll() {
-    if (!token) return;
+    if (!token || inFlight) return;
+    inFlight = true;
     call('GET', '/api/status').then(function (res) {
       status = res.data;
       receivedAt = performance.now();
       render();
-    }).catch(function () {});
+    }).catch(function () {}).then(function () { inFlight = false; });
   }
 
   function action(method, path, okText) {

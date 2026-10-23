@@ -2,6 +2,7 @@
 
 #include <ArduinoJson.h>
 
+#include <cstring>
 #include <string>
 
 #include "api_router.h"
@@ -206,8 +207,47 @@ void test_authorized() {
   TEST_ASSERT_FALSE(authorized("", ""));
 }
 
+void test_copy_body_chunk_never_writes_past_total() {  // final review, Critical
+  char buf[16];
+  memset(buf, 0xAA, sizeof(buf));
+  const uint8_t big[10] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
+  // Declared total 4, but the library hands over a 10-byte chunk.
+  TEST_ASSERT_EQUAL_UINT32(4, copyBodyChunk(buf, 4, big, 10, 0));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY("0123", buf, 4);
+  for (int i = 4; i < 16; i++) TEST_ASSERT_EQUAL_HEX8(0xAA, static_cast<uint8_t>(buf[i]));
+  // Chunk starting at or past the end writes nothing.
+  TEST_ASSERT_EQUAL_UINT32(0, copyBodyChunk(buf, 4, big, 10, 4));
+  TEST_ASSERT_EQUAL_UINT32(0, copyBodyChunk(buf, 4, big, 10, 99));
+  for (int i = 4; i < 16; i++) TEST_ASSERT_EQUAL_HEX8(0xAA, static_cast<uint8_t>(buf[i]));
+}
+
+void test_copy_body_chunk_assembles_chunks() {
+  char buf[8] = {0};
+  const uint8_t a[] = {'a', 'b', 'c'}, b[] = {'d', 'e', 'f', 'g', 'h', 'i'};
+  TEST_ASSERT_EQUAL_UINT32(3, copyBodyChunk(buf, 6, a, 3, 0));
+  TEST_ASSERT_EQUAL_UINT32(3, copyBodyChunk(buf, 6, b, 6, 3));  // clamped from 6 to 3
+  TEST_ASSERT_EQUAL_STRING("abcdef", buf);
+}
+
+void test_reject_body() {  // final review, Important (curl -d sends form-encoded)
+  TEST_ASSERT_FALSE(rejectBody(0, false).has_value());
+  TEST_ASSERT_FALSE(rejectBody(10, true).has_value());
+  TEST_ASSERT_FALSE(rejectBody(kMaxBodyBytes, true).has_value());
+  auto big = rejectBody(kMaxBodyBytes + 1, true);
+  TEST_ASSERT_TRUE(big.has_value());
+  TEST_ASSERT_EQUAL_INT(413, big->status);
+  TEST_ASSERT_EQUAL_STRING("payload_too_large", parse(big->body)["error"].as<const char*>());
+  auto form = rejectBody(10, false);
+  TEST_ASSERT_TRUE(form.has_value());
+  TEST_ASSERT_EQUAL_INT(415, form->status);
+  TEST_ASSERT_EQUAL_STRING("unsupported_media_type", parse(form->body)["error"].as<const char*>());
+}
+
 int main() {
   UNITY_BEGIN();
+  RUN_TEST(test_copy_body_chunk_never_writes_past_total);
+  RUN_TEST(test_copy_body_chunk_assembles_chunks);
+  RUN_TEST(test_reject_body);
   RUN_TEST(test_status_shape);
   RUN_TEST(test_status_after_move_with_unsynced_clock);
   RUN_TEST(test_status_stopped_has_null_next_move);

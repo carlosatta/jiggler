@@ -17,13 +17,15 @@ struct HttpServer::Impl {
   static void json(AsyncWebServerRequest* req, int status, const std::string& body) {
     AsyncWebServerResponse* res = req->beginResponse(status, "application/json", body.c_str());
     res->addHeader("Connection", "close");
+    res->addHeader("Cache-Control", "no-store");
     req->send(res);
   }
 
   static void onBody(AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
-    if (total > jig::kMaxBodyBytes) return;  // rejected with 413 in handle()
-    if (index == 0) req->_tempObject = calloc(total + 1, 1);  // freed by the library with the request
-    if (req->_tempObject) memcpy(static_cast<uint8_t*>(req->_tempObject) + index, data, len);
+    if (total > jig::kMaxBodyBytes || index >= total) return;  // refused in handle()
+    if (index == 0 && !req->_tempObject) req->_tempObject = calloc(total + 1, 1);  // freed by the library
+    if (!req->_tempObject) return;
+    jig::copyBodyChunk(static_cast<char*>(req->_tempObject), total, data, len, index);
   }
 
   void handle(AsyncWebServerRequest* req) {
@@ -40,7 +42,8 @@ struct HttpServer::Impl {
     }
 
     const size_t contentLength = req->contentLength();
-    if (contentLength > jig::kMaxBodyBytes) return json(req, 413, jig::errorJson("payload_too_large"));
+    if (auto rejected = jig::rejectBody(contentLength, req->_tempObject != nullptr))
+      return json(req, rejected->status, rejected->body);
     const std::string body = (req->_tempObject && contentLength > 0)
                                  ? std::string(static_cast<const char*>(req->_tempObject), contentLength)
                                  : std::string();

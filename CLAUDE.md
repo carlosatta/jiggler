@@ -36,4 +36,6 @@ All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio
 - Partition table is `huge_app.csv` (3 MB app, no OTA). The default 1.25 MB partition was 95% full.
 - A mouse identity change touches `identity.h` (`kBleName`, `kVid`, `kPid`, OUI `00:1F:20`). The base MAC is set with `esp_base_mac_addr_set` before BLE init, which also changes the WiFi MAC.
 - The dashboard test checks that the page only calls routes `handleApi` serves. Update `kPageRoutes` in `test/test_dashboard` when the page adds a call.
+- REST and MCP bodies must be sent with `Content-Type: application/json`. `curl -d` alone sends form-encoded, which the HTTP library parses as params, so the device answers 415 `unsupported_media_type`. Use `curl -H 'Content-Type: application/json' -d ...`.
+- HTTP body bytes from ESPAsyncWebServer can exceed the declared Content-Length; always copy through `copyBodyChunk`, never `memcpy` directly.
 - Exact return-to-start is guaranteed in HID counts only. OS pointer acceleration can leave visible drift; this is unmeasured on a real host.

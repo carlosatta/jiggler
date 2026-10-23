@@ -4,6 +4,20 @@
 
 namespace jig {
 
+size_t copyBodyChunk(char* dst, size_t total, const uint8_t* data, size_t len, size_t index) {
+  if (index >= total) return 0;
+  const size_t n = len < total - index ? len : total - index;
+  for (size_t i = 0; i < n; i++) dst[index + i] = static_cast<char>(data[i]);
+  return n;
+}
+
+std::optional<HttpResponse> rejectBody(size_t contentLength, bool captured) {
+  if (contentLength > kMaxBodyBytes) return HttpResponse{413, errorJson("payload_too_large")};
+  if (contentLength > 0 && !captured)
+    return HttpResponse{415, errorJson("unsupported_media_type", "", "send the body with Content-Type: application/json")};
+  return std::nullopt;
+}
+
 bool authorized(const std::string& header, const std::string& token) {
   static const std::string kPrefix = "Bearer ";
   if (token.empty() || header.compare(0, kPrefix.size(), kPrefix) != 0) return false;
