@@ -87,6 +87,11 @@ Plan planActivity(const Config& config, Rng& rng) {
 
 size_t runPlan(const Plan& plan, MouseSink& mouse, const Platform& platform,
                const std::function<void(uint32_t)>& sleepMs) {
+  return runPlan(plan, mouse, nullptr, platform, sleepMs);
+}
+
+size_t runPlan(const Plan& plan, MouseSink& mouse, KeyboardSink* keyboard, const Platform& platform,
+               const std::function<void(uint32_t)>& sleepMs) {
   size_t executed = 0;
   for (const Step& s : plan.steps) {
     if (!platform.mouseConnected()) break;
@@ -94,6 +99,8 @@ size_t runPlan(const Plan& plan, MouseSink& mouse, const Platform& platform,
       case Step::Kind::Move: mouse.move(s.dx, s.dy); break;
       case Step::Kind::Click: mouse.click(); break;
       case Step::Kind::Scroll: mouse.scroll(s.notches); break;
+      case Step::Kind::KeyDown: if (keyboard) keyboard->keyDown(s.mods, s.key); break;
+      case Step::Kind::KeyUp: if (keyboard) keyboard->keyUp(); break;
     }
     executed++;
     sleepMs(s.waitMs);

@@ -38,6 +38,12 @@ struct MouseSink {
   virtual void scroll(int8_t notches) = 0;
 };
 
+struct KeyboardSink {
+  virtual ~KeyboardSink() = default;
+  virtual void keyDown(uint8_t modifiers, uint8_t usage) = 0;  // HID usage page 0x07
+  virtual void keyUp() = 0;                                    // releases everything
+};
+
 struct ConfigStore {
   virtual ~ConfigStore() = default;
   virtual Config load() = 0;

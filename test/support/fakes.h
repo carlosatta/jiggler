@@ -43,6 +43,14 @@ struct FakeMouse : MouseSink {
   void scroll(int8_t notches) override { calls.push_back("scroll " + std::to_string(notches)); }
 };
 
+struct FakeKeyboard : KeyboardSink {
+  std::vector<std::string> calls;
+  void keyDown(uint8_t modifiers, uint8_t usage) override {
+    calls.push_back("down " + std::to_string(modifiers) + "," + std::to_string(usage));
+  }
+  void keyUp() override { calls.push_back("up"); }
+};
+
 struct MemBlobStore : BlobStore {
   std::map<std::string, std::string> data;
   std::string get(const std::string& key) override {
