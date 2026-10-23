@@ -7,6 +7,7 @@
 #include "controller.h"
 #include "devices.h"
 #include "network_settings.h"
+#include "script.h"
 
 namespace jig {
 
@@ -15,6 +16,7 @@ struct ApiContext {
   Controller& controller;
   NetworkStore* network = nullptr;
   DeviceRegistry* devices = nullptr;
+  ScriptLibrary* scripts = nullptr;
   std::function<void()> restart;
 };
 

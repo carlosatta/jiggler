@@ -11,7 +11,7 @@
 namespace jig {
 
 struct Step {
-  enum class Kind : uint8_t { Move, Click, Scroll, KeyDown, KeyUp };
+  enum class Kind : uint8_t { Move, Click, Scroll, KeyDown, KeyUp, Wait };
   Kind kind;
   int8_t dx;
   int8_t dy;
@@ -27,6 +27,9 @@ struct Plan {
 
 // Net Move displacement of the returned plan is exactly (0,0).
 Plan planActivity(const Config& config, Rng& rng);
+
+// Appends a human-like stroke from (0,0) to exactly (dx,dy), |dx|,|dy| <= 2000; nothing for (0,0).
+void appendHumanMove(std::vector<Step>& steps, int dx, int dy, Rng& rng);
 
 // Stops as soon as the mouse is disconnected; returns the number of steps processed.
 // Key steps are skipped (their wait is still honored) when `keyboard` is null.

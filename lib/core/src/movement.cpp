@@ -63,6 +63,11 @@ void appendStroke(std::vector<Step>& steps, int fx, int fy, int tx, int ty, Rng&
 
 }  // namespace
 
+void appendHumanMove(std::vector<Step>& steps, int dx, int dy, Rng& rng) {
+  if (dx == 0 && dy == 0) return;
+  appendStroke(steps, 0, 0, dx, dy, rng, kStepMs);
+}
+
 Plan planActivity(const Config& config, Rng& rng) {
   Plan plan;
   const double angle = 2.0 * kPi * rand01(rng);
@@ -101,6 +106,7 @@ size_t runPlan(const Plan& plan, MouseSink& mouse, KeyboardSink* keyboard, const
       case Step::Kind::Scroll: mouse.scroll(s.notches); break;
       case Step::Kind::KeyDown: if (keyboard) keyboard->keyDown(s.mods, s.key); break;
       case Step::Kind::KeyUp: if (keyboard) keyboard->keyUp(); break;
+      case Step::Kind::Wait: break;
     }
     executed++;
     sleepMs(s.waitMs);

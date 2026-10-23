@@ -192,7 +192,7 @@ void test_parse_error_reply_has_null_id() {
 
 void test_oversized_body_rejected() {  // RF3
   Mcp m;
-  const std::string big = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"pad\":\"" + std::string(1100, 'a') + "\"}";
+  const std::string big = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"pad\":\"" + std::string(4200, 'a') + "\"}";
   McpReply r = m.call(big);
   TEST_ASSERT_EQUAL_INT(413, r.httpStatus);
 }

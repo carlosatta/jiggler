@@ -10,7 +10,7 @@ HttpResponse networkRoute(ApiContext& ctx, const std::string& method, const std:
   if (!ctx.network) return json(404, errorJson("not_found"));
   if (method == "GET") return json(200, networkToJson(ctx.network->load()));
   if (method != "PUT") return json(405, errorJson("method_not_allowed"));
-  if (body.size() > kMaxBodyBytes) return json(413, errorJson("payload_too_large"));
+  if (body.size() > kMaxSmallBodyBytes) return json(413, errorJson("payload_too_large"));
 
   NetworkSettings settings = ctx.network->load();
   ParseError err;
@@ -23,7 +23,7 @@ HttpResponse devicesRoute(ApiContext& ctx, const std::string& method, const std:
   if (!ctx.devices) return json(404, errorJson("not_found"));
   if (method == "GET") return json(200, devicesToJson(ctx.devices->list()));
   if (method != "PUT") return json(405, errorJson("method_not_allowed"));
-  if (body.size() > kMaxBodyBytes) return json(413, errorJson("payload_too_large"));
+  if (body.size() > kMaxMediumBodyBytes) return json(413, errorJson("payload_too_large"));
 
   std::vector<DeviceConfig> devices;
   ParseError err;
@@ -33,12 +33,66 @@ HttpResponse devicesRoute(ApiContext& ctx, const std::string& method, const std:
   return json(200, devicesToJson(ctx.devices->list(), true));
 }
 
+int statusForCmdError(const std::string& error) {
+  if (error == "not_found") return 404;
+  if (error == "read_only") return 403;
+  if (error == "limit_reached") return 409;
+  return 400;
+}
+
+HttpResponse scriptsRoute(ApiContext& ctx, const std::string& method, const std::string& path, const std::string& body) {
+  if (!ctx.scripts) return json(404, errorJson("not_found"));
+  static const std::string kPrefix = "/api/scripts";
+  if (path == kPrefix) {
+    if (method != "GET") return json(405, errorJson("method_not_allowed"));
+    JsonDocument doc;
+    JsonArray arr = doc["scripts"].to<JsonArray>();
+    for (const std::string& name : ctx.scripts->names()) {
+      JsonObject o = arr.add<JsonObject>();
+      o["name"] = name;
+      o["builtin"] = ctx.scripts->isBuiltin(name);
+    }
+    std::string out;
+    serializeJson(doc, out);
+    return json(200, out);
+  }
+
+  const std::string name = path.substr(kPrefix.size() + 1);
+  if (name.find('/') != std::string::npos) return json(404, errorJson("not_found"));
+
+  if (method == "GET") {
+    auto script = ctx.scripts->get(name);
+    if (!script) return json(404, errorJson("not_found"));
+    JsonDocument doc, parsed;
+    deserializeJson(parsed, *script);
+    doc["name"] = name;
+    doc["builtin"] = ctx.scripts->isBuiltin(name);
+    doc["script"] = parsed;
+    std::string out;
+    serializeJson(doc, out);
+    return json(200, out);
+  }
+  if (method == "PUT") {
+    if (body.size() > kMaxBodyBytes) return json(413, errorJson("payload_too_large"));
+    CmdResult r = ctx.scripts->put(name, body);
+    if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
+    return json(200, "{\"name\":\"" + name + "\"}");
+  }
+  if (method == "DELETE") {
+    CmdResult r = ctx.scripts->remove(name);
+    if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
+    return json(200, "{\"deleted\":\"" + name + "\"}");
+  }
+  return json(405, errorJson("method_not_allowed"));
+}
+
 }  // namespace
 
 HttpResponse handleApiEx(ApiContext& ctx, const std::string& method, const std::string& path,
                          const std::string& body) {
   if (path == "/api/network") return networkRoute(ctx, method, body);
   if (path == "/api/devices") return devicesRoute(ctx, method, body);
+  if (path == "/api/scripts" || path.rfind("/api/scripts/", 0) == 0) return scriptsRoute(ctx, method, path, body);
   if (path == "/api/profiles") {
     if (!ctx.devices) return json(404, errorJson("not_found"));
     if (method != "GET") return json(405, errorJson("method_not_allowed"));

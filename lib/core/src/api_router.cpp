@@ -33,7 +33,7 @@ namespace {
 HttpResponse json(int status, std::string body) { return {status, std::move(body)}; }
 
 HttpResponse putConfig(Controller& c, const std::string& body) {
-  if (body.size() > kMaxBodyBytes) return json(413, errorJson("payload_too_large"));
+  if (body.size() > kMaxSmallBodyBytes) return json(413, errorJson("payload_too_large"));
   ConfigPatch patch;
   ParseError perr;
   if (!parseConfigPatch(body, patch, perr)) return json(400, errorJson(perr.code, perr.field, perr.message));
