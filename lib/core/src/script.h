@@ -10,7 +10,9 @@
 
 namespace jig {
 
-constexpr size_t kMaxScriptBytes = 3000;
+// Sized so that 8 scripts fit the 20 KB NVS partition next to WiFi credentials and the other blobs.
+constexpr size_t kMaxScriptBytes = 1536;
+constexpr size_t kMaxCompileOps = 10000;  // operations visited while compiling, emitted or not
 constexpr size_t kMaxScriptSteps = 2000;
 constexpr size_t kMaxUserScripts = 8;
 

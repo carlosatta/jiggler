@@ -8,7 +8,7 @@
 class NvsBlobStore : public jig::BlobStore {
  public:
   std::string get(const std::string& key) override;
-  void put(const std::string& key, const std::string& value) override;
+  bool put(const std::string& key, const std::string& value) override;
   void remove(const std::string& key) override;
   std::vector<std::string> keys(const std::string& prefix) override;
 };

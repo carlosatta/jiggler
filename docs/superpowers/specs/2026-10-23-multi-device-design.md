@@ -1,6 +1,6 @@
 # Jiggler: più dispositivi, profili, script, modalità AP — design
 
-Estende [funzionalita.md](../../../funzionalita.md). Richiesta dell'utente (2026-10-23): captive portal, più dispositivi contemporanei (mouse, tastiera…), tipo/modello da lista (Logitech, Razer…) o custom con nome/MAC/ecc. e valori di default, tastiera con comportamento scriptabile, modalità senza WiFi di casa. L'utente ha rinunciato alle domande ("fai quello che vuoi, voglio risultati"): **le scelte sotto sono mie**, non concordate.
+Estende [features.md](../../../features.md). Richiesta dell'utente (2026-10-23): captive portal, più dispositivi contemporanei (mouse, tastiera…), tipo/modello da lista (Logitech, Razer…) o custom con nome/MAC/ecc. e valori di default, tastiera con comportamento scriptabile, modalità senza WiFi di casa. L'utente ha rinunciato alle domande ("fai quello che vuoi, voglio risultati"): **le scelte sotto sono mie**, non concordate.
 
 ## Obiettivo
 Il dispositivo espone mouse e tastiera BLE, ciascuno scelto da un catalogo di profili o personalizzato; il comportamento si programma con script; funziona anche senza WiFi di casa (rete propria con captive portal e dashboard).

@@ -155,8 +155,8 @@ std::vector<Automation> AutomationEngine::list() const {
 CmdResult AutomationEngine::replace(const std::vector<Automation>& automations) {
   if (auto bad = validateAutomations(automations, &scripts_)) return fail("invalid_automation", bad->field, bad->message);
   std::lock_guard<std::mutex> lock(mutex_);
+  if (!blobs_.put(kBlobKey, automationsToJson(automations))) return fail("storage_error", "", "could not save the automations (storage full?)");
   automations_ = automations;
-  blobs_.put(kBlobKey, automationsToJson(automations_));
   scheduleAllLocked();
   CmdResult r;
   r.ok = true;
@@ -190,23 +190,30 @@ CmdResult AutomationEngine::runInline(const std::string& scriptJson) {
 }
 
 std::optional<Plan> AutomationEngine::tick(bool running) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (!pending_.empty()) {
-    Pending next = std::move(pending_.front());
-    pending_.pop_front();
-    if (!platform_.mouseConnected()) return std::nullopt;  // an on-demand run must not fire later on reconnect
-    if (next.plan) return std::move(next.plan);
-    return compileLocked(next.script);
+  // Decide what to run under the lock, but read the script and compile it after releasing it: compiling
+  // can take a while and every HTTP handler touching the engine would otherwise block behind it.
+  std::string script;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!pending_.empty()) {
+      Pending next = std::move(pending_.front());
+      pending_.pop_front();
+      if (!platform_.mouseConnected()) return std::nullopt;  // an on-demand run must not fire later on reconnect
+      if (next.plan) return std::move(next.plan);
+      script = next.script;
+    } else {
+      if (!running || !platform_.mouseConnected()) return std::nullopt;
+      const uint32_t now = platform_.nowMs();
+      for (size_t i = 0; i < automations_.size(); i++) {
+        if (!automations_[i].enabled || static_cast<int32_t>(now - dueMs_[i]) < 0) continue;
+        scheduleLocked(i);  // reschedule first so a script that fails to compile is not retried every tick
+        script = automations_[i].script;
+        break;  // other due automations are served by the next tick
+      }
+    }
   }
-  if (!running || !platform_.mouseConnected()) return std::nullopt;
-
-  const uint32_t now = platform_.nowMs();
-  for (size_t i = 0; i < automations_.size(); i++) {
-    if (!automations_[i].enabled || static_cast<int32_t>(now - dueMs_[i]) < 0) continue;
-    scheduleLocked(i);  // reschedule first so a script that fails to compile is not retried every tick
-    if (auto plan = compileLocked(automations_[i].script)) return plan;
-  }
-  return std::nullopt;
+  if (script.empty()) return std::nullopt;
+  return compileNamed(script);
 }
 
 void AutomationEngine::scheduleLocked(size_t index) {
@@ -220,7 +227,7 @@ void AutomationEngine::scheduleAllLocked() {
   for (size_t i = 0; i < automations_.size(); i++) scheduleLocked(i);
 }
 
-std::optional<Plan> AutomationEngine::compileLocked(const std::string& script) {
+std::optional<Plan> AutomationEngine::compileNamed(const std::string& script) {
   auto json = scripts_.get(script);
   if (!json) return std::nullopt;
   Plan plan;

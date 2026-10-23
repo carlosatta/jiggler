@@ -54,7 +54,7 @@ struct ConfigStore {
 struct BlobStore {
   virtual ~BlobStore() = default;
   virtual std::string get(const std::string& key) = 0;
-  virtual void put(const std::string& key, const std::string& value) = 0;
+  virtual bool put(const std::string& key, const std::string& value) = 0;  // false = not stored (e.g. storage full)
   virtual void remove(const std::string& key) = 0;
   virtual std::vector<std::string> keys(const std::string& prefix) = 0;
 };

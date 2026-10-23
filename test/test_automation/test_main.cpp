@@ -37,7 +37,7 @@ Automation automation(const char* id, const char* script, uint32_t minSec, uint3
 struct Env {
   FakeClock clock;
   XorShiftRng rng{1};
-  MemBlobStore blobs;
+  FlakyBlobStore blobs;
   ScriptLibrary scripts{blobs};
   AutomationEngine engine{clock, rng, scripts, blobs};
 
@@ -199,6 +199,17 @@ void test_replace_persists_and_invalid_changes_nothing() {
   TEST_ASSERT_TRUE(again.list()[0].enabled);
 }
 
+void test_replace_storage_failure_reported() {  // final review, Critical
+  Env e;
+  e.useOne(15, 25, true);
+  e.blobs.failPuts = true;
+  CmdResult r = e.engine.replace({automation("b", "ping", 30, 40, true)});
+  TEST_ASSERT_FALSE(r.ok);
+  TEST_ASSERT_EQUAL_STRING("storage_error", r.error.c_str());
+  TEST_ASSERT_EQUAL_STRING("a", e.engine.list()[0].id.c_str());  // unchanged
+  e.blobs.failPuts = false;
+}
+
 void test_corrupt_blob_falls_back_to_defaults() {
   Env e;
   e.blobs.put("autos", "{nope");
@@ -280,6 +291,7 @@ int main() {
   RUN_TEST(test_pending_run_dropped_if_mouse_disconnects);
   RUN_TEST(test_deleted_script_skipped_and_rescheduled);
   RUN_TEST(test_replace_persists_and_invalid_changes_nothing);
+  RUN_TEST(test_replace_storage_failure_reported);
   RUN_TEST(test_corrupt_blob_falls_back_to_defaults);
   RUN_TEST(test_automation_routes);
   return UNITY_END();

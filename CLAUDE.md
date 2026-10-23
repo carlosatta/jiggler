@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What the project is
 
-An ESP32 (classic `esp32dev`) that keeps a computer awake by acting as a BLE mouse presenting as a Logitech MX Master 3S, with control and status over WiFi: web dashboard, REST API and MCP server. [funzionalita.md](funzionalita.md) is the functional spec (Italian) and the source of truth for requirements; the implementation plan is in `docs/superpowers/plans/`. Keep documentation and UI strings in Italian.
+An ESP32 (classic `esp32dev`) that keeps a computer awake by acting as a BLE mouse presenting as a Logitech MX Master 3S, with control and status over WiFi: web dashboard, REST API and MCP server. [features.md](features.md) is the functional spec and the source of truth for requirements; the implementation plan is in `docs/superpowers/plans/`. Documentation is in English; dashboard UI strings are in Italian (the design history in `docs/superpowers/` is also Italian).
 
 ## Commands
 

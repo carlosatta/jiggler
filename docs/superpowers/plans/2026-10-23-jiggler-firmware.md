@@ -8,7 +8,7 @@
 
 **Tech Stack:** PlatformIO, Arduino framework on ESP32 (`esp32dev`), C++17, NimBLE-Arduino, ArduinoJson 7, mathieucarbou/ESPAsyncWebServer, tzapu/WiFiManager, Unity (host tests).
 
-**Spec:** [funzionalita.md](../../../funzionalita.md)
+**Spec:** [features.md](../../../features.md)
 
 ## Global Constraints
 

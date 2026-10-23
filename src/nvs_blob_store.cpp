@@ -52,16 +52,25 @@ std::string NvsBlobStore::get(const std::string& key) {
   return value;
 }
 
-void NvsBlobStore::put(const std::string& key, const std::string& value) {
+bool NvsBlobStore::put(const std::string& key, const std::string& value) {
   Preferences prefs;
   prefs.begin(kNamespace, false);
-  prefs.putString(nvsKey(key).c_str(), value.c_str());
-  std::vector<std::string> index = readIndex(prefs);
-  if (std::find(index.begin(), index.end(), key) == index.end()) {
-    index.push_back(key);
-    writeIndex(prefs, index);
+  const std::string nk = nvsKey(key);
+  // putString returns the number of bytes written, 0 when NVS refused the write (e.g. no free page).
+  const size_t written = prefs.putString(nk.c_str(), value.c_str());
+  bool ok = value.empty() || written == value.size();
+  if (ok) {
+    std::vector<std::string> index = readIndex(prefs);
+    if (std::find(index.begin(), index.end(), key) == index.end()) {
+      index.push_back(key);
+      std::string raw;
+      for (const std::string& k : index) raw += k + "\n";
+      ok = prefs.putString(kIndexKey, raw.c_str()) == raw.size();
+      if (!ok) prefs.remove(nk.c_str());  // never leave a value that the index does not know about
+    }
   }
   prefs.end();
+  return ok;
 }
 
 void NvsBlobStore::remove(const std::string& key) {

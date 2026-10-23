@@ -40,6 +40,7 @@ struct Ctx {
   Rng& rng;
   std::vector<Step> steps;
   uint64_t worstWaitMs = 0;  // random waits counted at their maximum
+  size_t ops = 0;            // operations visited, including ones that emit no step (wait 0, move 0,0)
 };
 
 using Err = std::optional<CompileError>;
@@ -88,6 +89,7 @@ void pushWait(Ctx& ctx, int64_t chosenMs, int64_t worstMs) {
 Err compileSteps(JsonArrayConst steps, int depth, const std::string& path, Ctx& ctx);
 
 Err compileOp(JsonObjectConst o, int depth, const std::string& path, Ctx& ctx) {
+  if (++ctx.ops > kMaxCompileOps) return fail(path, "script is too complex (max 10000 operations)");
   if (!o["op"].is<const char*>()) return fail(path + "/op", "is required and must be a string");
   const std::string op = o["op"].as<std::string>();
   std::string bad;
@@ -230,7 +232,7 @@ CmdResult ScriptLibrary::put(const std::string& name, const std::string& json) {
   ValidationRng rng;
   if (auto err = compileScript(json, rng, scratch)) return failCmd("invalid_script", err->path, err->message);
   if (!get(name) && names().size() - 1 >= kMaxUserScripts) return failCmd("limit_reached", "", "at most 8 user scripts");
-  blobs_.put(kBlobPrefix + name, json);
+  if (!blobs_.put(kBlobPrefix + name, json)) return failCmd("storage_error", "", "could not save the script (storage full?)");
   CmdResult r;
   r.ok = true;
   return r;

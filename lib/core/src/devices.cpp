@@ -84,7 +84,7 @@ std::optional<ValidationError> validateDevices(const std::vector<DeviceConfig>& 
     return ValidationError{"devices", "must contain 1 to 4 devices"};
 
   std::set<std::string> ids;
-  bool anyEnabled = false;
+  bool anyEnabled = false, anyMouse = false;
   for (size_t i = 0; i < devices.size(); i++) {
     const DeviceConfig& d = devices[i];
     if (!validId(d.id)) return ValidationError{at(i, "id"), "must be 1 to 24 characters of a-z 0-9 _ -"};
@@ -104,8 +104,10 @@ std::optional<ValidationError> validateDevices(const std::vector<DeviceConfig>& 
       if ((*mac)[0] & 1) return ValidationError{at(i, "mac"), "must be a unicast address (first byte even)"};
     }
     anyEnabled |= d.enabled;
+    anyMouse |= d.enabled && d.kind == DeviceKind::Mouse;
   }
   if (!anyEnabled) return ValidationError{"devices", "at least one device must be enabled"};
+  if (!anyMouse) return ValidationError{"devices", "at least one mouse must be enabled (the jiggler needs it)"};
   return std::nullopt;
 }
 
@@ -263,8 +265,12 @@ CmdResult DeviceRegistry::replace(const std::vector<DeviceConfig>& devices) {
     return r;
   }
   std::lock_guard<std::mutex> lock(mutex_);
+  if (!blobs_.put(kBlobKey, devicesToJson(devices))) {
+    r.error = "storage_error";
+    r.message = "could not save the devices (storage full?)";
+    return r;
+  }
   devices_ = devices;
-  blobs_.put(kBlobKey, devicesToJson(devices_));
   r.ok = true;
   return r;
 }
@@ -280,6 +286,7 @@ ResolvedDevice DeviceRegistry::resolved(const uint8_t efuseMac[6]) const {
     if (!primarySet) {
       out.identity = resolveIdentity(d);
       out.mac = resolveMac(d, out.identity, efuseMac);
+      out.macExplicit = d.mac.has_value();
       primarySet = true;
     }
   }

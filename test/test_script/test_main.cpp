@@ -38,7 +38,7 @@ struct Env {
   XorShiftRng rng{1};
   MemStore config;
   Controller controller{clock, rng, config};
-  MemBlobStore blobs;
+  FlakyBlobStore blobs;
   ScriptLibrary library{blobs};
   ApiContext ctx{controller};
   Env() {
@@ -196,6 +196,48 @@ void test_script_bombs_rejected() {  // RF2
   }
 }
 
+void test_compile_iteration_bomb_rejected() {  // final review, Critical
+  const std::string nop = "{\"op\":\"wait\",\"ms\":0}";
+  const std::string move0 = "{\"op\":\"move\",\"dx\":0,\"dy\":0}";
+  for (const std::string& op : {nop, move0}) {
+    Plan p;
+    p.steps.push_back({Step::Kind::Click, 0, 0, 0, 1});
+    // 100*100*100 = 1e6 iterations that emit no steps: must be refused, not ground through
+    auto err = compile(script(repeat(100, repeat(100, repeat(100, op)))), p);
+    TEST_ASSERT_TRUE_MESSAGE(err.has_value(), op.c_str());
+    TEST_ASSERT_EQUAL_UINT32(1, p.steps.size());
+  }
+  Plan heavy;
+  // 1000*1000*1000 = 1e9 iterations: the reviewer measured ~7 minutes on a laptop before the fix
+  TEST_ASSERT_TRUE(compile(script(repeat(1000, repeat(1000, repeat(1000, nop)))), heavy).has_value());
+  TEST_ASSERT_TRUE(heavy.steps.empty());
+  Plan ok;
+  TEST_ASSERT_FALSE(compile(script(repeat(100, nop)), ok).has_value());  // a modest number of no-op steps is fine
+}
+
+void test_library_storage_failure_reported() {  // final review, Critical
+  FlakyBlobStore blobs;
+  ScriptLibrary lib(blobs);
+  const std::string s = script("{\"op\":\"click\"}");
+  TEST_ASSERT_TRUE(lib.put("ok", s).ok);
+  blobs.failPuts = true;
+  CmdResult r = lib.put("full", s);
+  TEST_ASSERT_FALSE(r.ok);
+  TEST_ASSERT_EQUAL_STRING("storage_error", r.error.c_str());
+  TEST_ASSERT_FALSE(lib.get("full").has_value());
+  TEST_ASSERT_EQUAL_UINT32(2, lib.names().size());  // built-in + "ok" only
+  blobs.failPuts = false;
+  TEST_ASSERT_TRUE(lib.put("full", s).ok);
+}
+
+void test_script_size_limit_fits_nvs() {
+  MemBlobStore blobs;
+  ScriptLibrary lib(blobs);
+  std::string padded = "{\"steps\":[{\"op\":\"click\"}]," + std::string(kMaxScriptBytes, ' ') + "}";
+  TEST_ASSERT_FALSE(lib.put("big", padded).ok);
+  TEST_ASSERT_TRUE(kMaxScriptBytes <= 1536);  // 8 scripts must fit the 20 KB NVS partition next to WiFi credentials
+}
+
 void test_wait_random_in_range() {
   bool differs = false;
   uint16_t first = 0;
@@ -314,6 +356,9 @@ void test_script_routes() {
 
   for (int i = 0; i < 8; i++) TEST_ASSERT_EQUAL_INT(200, e.call("PUT", "/api/scripts/s" + std::to_string(i), s).status);
   TEST_ASSERT_EQUAL_INT(409, e.call("PUT", "/api/scripts/extra", s).status);
+  e.blobs.failPuts = true;
+  TEST_ASSERT_EQUAL_INT(507, e.call("PUT", "/api/scripts/s0", script("{\"op\":\"scroll\",\"notches\":2}")).status);
+  e.blobs.failPuts = false;
 
   e.ctx.scripts = nullptr;
   TEST_ASSERT_EQUAL_INT(404, e.call("GET", "/api/scripts").status);
@@ -327,6 +372,9 @@ int main() {
   RUN_TEST(test_type_emits_shift_for_uppercase);
   RUN_TEST(test_type_rejects_non_ascii);
   RUN_TEST(test_script_bombs_rejected);
+  RUN_TEST(test_compile_iteration_bomb_rejected);
+  RUN_TEST(test_library_storage_failure_reported);
+  RUN_TEST(test_script_size_limit_fits_nvs);
   RUN_TEST(test_wait_random_in_range);
   RUN_TEST(test_library_put_get_remove);
   RUN_TEST(test_library_limits);

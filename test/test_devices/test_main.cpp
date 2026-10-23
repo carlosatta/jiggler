@@ -40,7 +40,7 @@ struct Api {
   XorShiftRng rng{1};
   MemStore config;
   Controller controller{clock, rng, config};
-  MemBlobStore blobs;
+  FlakyBlobStore blobs;
   DeviceRegistry registry{blobs};
   ApiContext ctx{controller};
 
@@ -191,6 +191,7 @@ void test_validate_devices_table() {  // RF1
   { auto d = base(); d[0].name = ""; cases.push_back({"empty name", d}); }
   { auto d = base(); d[0].manufacturer = std::string(33, 'm'); cases.push_back({"manufacturer too long", d}); }
   { auto d = base(); d[0].enabled = false; cases.push_back({"none enabled", d}); }
+  { auto d = base(); d[0].enabled = false; d[1].enabled = true; cases.push_back({"keyboard only (the jiggler would move nothing)", d}); }
   { std::vector<DeviceConfig> d; cases.push_back({"empty list", d}); }
   { std::vector<DeviceConfig> d; for (int i = 0; i < 5; i++) d.push_back(dev(("d" + std::to_string(i)).c_str(), DeviceKind::Mouse, true, "custom")); cases.push_back({"5 devices", d}); }
 
@@ -265,12 +266,11 @@ void test_registry_primary_and_flags() {
   TEST_ASSERT_TRUE(r.mouse && r.keyboard);
   TEST_ASSERT_EQUAL_STRING("MX Master 3S", r.identity.name.c_str());  // first enabled device is primary
 
-  d[0].enabled = false;
   d[1].profileId = "logitech-mx-keys";
+  std::swap(d[0], d[1]);  // keyboard first: its identity becomes the primary one
   TEST_ASSERT_TRUE(reg.replace(d).ok);
   r = reg.resolved(kEfuse);
-  TEST_ASSERT_FALSE(r.mouse);
-  TEST_ASSERT_TRUE(r.keyboard);
+  TEST_ASSERT_TRUE(r.mouse && r.keyboard);
   TEST_ASSERT_EQUAL_STRING("MX Keys", r.identity.name.c_str());
   TEST_ASSERT_EQUAL_HEX16(0xB35B, r.identity.pid);
 }
@@ -296,6 +296,34 @@ void test_registry_replace_persists_and_invalid_changes_nothing() {  // RF1
   DeviceRegistry again(blobs);
   again.begin();
   TEST_ASSERT_EQUAL_STRING("Persistito", again.list()[0].name->c_str());
+}
+
+void test_registry_storage_failure_reported() {  // final review, Critical
+  FlakyBlobStore blobs;
+  DeviceRegistry reg(blobs);
+  reg.begin();
+  auto d = defaultDevices();
+  d[0].name = "NonSalvato";
+  blobs.failPuts = true;
+  CmdResult r = reg.replace(d);
+  TEST_ASSERT_FALSE(r.ok);
+  TEST_ASSERT_EQUAL_STRING("storage_error", r.error.c_str());
+  TEST_ASSERT_FALSE(reg.list()[0].name.has_value());  // in-memory list unchanged
+  blobs.failPuts = false;
+  TEST_ASSERT_TRUE(reg.replace(d).ok);
+}
+
+void test_resolved_marks_explicit_mac() {  // final review, Important
+  MemBlobStore blobs;
+  DeviceRegistry reg(blobs);
+  reg.begin();
+  TEST_ASSERT_FALSE(reg.resolved(kEfuse).macExplicit);  // profile OUI + chip tail: the chip adds its own offset
+  auto d = defaultDevices();
+  d[0].mac = "02:11:22:33:44:55";
+  TEST_ASSERT_TRUE(reg.replace(d).ok);
+  ResolvedDevice r = reg.resolved(kEfuse);
+  TEST_ASSERT_TRUE(r.macExplicit);
+  TEST_ASSERT_TRUE(r.mac.has_value());
 }
 
 void test_registry_corrupt_blob_falls_back_to_defaults() {
@@ -340,6 +368,11 @@ void test_api_profiles_devices_routes() {
   TEST_ASSERT_EQUAL_STRING("devices[0].mac", bd["field"].as<const char*>());
   TEST_ASSERT_EQUAL_STRING("razer-orochi-v2", a.registry.list()[0].profileId.c_str());  // unchanged
 
+  a.blobs.failPuts = true;
+  HttpResponse full = a.call("PUT", "/api/devices", "{\"devices\":[{\"id\":\"mouse\",\"kind\":\"mouse\",\"enabled\":true,\"profileId\":\"logitech-mx-master-3s\"}]}");
+  TEST_ASSERT_EQUAL_INT(507, full.status);
+  TEST_ASSERT_EQUAL_STRING("storage_error", parse(full.body)["error"].as<const char*>());
+  a.blobs.failPuts = false;
   TEST_ASSERT_EQUAL_INT(400, a.call("PUT", "/api/devices", "{").status);
   TEST_ASSERT_EQUAL_INT(405, a.call("DELETE", "/api/devices").status);
   TEST_ASSERT_EQUAL_INT(405, a.call("POST", "/api/profiles").status);
@@ -364,6 +397,8 @@ int main() {
   RUN_TEST(test_parse_devices_bad_input);
   RUN_TEST(test_registry_primary_and_flags);
   RUN_TEST(test_registry_replace_persists_and_invalid_changes_nothing);
+  RUN_TEST(test_registry_storage_failure_reported);
+  RUN_TEST(test_resolved_marks_explicit_mac);
   RUN_TEST(test_registry_corrupt_blob_falls_back_to_defaults);
   RUN_TEST(test_api_profiles_devices_routes);
   return UNITY_END();

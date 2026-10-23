@@ -26,7 +26,14 @@ class ServerCallbacks : public NimBLEServerCallbacks {
 }  // namespace
 
 void BleMouse::begin(const jig::ResolvedDevice& device) {
-  if (device.mac) esp_base_mac_addr_set(device.mac->data());
+  if (device.mac) {
+    std::array<uint8_t, 6> base = *device.mac;
+    // The Bluetooth address is the base MAC with the last byte + 2 (universal MAC layout). A profile-derived
+    // address keeps that offset (it only matters that the vendor prefix survives); a user-typed address
+    // must come out exactly as typed.
+    if (device.macExplicit) base[5] = static_cast<uint8_t>(base[5] - 2);
+    esp_base_mac_addr_set(base.data());
+  }
 
   NimBLEDevice::init(device.identity.name);
   NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_PUBLIC);

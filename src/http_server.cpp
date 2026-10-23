@@ -21,11 +21,21 @@ struct HttpServer::Impl {
     req->send(res);
   }
 
-  static void onBody(AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
+  bool isAuthorized(AsyncWebServerRequest* req) {
+    const AsyncWebHeader* auth = req->getHeader("Authorization");
+    return jig::authorized(auth ? auth->value().c_str() : "", tokens.load());
+  }
+
+  void acceptBody(AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
     if (total > jig::kMaxBodyBytes || index >= total) return;  // refused in handle()
-    if (index == 0 && !req->_tempObject) req->_tempObject = calloc(total + 1, 1);  // freed by the library
+    // No buffer for unauthenticated requests: handle() answers them with 401 without a body.
+    if (index == 0 && !req->_tempObject && isAuthorized(req)) req->_tempObject = calloc(total + 1, 1);  // freed by the library
     if (!req->_tempObject) return;
     jig::copyBodyChunk(static_cast<char*>(req->_tempObject), total, data, len, index);
+  }
+
+  static void onBody(Impl* self, AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
+    self->acceptBody(req, data, len, index, total);
   }
 
   void handle(AsyncWebServerRequest* req) {
@@ -36,8 +46,7 @@ struct HttpServer::Impl {
       return json(req, 404, jig::errorJson("not_found"));
     }
 
-    const AsyncWebHeader* auth = req->getHeader("Authorization");
-    if (!jig::authorized(auth ? auth->value().c_str() : "", tokens.load())) {
+    if (!isAuthorized(req)) {
       AsyncWebServerResponse* res = req->beginResponse(401, "application/json", jig::errorJson("unauthorized").c_str());
       res->addHeader("WWW-Authenticate", "Bearer");
       res->addHeader("Connection", "close");
@@ -79,7 +88,9 @@ void HttpServer::begin(bool captive) {
     res->addHeader("Cache-Control", "no-store");
     req->send(res);
   });
-  s->server.onRequestBody(Impl::onBody);
+  s->server.onRequestBody([s](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
+    Impl::onBody(s, req, data, len, index, total);
+  });
   s->server.onNotFound([s](AsyncWebServerRequest* req) { s->handle(req); });
   s->server.begin();
 }

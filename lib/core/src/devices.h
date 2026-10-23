@@ -28,6 +28,7 @@ struct DeviceConfig {
 struct ResolvedDevice {
   Identity identity;
   std::optional<std::array<uint8_t, 6>> mac;  // nullopt = keep the chip's own address
+  bool macExplicit = false;                    // the user typed this address: it must be the final Bluetooth address
   bool mouse = false;
   bool keyboard = false;
 };

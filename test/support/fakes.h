@@ -57,13 +57,25 @@ struct MemBlobStore : BlobStore {
     auto it = data.find(key);
     return it == data.end() ? std::string() : it->second;
   }
-  void put(const std::string& key, const std::string& value) override { data[key] = value; }
+  bool put(const std::string& key, const std::string& value) override {
+    data[key] = value;
+    return true;
+  }
   void remove(const std::string& key) override { data.erase(key); }
   std::vector<std::string> keys(const std::string& prefix) override {
     std::vector<std::string> out;
     for (const auto& kv : data)
       if (kv.first.rfind(prefix, 0) == 0) out.push_back(kv.first);
     return out;
+  }
+};
+
+// A store that can be told to refuse writes, like a full NVS.
+struct FlakyBlobStore : MemBlobStore {
+  bool failPuts = false;
+  bool put(const std::string& key, const std::string& value) override {
+    if (failPuts) return false;
+    return MemBlobStore::put(key, value);
   }
 };
 

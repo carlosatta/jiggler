@@ -51,7 +51,7 @@ class AutomationEngine {
  private:
   void scheduleLocked(size_t index);
   void scheduleAllLocked();
-  std::optional<Plan> compileLocked(const std::string& script);
+  std::optional<Plan> compileNamed(const std::string& script);  // no lock held: reads NVS and compiles
 
   Platform& platform_;
   Rng& rng_;

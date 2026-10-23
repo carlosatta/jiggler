@@ -207,7 +207,13 @@ textarea{min-height:220px;font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monosp
     'at most 8 user scripts': 'Massimo 8 script utente.',
     'at most 4 automations': 'Massimo 4 automazioni.',
     'must be 1 to 24 characters of a-z 0-9 _ -': 'Da 1 a 24 caratteri: a-z 0-9 _ -',
-    'must be auto or ap': 'Scegli Auto o Rete propria.'
+    'must be auto or ap': 'Scegli Auto o Rete propria.',
+    'at least one mouse must be enabled (the jiggler needs it)': 'Abilita almeno un mouse: il jiggler ne ha bisogno.',
+    'could not save the devices (storage full?)': 'Memoria piena: impossibile salvare.',
+    'could not save the script (storage full?)': 'Memoria piena: impossibile salvare lo script.',
+    'could not save the automations (storage full?)': 'Memoria piena: impossibile salvare.',
+    'script is too complex (max 10000 operations)': 'Script troppo complesso (massimo 10000 operazioni).',
+    'script is too large (max 3000 bytes)': 'Script troppo grande.'
   };
   var $ = function (id) { return document.getElementById(id); };
   var tr = function (m) { return MESSAGES[m] || m || 'Valore non valido.'; };

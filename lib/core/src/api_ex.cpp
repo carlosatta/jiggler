@@ -6,6 +6,14 @@ namespace {
 
 HttpResponse json(int status, std::string body) { return {status, std::move(body)}; }
 
+int statusForCmdError(const std::string& error) {
+  if (error == "not_found") return 404;
+  if (error == "read_only") return 403;
+  if (error == "limit_reached" || error == "mouse_not_connected" || error == "busy") return 409;
+  if (error == "storage_error") return 507;
+  return 400;
+}
+
 HttpResponse networkRoute(ApiContext& ctx, const std::string& method, const std::string& body) {
   if (!ctx.network) return json(404, errorJson("not_found"));
   if (method == "GET") return json(200, networkToJson(ctx.network->load()));
@@ -29,15 +37,8 @@ HttpResponse devicesRoute(ApiContext& ctx, const std::string& method, const std:
   ParseError err;
   if (!parseDevices(body, devices, err)) return json(400, errorJson(err.code, err.field, err.message));
   CmdResult r = ctx.devices->replace(devices);
-  if (!r.ok) return json(400, errorJson(r.error, r.field, r.message));
+  if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
   return json(200, devicesToJson(ctx.devices->list(), true));
-}
-
-int statusForCmdError(const std::string& error) {
-  if (error == "not_found") return 404;
-  if (error == "read_only") return 403;
-  if (error == "limit_reached" || error == "mouse_not_connected" || error == "busy") return 409;
-  return 400;
 }
 
 HttpResponse automationsRoute(ApiContext& ctx, const std::string& method, const std::string& body) {
@@ -50,7 +51,7 @@ HttpResponse automationsRoute(ApiContext& ctx, const std::string& method, const 
   ParseError err;
   if (!parseAutomations(body, automations, err)) return json(400, errorJson(err.code, err.field, err.message));
   CmdResult r = ctx.automations->replace(automations);
-  if (!r.ok) return json(400, errorJson(r.error, r.field, r.message));
+  if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
   return json(200, automationsToJson(ctx.automations->list()));
 }
 
