@@ -1,6 +1,7 @@
 #include "wifi_setup.h"
 
 #include <Arduino.h>
+#include <DNSServer.h>
 #include <ESPmDNS.h>
 #include <WiFi.h>
 #include <WiFiManager.h>
@@ -9,21 +10,27 @@
 namespace {
 constexpr const char* kApName = "Jiggler-Setup";
 constexpr uint32_t kReconnectIntervalMs = 30000;
+constexpr uint16_t kDnsPort = 53;
 
-std::string randomToken() {
-  char buf[17];
-  snprintf(buf, sizeof(buf), "%08x%08x", (unsigned)esp_random(), (unsigned)esp_random());
-  return buf;
+std::string randomHex(size_t digits) {
+  std::string out;
+  while (out.size() < digits) {
+    char buf[9];
+    snprintf(buf, sizeof(buf), "%08x", (unsigned)esp_random());
+    out += buf;
+  }
+  out.resize(digits);
+  return out;
 }
 
 std::string initialToken(TokenStore& tokens) {
   std::string t = tokens.load();
-  return t.empty() ? randomToken() : t;
+  return t.empty() ? randomHex(16) : t;
 }
 }  // namespace
 
 struct WifiSetup::Impl {
-  explicit Impl(TokenStore& t) : tokens(t) {}
+  Impl(TokenStore& t, jig::NetworkStore& n) : tokens(t), network(n) {}
 
   void persistToken() {
     std::string token = tokenParam->getValue();
@@ -32,17 +39,53 @@ struct WifiSetup::Impl {
     Serial.printf("API token saved: %s\n", token.c_str());
   }
 
+  void startAccessPoint() {
+    jig::NetworkSettings stored = network.load();
+    jig::NetworkSettings active = stored;
+#ifdef JIG_FORCE_AP
+    active.mode = jig::NetworkMode::Ap;
+#endif
+    if (active.apPassword.empty()) {
+      active.apPassword = randomHex(10);
+      stored.apPassword = active.apPassword;  // persist the password only, never a forced mode
+      network.save(stored);
+    }
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP(active.apSsid.c_str(), active.apPassword.c_str());
+    dns.start(kDnsPort, "*", WiFi.softAPIP());
+    MDNS.begin("jiggler");
+    MDNS.addService("http", "tcp", 80);
+    if (tokens.load().empty()) tokens.save(active.apPassword);  // the AP password doubles as the first token
+    ap = true;
+    Serial.printf("AP mode: SSID '%s' password '%s' IP %s (captive portal on)\n", active.apSsid.c_str(),
+                  active.apPassword.c_str(), WiFi.softAPIP().toString().c_str());
+  }
+
   TokenStore& tokens;
+  jig::NetworkStore& network;
   WiFiManager wm;
+  DNSServer dns;
   std::unique_ptr<WiFiManagerParameter> tokenParam;  // created in begin(): NVS is not ready during static init
+  bool ap = false;
   bool announced = false;
   uint32_t lastReconnectMs = 0;
 };
 
-WifiSetup::WifiSetup(TokenStore& tokens) : impl_(new Impl(tokens)) {}
+WifiSetup::WifiSetup(TokenStore& tokens, jig::NetworkStore& network) : impl_(new Impl(tokens, network)) {}
 WifiSetup::~WifiSetup() = default;
 
+bool WifiSetup::apMode() const { return impl_->ap; }
+
 void WifiSetup::begin() {
+  bool wantAp = impl_->network.load().mode == jig::NetworkMode::Ap;
+#ifdef JIG_FORCE_AP
+  wantAp = true;
+#endif
+  if (wantAp) {
+    impl_->startAccessPoint();
+    return;
+  }
+
   WiFiManager& wm = impl_->wm;
   wm.setDebugOutput(false);
   wm.setConfigPortalBlocking(false);
@@ -65,6 +108,15 @@ void WifiSetup::begin() {
 
 bool WifiSetup::loop() {
   Impl& s = *impl_;
+  if (s.ap) {
+    s.dns.processNextRequest();
+    if (!s.announced) {
+      s.announced = true;
+      return true;
+    }
+    return false;
+  }
+
   s.wm.process();
 
   const bool connected = WiFi.status() == WL_CONNECTED;

@@ -1,9 +1,9 @@
 #include "http_server.h"
 
 #include <ESPAsyncWebServer.h>
+#include <WiFi.h>
 
 #include <cstdlib>
-#include <cstring>
 #include <string>
 
 #include "api_router.h"
@@ -12,7 +12,7 @@
 #include "mcp_server.h"
 
 struct HttpServer::Impl {
-  Impl(jig::Controller& c, TokenStore& t) : controller(c), tokens(t), server(80) {}
+  Impl(jig::ApiContext& a, TokenStore& t) : api(a), tokens(t), server(80) {}
 
   static void json(AsyncWebServerRequest* req, int status, const std::string& body) {
     AsyncWebServerResponse* res = req->beginResponse(status, "application/json", body.c_str());
@@ -31,7 +31,10 @@ struct HttpServer::Impl {
   void handle(AsyncWebServerRequest* req) {
     const std::string path = req->url().c_str();
     const bool isMcp = path == "/mcp";
-    if (!isMcp && path.rfind("/api/", 0) != 0) return json(req, 404, jig::errorJson("not_found"));
+    if (!isMcp && path.rfind("/api/", 0) != 0) {
+      if (captive) return req->redirect(String("http://") + WiFi.softAPIP().toString() + "/");
+      return json(req, 404, jig::errorJson("not_found"));
+    }
 
     const AsyncWebHeader* auth = req->getHeader("Authorization");
     if (!jig::authorized(auth ? auth->value().c_str() : "", tokens.load())) {
@@ -51,25 +54,26 @@ struct HttpServer::Impl {
 
     if (isMcp) {
       if (method != "POST") return json(req, 405, jig::errorJson("method_not_allowed"));
-      jig::McpReply r = jig::handleMcp(controller, body);
+      jig::McpReply r = jig::handleMcp(api.controller, body);
       if (r.httpStatus == 202) return req->send(202);
       return json(req, r.httpStatus, r.body);
     }
-    jig::HttpResponse r = jig::handleApi(controller, method, path, body);
+    jig::HttpResponse r = jig::handleApiEx(api, method, path, body);
     json(req, r.status, r.body);
   }
 
-  jig::Controller& controller;
+  jig::ApiContext& api;
   TokenStore& tokens;
   AsyncWebServer server;
+  bool captive = false;
 };
 
-HttpServer::HttpServer(jig::Controller& controller, TokenStore& tokens)
-    : impl_(new Impl(controller, tokens)) {}
+HttpServer::HttpServer(jig::ApiContext& api, TokenStore& tokens) : impl_(new Impl(api, tokens)) {}
 HttpServer::~HttpServer() = default;
 
-void HttpServer::begin() {
+void HttpServer::begin(bool captive) {
   Impl* s = impl_.get();
+  s->captive = captive;
   s->server.on("/", HTTP_GET, [](AsyncWebServerRequest* req) {
     AsyncWebServerResponse* res = req->beginResponse(200, "text/html", kDashboardHtml);
     res->addHeader("Cache-Control", "no-store");
