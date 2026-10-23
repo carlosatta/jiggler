@@ -258,7 +258,7 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <div class="block">
 <h2>Paired computers</h2>
 <ul class="list" id="peers"></ul>
-<p class="empty" id="peersEmpty" hidden>No computer paired yet. On the computer, open the Bluetooth settings and choose the device.</p>
+<p class="empty" id="peersEmpty" hidden>No computer paired. Open pairing above, then choose the device in the computer’s Bluetooth settings.</p>
 <div class="actions"><button class="danger" id="forgetAll">Forget all</button></div>
 <p class="msg" id="peersMsg" role="status" aria-live="polite"></p>
 <p class="hint">Bluetooth does not tell the device a computer’s name, so they are numbered. To tell them apart: disconnect, see which computer loses the mouse, and rename it here. Up to 3 computers can be paired.</p>
@@ -446,6 +446,10 @@ var JigLib = (function () {
       return { tone: 'open', title: 'Pairing is open',
         detail: 'Closes in ' + fmtDuration(pairing.remainingMs) + '. On the computer, choose “' + name + '”.', actions: ['closePairing'] };
     }
+    if (!bt.peerCount) {
+      return { tone: 'idle', title: 'No computer paired',
+        detail: 'Open pairing, then choose “' + name + '” in the computer’s Bluetooth settings.', actions: ['pair'] };
+    }
     return { tone: 'idle', title: 'No computer connected',
       detail: 'It reconnects by itself when a paired computer is on and nearby.', actions: ['pair'] };
   }
@@ -464,8 +468,8 @@ var JigLib = (function () {
     if (!m || +m[1] > 23 || +m[2] > 59) return null;
     var target = new Date(now.getTime());
     target.setHours(+m[1], +m[2], 0, 0);
+    if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);  // calendar day, not 24 h: DST-safe
     var diff = target.getTime() - now.getTime();
-    if (diff <= 0) diff += 24 * 3600000;
     return Math.min(1440, Math.max(1, Math.ceil(diff / 60000)));
   }
 
@@ -992,7 +996,7 @@ var App = (function () {
   };
   App.confirmInline($('forgetAll'), 'Confirm: forget all', function () {
     App.call('DELETE', '/api/bluetooth/peers').then(function (res) {
-      reply(res, 'All computers forgotten. Pairing is open again.', 'peersMsg');
+      reply(res, 'All computers forgotten. Pairing stays closed: open it to add one.', 'peersMsg');
       load(); App.poll();
     }).catch(function () {});
   });

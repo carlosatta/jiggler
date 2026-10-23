@@ -44,6 +44,9 @@ struct BleLink {
   virtual void forgetAllBonds() = 0;
   virtual void setAdvertising(bool on) = 0;     // false = invisible: nobody can connect or reconnect
   virtual void setPairingOpen(bool open) = 0;   // false = refuse (and undo) new bonds
+  // True once after the computer ended a connection on purpose (its "Disconnect" button), not after a
+  // link loss or one we ended ourselves.
+  virtual bool takePeerDisconnectRequest() = 0;
 };
 
 struct Peer {
@@ -66,7 +69,8 @@ struct BluetoothStatus {
 };
 
 // Pairing policy and bookkeeping for the computers that use the device.
-//  - No bond yet: pairing is open (a new device must be usable out of the box).
+//  - A board that was never paired: pairing is open (it must be usable out of the box) until the first computer pairs.
+//    After that an empty bond list does NOT reopen it (e.g. the stack dropped a stale bond): only the owner can.
 //  - With a bond: pairing is closed unless a timed window is opened by the owner.
 //  - A window closes by itself when its time is up, when someone pairs, or when the owner stops it.
 //  - "Disconnect" drops the link and hides the device for kDisconnectHoldSec, or until "reconnect" (or a window).
@@ -92,6 +96,7 @@ class BluetoothManager {
   void applyLocked();
   void expireLocked();  // closes a finished/used pairing window, ends an expired hold
   bool pairingOpenLocked();
+  void noteBondsLocked(const std::vector<std::string>& bonded);
   std::string labelForLocked(const std::string& id);
   bool saveLabelsLocked();
 
@@ -101,6 +106,8 @@ class BluetoothManager {
   std::mutex mutex_;
   std::map<std::string, std::string> labels_;      // id -> label
   std::map<std::string, uint32_t> connectedSince_;  // address -> millis of first sight (status() is polled)
+  bool everPaired_ = false;       // some computer has paired at least once: an empty bond list no longer reopens pairing
+  bool everPairedDirty_ = false;  // not stored yet; tick() retries
   bool labelsDirty_ = false;  // default names handed out since the last save; tick() persists them
   bool held_ = false;
   bool windowOpen_ = false;

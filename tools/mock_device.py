@@ -130,11 +130,11 @@ class Device:
         return {"state": self.state, "mouseConnected": bt["connected"], "wifiConnected": True,
                 "msToNextMove": int((self.next_move_at - now) * 1000) if self.state == "running" else None,
                 "stopsInMs": int((self.stop_at - now) * 1000) if self.state == "running" and self.stop_at else None,
-                "schedule": {"timeSynced": True, "localTime": time.strftime("%H:%M"), "weekday": time.strftime("%a").lower(),
+                "schedule": {"timeSynced": True, "localTime": time.strftime("%H:%M"), "weekday": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"][time.localtime().tm_wday],
                              "active": False, "enabledCount": sum(1 for s in self.schedules if s["enabled"]), "timezone": self.tz},
                 "moveCount": self.moves, "lastMoveAgoMs": int((now - self.last_move) * 1000), "lastMoveAt": int(self.last_move),
                 "config": self.config, "bluetooth": summary,
-                "device": {"version": "0.3.0", "bleName": "MX Master 3S", "bleAddress": "00:1f:20:fd:3b:76"}}
+                "device": {"version": "0.3.1", "bleName": "MX Master 3S", "bleAddress": "00:1f:20:fd:3b:76"}}
 
 
 DEV = None

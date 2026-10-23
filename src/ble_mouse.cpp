@@ -24,6 +24,18 @@ std::string lower(std::string s) {
 
 std::string addressOf(const ble_addr_t& a) { return lower(NimBLEAddress(a).toString()); }
 
+BleMouse* gBle = nullptr;
+
+// Receives every GAP event (NimBLE's server callbacks do not pass the disconnect reason on).
+int gapListener(ble_gap_event* event, void*) {
+  if (!gBle) return 0;
+  if (event->type == BLE_GAP_EVENT_DISCONNECT) gBle->notePeerDisconnect(event->disconnect.reason);
+  else if (event->type == BLE_GAP_EVENT_ENC_CHANGE)
+    Serial.printf("BLE encryption change: status %d\n", event->enc_change.status);
+  else if (event->type == BLE_GAP_EVENT_REPEAT_PAIRING) Serial.println("BLE repeat pairing requested by a known computer");
+  return 0;
+}
+
 class ServerCallbacks : public NimBLEServerCallbacks {
  public:
   explicit ServerCallbacks(BleMouse& ble) : ble_(ble) {}
@@ -59,6 +71,8 @@ void BleMouse::begin(const jig::ResolvedDevice& device) {
 
   NimBLEServer* server = NimBLEDevice::createServer();
   server_ = server;
+  gBle = this;
+  NimBLEDevice::setCustomGapHandler(gapListener);
   server->advertiseOnDisconnect(false);  // BluetoothManager decides when the device is visible (see linkDown/setAdvertising)
   server->setCallbacks(new ServerCallbacks(*this));
 
@@ -95,7 +109,7 @@ void BleMouse::linkUp(uint16_t handle, const std::string& peerAddress) {
 // Pairing finished (the identity address is now known). A computer that was not bonded before this link came
 // up is refused unless the owner opened a pairing window (and there is room): its bond, if it made one, is
 // removed and the link dropped. This holds even when it paired without asking to bond.
-void BleMouse::linkIdentified(uint16_t handle, const std::string& idAddress, bool) {
+void BleMouse::linkIdentified(uint16_t handle, const std::string& idAddress, bool bonded) {
   bool refuse = false;
   {
     std::lock_guard<std::mutex> lock(linksMutex_);
@@ -106,10 +120,19 @@ void BleMouse::linkIdentified(uint16_t handle, const std::string& idAddress, boo
       refuse = jig::refuseNewPeer(known, pairingOpen_, l.bondedBefore.size());
     }
   }
+  Serial.printf("BLE identified %s: bonded=%d pairingOpen=%d -> %s\n", idAddress.c_str(), bonded ? 1 : 0, pairingOpen_.load() ? 1 : 0,
+                refuse ? "REFUSE" : "accept");
   if (!refuse) return;
   Serial.printf("BLE pairing refused for %s (window closed)\n", idAddress.c_str());
   forgetBond(idAddress);
   if (server_) server_->disconnect(handle);
+}
+
+// reason is NimBLE's code: 0x200 + the HCI reason. 0x213 = the remote user terminated the connection
+// (the computer's own "Disconnect"); 0x216 = we did; 0x208 = the link timed out (out of range, asleep).
+void BleMouse::notePeerDisconnect(int reason) {
+  Serial.printf("BLE disconnect reason 0x%03x\n", reason);
+  if (reason == 0x213) peerDisconnect_ = true;
 }
 
 void BleMouse::linkDown(uint16_t handle) {

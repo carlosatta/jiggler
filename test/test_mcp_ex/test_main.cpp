@@ -49,6 +49,7 @@ struct Env {
     void forgetAllBonds() override { bonded.clear(); }
     void setAdvertising(bool on) override { advertising = on; }
     void setPairingOpen(bool open) override { pairingOpen = open; }
+    bool takePeerDisconnectRequest() override { return false; }
   } link;
   BluetoothManager bluetooth{clock, link, blobs};
   int restarts = 0;
@@ -316,7 +317,8 @@ void test_bluetooth_tools() {
   TEST_ASSERT_TRUE(isError(e.tool("forget_computer", "{\"id\":\"000000000000\"}")));
   McpReply f = e.tool("forget_computer", "{\"id\":\"aabbccddee01\"}");
   TEST_ASSERT_FALSE(isError(f));
-  TEST_ASSERT_TRUE(toolText(f)["pairing"]["firstRun"].as<bool>());
+  TEST_ASSERT_FALSE(toolText(f)["pairing"]["firstRun"].as<bool>());  // forgetting does not make the board factory-new
+  TEST_ASSERT_FALSE(toolText(f)["pairing"]["open"].as<bool>());
 }
 
 void test_restart_tool_calls_callback() {

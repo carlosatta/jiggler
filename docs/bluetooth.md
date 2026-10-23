@@ -6,15 +6,20 @@ The board is a Bluetooth peripheral with **one** identity (see [devices.md](devi
 
 | Situation | Pairing |
 |---|---|
-| No computer paired yet (new board, or after "Dimentica tutti") | Open: the first computer that asks can pair. |
+| A brand-new board that has never been paired | Open: the first computer that asks can pair. |
+| Every bond lost later (the stack dropped a stale one, or you pressed "Forget all") | **Closed.** The board remembers it has been paired; only you can open a window. |
 | At least one computer paired | **Closed.** A new computer that tries to pair is refused and its bond is removed. |
 | Window opened by the owner | Open for **3 minutes** (the API also accepts 30–600 s), then closes by itself. It closes earlier if the owner stops it, or **as soon as a new computer pairs**. |
 
 Open a window from the dashboard (**Computers → Pairing**), with `POST /api/bluetooth/pairing`, the `start_pairing` MCP tool, or a **short press** of the BOOT button (the LED blinks fast while it is open). The dashboard shows a countdown. Stop it early with `DELETE /api/bluetooth/pairing`.
 
-The refusal is enforced after the pairing handshake: as soon as the board learns the newcomer's identity its link is dropped and its bond, if it made one, is deleted. This also applies to a computer that pairs without asking to bond. Already-paired computers are never affected.
+Any new bond closes the window, so whoever pairs first in range uses it up: do it yourself, quickly, and check Computers afterwards. The refusal is enforced after the pairing handshake: as soon as the board learns the newcomer's identity its link is dropped and its bond, if it made one, is deleted. This also applies to a computer that pairs without asking to bond. Already-paired computers are never affected.
 
 **At most 3 computers** can be paired. A fourth is refused even while a window is open: forget one first. (The stack keeps 5 bond slots and evicts the oldest when full; the spare slots keep a refused newcomer from ever pushing a real bond out.)
+
+## When the computer disconnects
+
+If you press *Disconnect* in the computer's own Bluetooth menu, the board sees the computer end the connection and treats it like the dashboard's Disconnect: the device is hidden for 3 minutes, so the computer does not simply reconnect at once. (Without this, macOS reconnects immediately because the device keeps advertising.) A connection lost for other reasons (out of range, computer asleep or off) is not affected, and neither is a drop during pairing.
 
 ## Which computer is connected?
 
@@ -28,7 +33,7 @@ There is no way for a peripheral to tell a deliberate "connect" click on the com
 
 ## Forgetting
 
-`DELETE /api/bluetooth/peers/<id>` removes one bond on the board and drops that computer's link if it is connected. `DELETE /api/bluetooth/peers` removes all of them and reopens pairing. **Also remove the device in the computer's Bluetooth settings**, otherwise that computer keeps a stale key and may fail to reconnect until you do.
+`DELETE /api/bluetooth/peers/<id>` removes one bond on the board and drops that computer's link if it is connected. `DELETE /api/bluetooth/peers` removes all of them; pairing stays closed until you open a window. **Also remove the device in the computer's Bluetooth settings**, otherwise that computer keeps a stale key and may fail to reconnect until you do.
 
 ## Limits
 

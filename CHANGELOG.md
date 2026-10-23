@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- A board that has been paired once never goes back to "open for anyone" when its bond list empties (a stale bond dropped by the stack made it look brand-new, so a computer could re-pair without a window). "Forget all" keeps pairing closed too.
+- Pressing Disconnect on the computer now hides the device for 3 minutes instead of being undone by an immediate reconnect.
+- Fixes from review: remaining-time counters can no longer underflow, forgetting a computer during an open window, schedule saved before the clock exists, DST-safe "until a time", locale-independent mock.
+- Serial log lines for pairing decisions and disconnect reasons.
+
 ## 0.3.0
 
 - **Timed runs.** Start for 5, 10 or 30 minutes, an hour, until a time of day or a custom number of minutes (`POST /api/start {"minutes": n}`, `stopsInMs` in the status, `minutes` on the MCP `start` tool).

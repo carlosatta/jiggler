@@ -117,7 +117,7 @@
   };
   App.confirmInline($('forgetAll'), 'Confirm: forget all', function () {
     App.call('DELETE', '/api/bluetooth/peers').then(function (res) {
-      reply(res, 'All computers forgotten. Pairing is open again.', 'peersMsg');
+      reply(res, 'All computers forgotten. Pairing stays closed: open it to add one.', 'peersMsg');
       load(); App.poll();
     }).catch(function () {});
   });

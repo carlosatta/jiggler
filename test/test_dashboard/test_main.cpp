@@ -38,6 +38,7 @@ struct FakeLink : BleLink {
   void forgetAllBonds() override { bonded.clear(); }
   void setAdvertising(bool) override {}
   void setPairingOpen(bool) override {}
+  bool takePeerDisconnectRequest() override { return false; }
 };
 
 struct MemTokens : TokenVault {

@@ -199,6 +199,7 @@ void test_invalid_settings_are_not_applied() {
 void test_the_window_starts_and_stops_the_jiggler() {
   Env e;
   e.setSchedules({entry("work", kWeekdays, 9 * 60, 60)});
+  e.controller.stop();  // these tests are about the window edges, so start from stopped
   e.tickAt(0, 8, 0);   // first look at the clock: outside the window, so it is stopped
   TEST_ASSERT_FALSE(e.running());
   e.tickAt(0, 8, 59);
@@ -251,6 +252,7 @@ void test_a_manual_change_inside_the_window_is_respected_until_the_next_edge() {
 void test_manual_start_outside_a_window_is_left_alone() {
   Env e;
   e.setSchedules({entry("work", kWeekdays, 9 * 60, 60)});
+  e.controller.stop();  // these tests are about the window edges, so start from stopped
   e.tickAt(0, 20, 0);
   TEST_ASSERT_FALSE(e.running());
   e.controller.start();
@@ -283,17 +285,56 @@ void test_disabled_or_empty_schedules_never_touch_the_controller() {
   TEST_ASSERT_TRUE(e.running());
 }
 
-void test_nothing_happens_while_the_clock_is_not_synced() {
+void test_nothing_happens_while_the_clock_is_not_synced_and_then_the_schedule_takes_over_after_a_boot() {
   Env e;
   e.setSchedules({entry("work", kWeekdays, 9 * 60, 60)});
+  ScheduleEngine rebooted(e.clock, e.controller, e.blobs);  // the clock is unknown at boot
+  rebooted.begin();
   e.clock.local.reset();
-  e.engine.tick();
+  rebooted.tick();
   TEST_ASSERT_TRUE(e.running());
-  ScheduleStatus s = e.engine.status();
-  TEST_ASSERT_FALSE(s.timeSynced);
-  e.tickAt(0, 20, 0);  // once the time arrives the schedule takes over
+  TEST_ASSERT_FALSE(rebooted.status().timeSynced);
+  e.clock.local = at(0, 20, 0);  // SNTP arrives: the schedule is in charge
+  rebooted.tick();
   TEST_ASSERT_FALSE(e.running());
-  TEST_ASSERT_TRUE(e.engine.status().timeSynced);
+  TEST_ASSERT_TRUE(rebooted.status().timeSynced);
+}
+
+void test_saving_without_a_clock_still_does_not_stop_anything_when_the_clock_arrives() {
+  Env e;
+  e.setSchedules({entry("work", kWeekdays, 9 * 60, 60)});  // clock unknown while saving
+  e.tickAt(0, 20, 0);                                       // the clock arrives outside the window
+  TEST_ASSERT_TRUE(e.running());
+}
+
+void test_overlapping_windows_keep_it_running_until_the_last_one_closes() {
+  Env e;
+  e.setSchedules({entry("a", kWeekdays, 9 * 60, 60), entry("b", kWeekdays, 9 * 60 + 30, 90)});  // 09:00-10:00 and 09:30-11:00
+  e.controller.stop();  // these tests are about the window edges, so start from stopped
+  e.tickAt(0, 8, 0);
+  TEST_ASSERT_FALSE(e.running());
+  e.tickAt(0, 9, 0);
+  TEST_ASSERT_TRUE(e.running());
+  e.tickAt(0, 9, 45);
+  TEST_ASSERT_TRUE(e.running());
+  e.tickAt(0, 10, 0);   // "a" closed, "b" is still open
+  TEST_ASSERT_TRUE(e.running());
+  e.tickAt(0, 10, 59);
+  TEST_ASSERT_TRUE(e.running());
+  e.tickAt(0, 11, 0);
+  TEST_ASSERT_FALSE(e.running());
+}
+
+void test_enabling_a_schedule_after_all_were_off_starts_from_a_clean_look_at_the_clock() {
+  Env e;
+  e.setSchedules({entry("work", kWeekdays, 9 * 60, 120, false)});
+  e.tickAt(0, 9, 30);            // disabled: untouched
+  TEST_ASSERT_TRUE(e.running());
+  e.setSchedules({entry("work", kWeekdays, 9 * 60, 120, true)});  // enabled while inside its window
+  e.tickAt(0, 9, 40);
+  TEST_ASSERT_TRUE(e.running());  // saving did not stop it
+  e.tickAt(0, 11, 0);             // and the closing edge still works
+  TEST_ASSERT_FALSE(e.running());
 }
 
 void test_the_posix_timezone_reaches_the_platform() {
@@ -376,7 +417,10 @@ int main() {
   RUN_TEST(test_manual_start_outside_a_window_is_left_alone);
   RUN_TEST(test_saving_does_not_start_or_stop_by_itself);
   RUN_TEST(test_disabled_or_empty_schedules_never_touch_the_controller);
-  RUN_TEST(test_nothing_happens_while_the_clock_is_not_synced);
+  RUN_TEST(test_nothing_happens_while_the_clock_is_not_synced_and_then_the_schedule_takes_over_after_a_boot);
+  RUN_TEST(test_saving_without_a_clock_still_does_not_stop_anything_when_the_clock_arrives);
+  RUN_TEST(test_overlapping_windows_keep_it_running_until_the_last_one_closes);
+  RUN_TEST(test_enabling_a_schedule_after_all_were_off_starts_from_a_clean_look_at_the_clock);
   RUN_TEST(test_the_posix_timezone_reaches_the_platform);
   RUN_TEST(test_status_reports_local_time_and_whether_a_window_is_open);
   RUN_TEST(test_schedule_routes_and_status_extras);

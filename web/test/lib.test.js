@@ -93,6 +93,14 @@ test('connection view: connected while a window is open keeps disconnect and off
   assert.deepEqual(v.actions, ['disconnect', 'closePairing']);
 });
 
+test('connection view: no computer paired and pairing closed says so and offers to pair', () => {
+  const v = JigLib.connectionView(bt({ peerCount: 0 }), device);
+  assert.equal(v.tone, 'idle');
+  assert.equal(v.title, 'No computer paired');
+  assert.match(v.detail, /Open pairing/);
+  assert.deepEqual(v.actions, ['pair']);
+});
+
 test('checkNewToken validates length, spaces and confirmation', () => {
   assert.equal(JigLib.checkNewToken('abcdefgh', 'abcdefgh'), '');
   assert.equal(JigLib.checkNewToken('short', 'short'), '8 to 40 characters, no spaces.');

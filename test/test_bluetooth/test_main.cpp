@@ -26,6 +26,7 @@ struct FakeBleLink : BleLink {
   std::vector<std::string> bonded, connected;
   bool advertising = true;
   bool pairingOpen = false;
+  bool peerRequestedDisconnect = false;
   int disconnects = 0;
   std::vector<std::string> bondedAddresses() override { return bonded; }
   std::vector<std::string> connectedAddresses() override { return connected; }
@@ -42,6 +43,11 @@ struct FakeBleLink : BleLink {
   void forgetAllBonds() override { bonded.clear(); }
   void setAdvertising(bool on) override { advertising = on; }
   void setPairingOpen(bool open) override { pairingOpen = open; }
+  bool takePeerDisconnectRequest() override {
+    const bool b = peerRequestedDisconnect;
+    peerRequestedDisconnect = false;
+    return b;
+  }
 };
 
 struct Env {
@@ -228,9 +234,9 @@ void test_forget_one_and_all() {
   TEST_ASSERT_TRUE(e.bt.forgetAll().ok);
   TEST_ASSERT_TRUE(e.link.bonded.empty());
   BluetoothStatus s = e.bt.status();
-  TEST_ASSERT_TRUE(s.firstRun);          // back to the factory state: pairing is open again
-  TEST_ASSERT_TRUE(s.pairingOpen);
-  TEST_ASSERT_TRUE(e.link.pairingOpen);
+  TEST_ASSERT_FALSE(s.firstRun);         // a board that has been paired is not factory-new: pairing stays closed
+  TEST_ASSERT_FALSE(s.pairingOpen);
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
   TEST_ASSERT_TRUE(s.peers.empty());
 }
 
@@ -446,14 +452,14 @@ void test_forgetting_a_connected_computer_drops_its_link() {
   TEST_ASSERT_FALSE(e.bt.status().connected);
 }
 
-void test_forget_all_while_connected_drops_the_link_and_reopens_pairing() {
+void test_forget_all_while_connected_drops_the_link_and_keeps_pairing_closed() {
   Env e({kA});
   e.link.connected = {kA};
   TEST_ASSERT_TRUE(e.bt.forgetAll().ok);
   BluetoothStatus s = e.bt.status();
   TEST_ASSERT_FALSE(s.connected);
-  TEST_ASSERT_TRUE(s.firstRun);
-  TEST_ASSERT_TRUE(s.pairingOpen);
+  TEST_ASSERT_FALSE(s.firstRun);
+  TEST_ASSERT_FALSE(s.pairingOpen);
 }
 
 void test_refusal_policy() {
@@ -540,6 +546,131 @@ void test_hold_countdown_is_in_the_json() {
   TEST_ASSERT_TRUE(d["heldRemainingMs"].isNull());
 }
 
+void test_losing_every_bond_does_not_make_the_board_factory_new_again() {
+  Env e({kA});
+  e.bt.tick();                 // sees the bond: from now on this board has been paired
+  e.link.bonded.clear();       // the stack dropped it (e.g. the computer forgot the device and re-paired)
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_FALSE(s.firstRun);
+  TEST_ASSERT_FALSE(s.pairingOpen);
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
+}
+
+void test_the_paired_before_memory_survives_a_restart() {
+  Env e({kA});
+  e.bt.tick();
+  e.link.bonded.clear();
+  BluetoothManager again(e.clock, e.link, e.blobs);  // reboot with the same storage and no bonds left
+  again.begin();
+  TEST_ASSERT_FALSE(again.status().pairingOpen);
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
+}
+
+void test_a_board_with_stored_names_counts_as_paired_before() {
+  // boards flashed before the flag existed: their saved computer names prove they were paired
+  Env e({kA});
+  e.bt.status();
+  e.bt.tick();
+  e.blobs.data.erase("paired");
+  e.link.bonded.clear();
+  BluetoothManager again(e.clock, e.link, e.blobs);
+  again.begin();
+  TEST_ASSERT_FALSE(again.status().pairingOpen);
+}
+
+void test_a_factory_new_board_stays_open_until_the_first_pairing() {
+  Env e;
+  e.bt.tick();
+  TEST_ASSERT_TRUE(e.bt.status().pairingOpen);
+  e.link.bonded.push_back(kA);  // the first computer pairs
+  e.bt.tick();
+  e.link.bonded.clear();
+  TEST_ASSERT_FALSE(e.bt.status().pairingOpen);
+}
+
+void test_a_failed_save_of_the_paired_flag_is_retried() {
+  Env e;
+  e.flaky()->failPuts = true;
+  e.link.bonded.push_back(kA);
+  e.bt.tick();
+  e.link.bonded.clear();
+  TEST_ASSERT_FALSE(e.bt.status().pairingOpen);       // held in memory even though it could not be stored
+  e.flaky()->failPuts = false;
+  e.bt.tick();
+  TEST_ASSERT_TRUE(e.blobs.data.count("paired") == 1);
+}
+
+void test_the_computer_disconnecting_hides_the_device_like_the_dashboard_does() {
+  Env e({kA});
+  e.link.connected = {kA};
+  e.link.peerRequestedDisconnect = true;
+  e.link.connected.clear();
+  e.bt.tick();
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_TRUE(s.held);
+  TEST_ASSERT_EQUAL_UINT32(180000, *s.heldRemainingMs);
+  TEST_ASSERT_FALSE(e.link.advertising);   // otherwise the computer reconnects at once
+  e.clock.now = 180000;
+  e.bt.tick();
+  TEST_ASSERT_FALSE(e.bt.status().held);
+  TEST_ASSERT_TRUE(e.link.advertising);
+}
+
+void test_a_disconnect_during_a_pairing_window_is_not_a_request_to_hide() {
+  Env e({kA});
+  e.bt.startPairing(kDefaultPairingSec);
+  e.link.peerRequestedDisconnect = true;   // the handshake can end links on its own
+  e.bt.tick();
+  TEST_ASSERT_FALSE(e.bt.status().held);
+  TEST_ASSERT_TRUE(e.link.advertising);
+}
+
+void test_a_disconnect_on_a_factory_new_board_is_not_a_request_to_hide() {
+  Env e;
+  e.link.peerRequestedDisconnect = true;
+  e.bt.tick();
+  TEST_ASSERT_FALSE(e.bt.status().held);
+}
+
+struct SteppingClock : FakeClock {  // every read of the clock moves it, like real time passing between two reads
+  mutable uint32_t t = 0;
+  uint32_t step = 2;
+  uint32_t nowMs() const override {
+    const uint32_t v = t;
+    t += step;
+    return v;
+  }
+};
+
+void test_remaining_time_never_underflows_when_the_deadline_passes_between_two_clock_reads() {
+  SteppingClock clock;
+  FakeBleLink link;
+  link.bonded = {kA};
+  MemBlobStore blobs;
+  BluetoothManager bt(clock, link, blobs);
+  bt.begin();
+  clock.t = 0;
+  bt.disconnect();                 // hold until 180000
+  clock.t = 179999;              // status(): first read 179999 (still held), second read 180001
+  BluetoothStatus s = bt.status();
+  TEST_ASSERT_TRUE(s.heldRemainingMs.has_value());
+  TEST_ASSERT_TRUE(*s.heldRemainingMs < 1000);
+  clock.t = 0;
+  bt.startPairing(kMinPairingSec);  // window until 30000
+  clock.t = 29999;
+  s = bt.status();
+  TEST_ASSERT_TRUE(!s.pairingRemainingMs.has_value() || *s.pairingRemainingMs < 1000);
+}
+
+void test_forgetting_a_computer_during_an_open_window_lets_it_close_when_that_computer_pairs_again() {
+  Env e({kA, kB});
+  e.bt.startPairing(kDefaultPairingSec);
+  e.bt.forget(kIdA);
+  e.link.bonded.push_back(kA);   // the same computer pairs again
+  e.bt.tick();
+  TEST_ASSERT_FALSE(e.bt.status().pairingOpen);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_first_run_pairing_is_open_without_timeout);
@@ -566,7 +697,7 @@ int main() {
   RUN_TEST(test_default_names_are_persisted_by_tick_not_by_status);
   RUN_TEST(test_default_names_never_repeat_after_a_forget);
   RUN_TEST(test_forgetting_a_connected_computer_drops_its_link);
-  RUN_TEST(test_forget_all_while_connected_drops_the_link_and_reopens_pairing);
+  RUN_TEST(test_forget_all_while_connected_drops_the_link_and_keeps_pairing_closed);
   RUN_TEST(test_refusal_policy);
   RUN_TEST(test_pairing_window_is_three_minutes_by_default);
   RUN_TEST(test_window_closes_by_itself_when_a_computer_pairs);
@@ -575,5 +706,15 @@ int main() {
   RUN_TEST(test_stopping_the_window_by_hand_still_works);
   RUN_TEST(test_disconnect_hold_lasts_three_minutes_then_the_computer_can_reconnect);
   RUN_TEST(test_hold_countdown_is_in_the_json);
+  RUN_TEST(test_losing_every_bond_does_not_make_the_board_factory_new_again);
+  RUN_TEST(test_the_paired_before_memory_survives_a_restart);
+  RUN_TEST(test_a_board_with_stored_names_counts_as_paired_before);
+  RUN_TEST(test_a_factory_new_board_stays_open_until_the_first_pairing);
+  RUN_TEST(test_a_failed_save_of_the_paired_flag_is_retried);
+  RUN_TEST(test_the_computer_disconnecting_hides_the_device_like_the_dashboard_does);
+  RUN_TEST(test_a_disconnect_during_a_pairing_window_is_not_a_request_to_hide);
+  RUN_TEST(test_a_disconnect_on_a_factory_new_board_is_not_a_request_to_hide);
+  RUN_TEST(test_remaining_time_never_underflows_when_the_deadline_passes_between_two_clock_reads);
+  RUN_TEST(test_forgetting_a_computer_during_an_open_window_lets_it_close_when_that_computer_pairs_again);
   return UNITY_END();
 }

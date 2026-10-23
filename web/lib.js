@@ -64,6 +64,10 @@ var JigLib = (function () {
       return { tone: 'open', title: 'Pairing is open',
         detail: 'Closes in ' + fmtDuration(pairing.remainingMs) + '. On the computer, choose “' + name + '”.', actions: ['closePairing'] };
     }
+    if (!bt.peerCount) {
+      return { tone: 'idle', title: 'No computer paired',
+        detail: 'Open pairing, then choose “' + name + '” in the computer’s Bluetooth settings.', actions: ['pair'] };
+    }
     return { tone: 'idle', title: 'No computer connected',
       detail: 'It reconnects by itself when a paired computer is on and nearby.', actions: ['pair'] };
   }
@@ -82,8 +86,8 @@ var JigLib = (function () {
     if (!m || +m[1] > 23 || +m[2] > 59) return null;
     var target = new Date(now.getTime());
     target.setHours(+m[1], +m[2], 0, 0);
+    if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);  // calendar day, not 24 h: DST-safe
     var diff = target.getTime() - now.getTime();
-    if (diff <= 0) diff += 24 * 3600000;
     return Math.min(1440, Math.max(1, Math.ceil(diff / 60000)));
   }
 

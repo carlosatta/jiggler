@@ -263,8 +263,9 @@ CmdResult ScheduleEngine::replace(const ScheduleSettings& next) {
   if (!blobs_.put(kBlobKey, stored)) return fail("storage_error", "", "could not save the schedules (storage full?)");
   settings_ = next;
   // Saving must not start or stop anything: remember what the clock says now so only later changes count.
-  const auto now = platform_.localTime(*posixTimezone(settings_.timezone));
-  first_ = !now;
+  // (Even with no clock yet: when it arrives, only a window opening or closing acts, not the level.)
+  const auto now = platform_.localTime(posixTimezone(settings_.timezone).value_or("UTC0"));
+  first_ = false;
   wasOpen_ = now ? anyWindowOpenLocked(*now) : false;
   CmdResult r;
   r.ok = true;
@@ -288,7 +289,7 @@ void ScheduleEngine::tick() {
     wasOpen_ = false;
     return;
   }
-  const auto now = platform_.localTime(*posixTimezone(settings_.timezone));
+  const auto now = platform_.localTime(posixTimezone(settings_.timezone).value_or("UTC0"));
   if (!now) return;
   const bool open = anyWindowOpenLocked(*now);
   if (first_ || open != wasOpen_) {
@@ -304,7 +305,7 @@ ScheduleStatus ScheduleEngine::status() const {
   ScheduleStatus s;
   s.timezone = settings_.timezone;
   s.enabledCount = enabledCountLocked();
-  const auto now = platform_.localTime(*posixTimezone(settings_.timezone));
+  const auto now = platform_.localTime(posixTimezone(settings_.timezone).value_or("UTC0"));
   if (now) {
     s.timeSynced = true;
     s.localTime = hhmm(now->minuteOfDay);

@@ -244,7 +244,7 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
       addTool(tools, t.name, "Open the pairing window so a new computer can pair (default 180 s). While it is closed, new computers are refused.", &schema);
       addNumberProp(schema["properties"].to<JsonObject>(), "seconds", "integer", 30, 600, "How long the window stays open (default 180).");
     } else if (name == "disconnect_bluetooth") {
-      addTool(tools, t.name, "Disconnect the computer and hide the device until reconnect_bluetooth (it stays powered and keeps its pairings).", &schema);
+      addTool(tools, t.name, "Disconnect the computer and hide the device for 3 minutes or until reconnect_bluetooth (it stays powered and keeps its pairings).", &schema);
       schema["properties"].to<JsonObject>();
     } else if (name == "reconnect_bluetooth") {
       addTool(tools, t.name, "Make the device visible again so paired computers can reconnect.", &schema);

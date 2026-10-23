@@ -29,6 +29,8 @@ class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::Bl
   void forgetAllBonds() override;
   void setAdvertising(bool on) override;
   void setPairingOpen(bool open) override;
+  bool takePeerDisconnectRequest() override { return peerDisconnect_.exchange(false); }
+  void notePeerDisconnect(int reason);  // from the NimBLE gap listener
 
   // Called by the server callbacks.
   void linkUp(uint16_t handle, const std::string& peerAddress);
@@ -54,6 +56,7 @@ class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::Bl
   std::atomic<bool> connected_{false};
   std::atomic<bool> advertise_{true};
   std::atomic<bool> pairingOpen_{true};
+  std::atomic<bool> peerDisconnect_{false};
   std::mutex linksMutex_;
   std::vector<Link> links_;
   std::string name_;
