@@ -274,6 +274,20 @@ void test_start_rejects_bad_minutes_and_bodies() {
   TEST_ASSERT_TRUE(parse(a.call("GET", "/api/status").body)["state"].as<std::string>() == "stopped");  // nothing started
 }
 
+void test_start_without_a_paired_computer_is_a_conflict() {
+  Api a;
+  a.clock.paired = false;
+  a.call("POST", "/api/stop");
+  HttpResponse r = a.call("POST", "/api/start");
+  TEST_ASSERT_EQUAL_INT(409, r.status);
+  TEST_ASSERT_TRUE(contains(r.body, "no_computer_paired"));
+  HttpResponse timed = a.call("POST", "/api/start", "{\"minutes\":10}");
+  TEST_ASSERT_EQUAL_INT(409, timed.status);
+  TEST_ASSERT_TRUE(parse(a.call("GET", "/api/status").body)["state"].as<std::string>() == "stopped");
+  a.clock.paired = true;
+  TEST_ASSERT_EQUAL_INT(200, a.call("POST", "/api/start").status);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_copy_body_chunk_never_writes_past_total);
@@ -294,5 +308,6 @@ int main() {
   RUN_TEST(test_authorized);
   RUN_TEST(test_start_with_minutes_sets_a_time_limit);
   RUN_TEST(test_start_rejects_bad_minutes_and_bodies);
+  RUN_TEST(test_start_without_a_paired_computer_is_a_conflict);
   return UNITY_END();
 }

@@ -66,7 +66,8 @@ class Device:
         self.held_until = None
         self.bonded_at_open = None
         if name == "firstrun":
-            pass
+            self.state = "stopped"
+            self.stop_at = None
         elif name in ("connected", "held", "pairing", "idle", "many"):
             self.peers = [{"address": "a4:83:e7:12:0b:9c", "label": "Computer 1"}]
             if name == "many":
@@ -81,6 +82,19 @@ class Device:
                 self.window_until = now + 95
         else:
             return False
+        if name != "firstrun":
+            self.state = "running"
+        return True
+
+    def pair_computer(self):
+        """Simulate a computer finishing pairing while the window is open (only then)."""
+        self.expire()
+        if not self.window_until:
+            return False
+        n = len(self.peers) + 1
+        self.peers.append({"address": "a4:83:e7:12:0b:%02x" % (0x9c + n), "label": "Computer %d" % n})
+        self.connected_since = time.time()
+        self.window_until = None
         return True
 
     def expire(self):
@@ -193,6 +207,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, (ROOT / "web" / "manifest.webmanifest").read_bytes(), "application/manifest+json")
         if method == "GET" and path in ("/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"):
             return self.send(200, (ROOT / "web" / "icons" / path[1:]).read_bytes(), "image/png")
+        if method == "POST" and path == "/__pair":
+            with DEV.lock:
+                ok = DEV.pair_computer()
+            return self.send(200 if ok else 409, {"ok": ok})
         if method == "POST" and path.startswith("/__scenario/"):
             with DEV.lock:
                 ok = DEV.scenario(path.rsplit("/", 1)[1])
@@ -213,6 +231,8 @@ class Handler(BaseHTTPRequestHandler):
             minutes = (body or {}).get("minutes") if isinstance(body, dict) else None
             if minutes is not None and (not isinstance(minutes, int) or not 1 <= minutes <= 1440):
                 return self.err(400, "invalid_minutes", "minutes", "must be between 1 and 1440")
+            if not d.peers:
+                return self.err(409, "no_computer_paired", "", "pair a computer first: there is nothing to keep awake yet")
             d.state = "running"; d.next_move_at = time.time() + 30
             d.stop_at = time.time() + minutes * 60 if minutes else None
             return self.send(200, d.status())

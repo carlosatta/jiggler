@@ -2,6 +2,8 @@
 
 ## 0.3.1
 
+- **The jiggler cannot run with no computer paired.** A board with nothing paired boots stopped; `start` answers `409 no_computer_paired`; forgetting every computer stops a running jiggler; a schedule window that opens before the first pairing starts the jiggler once a computer pairs.
+- **First-time setup** on the Status page while nothing is paired: connect, open pairing, choose the device on the computer; the page switches to the normal view by itself when it connects.
 - **Pairing is never open by default.** The old "no computer paired yet: pairing stays open" first-run state is gone, so a brand-new board, a board whose bond list emptied (a stale bond dropped by the stack) and a board after "Forget all" all refuse pairing until you open a window (dashboard or BOOT tap). The `firstRun` field is removed from the API.
 - Pressing Disconnect on the computer now hides the device for 3 minutes instead of being undone by an immediate reconnect.
 - Fixes from review: remaining-time counters can no longer underflow, forgetting a computer during an open window, schedule saved before the clock exists, DST-safe "until a time", locale-independent mock.

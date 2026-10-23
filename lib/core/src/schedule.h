@@ -75,6 +75,7 @@ class ScheduleEngine {
   ScheduleSettings settings_;
   bool first_ = true;     // no evaluation yet since boot / since the clock arrived
   bool wasOpen_ = false;  // a window was open at the previous evaluation
+  bool startPending_ = false;  // a window opened but the jiggler could not start (no computer paired yet): retry while it is open
 };
 
 }  // namespace jig

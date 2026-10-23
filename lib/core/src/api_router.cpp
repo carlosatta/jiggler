@@ -77,8 +77,8 @@ HttpResponse handleApi(Controller& c, const std::string& method, const std::stri
     std::optional<uint32_t> minutes;
     ParseError perr;
     if (!parseStartRequest(body, minutes, perr)) return json(400, errorJson(perr.code, perr.field, perr.message));
-    if (minutes) c.startFor(*minutes);
-    else c.start();
+    CmdResult started = minutes ? c.startFor(*minutes) : c.start();
+    if (!started.ok) return json(started.error == "no_computer_paired" ? 409 : 400, errorJson(started.error, started.field, started.message));
   } else if (path == "/api/stop") c.stop();
   else if (path == "/api/pause") c.pause();
   else if (path == "/api/move") {

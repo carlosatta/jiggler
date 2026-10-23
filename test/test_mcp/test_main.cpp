@@ -116,6 +116,15 @@ void test_start_tool_accepts_minutes() {
   TEST_ASSERT_TRUE(isError(m.tool("start", "{\"minutes\":\"x\"}")));
 }
 
+void test_start_tool_refuses_without_a_paired_computer() {
+  Mcp m;
+  m.clock.paired = false;
+  m.tool("stop");
+  McpReply r = m.tool("start");
+  TEST_ASSERT_TRUE(isError(r));
+  TEST_ASSERT_TRUE(isError(m.tool("start", "{\"minutes\":10}")));
+}
+
 void test_call_move_now() {
   Mcp m;
   McpReply ok = m.tool("move_now");
@@ -222,5 +231,6 @@ int main() {
   RUN_TEST(test_parse_error_reply_has_null_id);
   RUN_TEST(test_oversized_body_rejected);
   RUN_TEST(test_start_tool_accepts_minutes);
+  RUN_TEST(test_start_tool_refuses_without_a_paired_computer);
   return UNITY_END();
 }

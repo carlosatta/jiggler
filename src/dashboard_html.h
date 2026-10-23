@@ -110,6 +110,25 @@ body.offline .hero{opacity:.55}
 .facts dt{color:var(--muted)}
 .facts dd{font-variant-numeric:tabular-nums;text-align:right;overflow-wrap:anywhere}
 
+/* First-time setup */
+.setup{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:var(--s5) var(--s4);box-shadow:0 1px 2px rgb(0 0 0/.04),0 6px 18px rgb(0 0 0/.05)}
+.setup-title{font-size:1.5rem;line-height:1.2;font-weight:700;margin:0 0 var(--s2);text-wrap:balance}
+.setup-lead{color:var(--muted);max-width:46ch}
+.steps{list-style:none;margin:var(--s5) 0 0;padding:0;display:grid;gap:var(--s4)}
+.step{display:grid;grid-template-columns:2rem 1fr;gap:var(--s3);align-items:start;opacity:.55}
+.step.active,.step.done{opacity:1}
+.step .num{display:grid;place-items:center;width:2rem;height:2rem;border-radius:50%;border:1.5px solid var(--line);font-weight:650;font-size:.9375rem;color:var(--muted)}
+.step.active .num{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
+.step.done .num{border-color:var(--ok);color:var(--ok)}
+.step-title{font-weight:650;margin-top:.2rem}
+.step-text{color:var(--muted);font-size:.9375rem;margin-top:var(--s1);max-width:50ch}
+.step .actions{margin-top:var(--s3)}
+.step .msg:empty{display:none}
+.waiting{display:flex;align-items:center;gap:var(--s2);margin-top:var(--s3);font-weight:600;color:var(--accent)}
+.waiting .pulse{margin:0;width:10px;height:10px;background:var(--accent)}
+.waiting .pulse::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--accent);animation:pulse 2.4s var(--ease) infinite}
+@media (prefers-reduced-motion:reduce){.waiting .pulse::after{animation:none!important}}
+
 /* Run for */
 .runfor{display:flex;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s4);align-items:flex-end}
 .runfor .field{margin:0;min-width:10rem;flex:1 1 10rem}
@@ -196,6 +215,25 @@ input[aria-invalid=true]{border-color:var(--bad)}
 
 <section class="view" id="view-status" aria-labelledby="h-status">
 <h1 class="sr" id="h-status">Status</h1>
+<div class="setup" id="setup" hidden>
+<h2 class="setup-title">Set up your Jiggler</h2>
+<p class="setup-lead">Three steps and your first computer is connected. The jiggler cannot run until one is paired.</p>
+<ol class="steps">
+<li class="step done"><span class="num" aria-hidden="true">✓</span>
+<div><p class="step-title">Connect to the device</p>
+<p class="step-text">You are here, so WiFi and your token are set.</p></div></li>
+<li class="step" id="stepPair"><span class="num" aria-hidden="true">2</span>
+<div><p class="step-title">Open pairing</p>
+<p class="step-text" id="setupPairText">Pairing is closed, so nobody can connect by accident. Open it for 3 minutes. You can also tap the BOOT button once on the board.</p>
+<div class="actions"><button class="primary" id="setupOpen">Open pairing for 3 minutes</button><button id="setupStop" hidden>Stop pairing</button></div>
+<p class="msg" id="setupMsg" role="status" aria-live="polite"></p></div></li>
+<li class="step" id="stepChoose"><span class="num" aria-hidden="true">3</span>
+<div><p class="step-title">Choose the device on your computer</p>
+<p class="step-text">Open the Bluetooth settings and pick <b id="setupName">the device</b>. This page updates by itself when it connects.</p>
+<p class="waiting" id="setupWait" hidden><span class="pulse" aria-hidden="true"></span>Waiting for a computer…</p></div></li>
+</ol>
+</div>
+
 <div class="hero" id="hero" data-tone="idle">
 <div class="hero-head">
 <span class="pulse" aria-hidden="true"></span>
@@ -209,7 +247,7 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <p class="msg" id="heroMsg" role="status" aria-live="polite"></p>
 </div>
 
-<div class="block">
+<div class="block" id="movementBlock">
 <h2>Movement</h2>
 <p class="state" id="state">—</p>
 <p class="sub" id="next">&nbsp;</p>
@@ -781,7 +819,7 @@ var App = (function () {
     var running = s.state === 'running';
     $('state').textContent = running ? 'Running' : 'Stopped';
     var next = $('next');
-    if (!running) next.textContent = 'No movement scheduled. Press Start.';
+    if (!running) next.textContent = 'Not running. Press Start to keep the computer awake.';
     else {
       var parts = [];
       if (!s.mouseConnected && s.msToNextMove === 0) parts.push('Waiting for a computer to connect.');
@@ -812,9 +850,38 @@ var App = (function () {
     $('bMove').disabled = !s.mouseConnected;
   }
 
+  // ---- first-time setup: shown while no computer is paired ----
+  function renderSetup(status, elapsed) {
+    var bt = status.bluetooth;
+    var needed = !!bt && !bt.peerCount;
+    $('setup').hidden = !needed;
+    $('hero').hidden = needed;
+    $('movementBlock').hidden = needed;
+    if (!needed) return;
+    var p = bt.pairing || {};
+    var open = !!p.open && p.remainingMs != null;
+    $('setupName').textContent = '“' + ((status.device && status.device.bleName) || 'the device') + '”';
+    $('stepPair').className = 'step' + (open ? ' done' : ' active');
+    $('stepPair').querySelector('.num').textContent = open ? '✓' : '2';
+    $('stepChoose').className = 'step' + (open ? ' active' : '');
+    $('setupWait').hidden = !open;
+    $('setupOpen').hidden = open;
+    $('setupStop').hidden = !open;
+    $('setupPairText').textContent = open
+      ? 'Pairing is open: closes in ' + fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It closes by itself as soon as a computer pairs.'
+      : 'Pairing is closed, so nobody can connect by accident. Open it for 3 minutes. You can also tap the BOOT button once on the board.';
+  }
+  $('setupOpen').onclick = function () {
+    $('setupOpen').disabled = true;
+    ACTIONS.pair.run().then(function (r) { say(r[1] === 'bad' ? r[0] : '', r[1], 'setupMsg'); App.poll(); }).catch(function () {}).then(function () { $('setupOpen').disabled = false; });
+  };
+  $('setupStop').onclick = function () {
+    ACTIONS.closePairing.run().then(function (r) { say(r[1] === 'bad' ? r[0] : '', r[1], 'setupMsg'); App.poll(); }).catch(function () {});
+  };
+
   App.view('status', {
-    onStatus: function (s) { renderHero(s, 0); renderMotion(s, 0); renderFacts(s); },
-    onTick: function (s, elapsed) { renderHero(s, elapsed); renderMotion(s, elapsed); }
+    onStatus: function (s) { renderSetup(s, 0); renderHero(s, 0); renderMotion(s, 0); renderFacts(s); },
+    onTick: function (s, elapsed) { renderSetup(s, elapsed); renderHero(s, elapsed); renderMotion(s, elapsed); }
   });
 
   // ---- run for ----

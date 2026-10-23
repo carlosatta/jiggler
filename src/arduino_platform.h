@@ -33,6 +33,14 @@ class ArduinoPlatform : public jig::Platform {
 
   bool wifiConnected() const override { return WiFi.status() == WL_CONNECTED; }
 
+  bool computerPaired() const override {
+#ifdef JIG_FAKE_CONNECTED
+    return true;
+#else
+    return ble_.pairedCount() > 0;
+#endif
+  }
+
   // The loop task (schedule tick) and the HTTP task (status) both call this, and TZ is process-wide: serialise.
   std::optional<jig::LocalTime> localTime(const std::string& posixTz) const override {
     const time_t now = time(nullptr);

@@ -36,6 +36,8 @@ struct Platform {
   virtual uint32_t unixSeconds() const = 0;  // 0 = clock not synced
   virtual bool mouseConnected() const = 0;
   virtual bool wifiConnected() const = 0;
+  // At least one computer is paired. Without one the jiggler has nothing to keep awake and must not run.
+  virtual bool computerPaired() const { return true; }
   // `posixTz` is a POSIX TZ string such as "CET-1CEST,M3.5.0,M10.5.0/3". nullopt = clock not synced.
   virtual std::optional<LocalTime> localTime(const std::string& posixTz) const {
     (void)posixTz;

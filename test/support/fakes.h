@@ -29,12 +29,14 @@ struct FakeClock : Platform {
   uint32_t unix = 1760000000;
   bool mouse = true;
   bool wifi = true;
+  bool paired = true;
   std::optional<LocalTime> local;           // what localTime() reports; nullopt = clock not synced
   mutable std::string lastTz;               // the POSIX TZ string the last localTime() call asked for
   uint32_t nowMs() const override { return now; }
   uint32_t unixSeconds() const override { return unix; }
   bool mouseConnected() const override { return mouse; }
   bool wifiConnected() const override { return wifi; }
+  bool computerPaired() const override { return paired; }
   std::optional<LocalTime> localTime(const std::string& posixTz) const override {
     lastTz = posixTz;
     return local;

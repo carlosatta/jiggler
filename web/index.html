@@ -36,6 +36,25 @@
 
 <section class="view" id="view-status" aria-labelledby="h-status">
 <h1 class="sr" id="h-status">Status</h1>
+<div class="setup" id="setup" hidden>
+<h2 class="setup-title">Set up your Jiggler</h2>
+<p class="setup-lead">Three steps and your first computer is connected. The jiggler cannot run until one is paired.</p>
+<ol class="steps">
+<li class="step done"><span class="num" aria-hidden="true">✓</span>
+<div><p class="step-title">Connect to the device</p>
+<p class="step-text">You are here, so WiFi and your token are set.</p></div></li>
+<li class="step" id="stepPair"><span class="num" aria-hidden="true">2</span>
+<div><p class="step-title">Open pairing</p>
+<p class="step-text" id="setupPairText">Pairing is closed, so nobody can connect by accident. Open it for 3 minutes. You can also tap the BOOT button once on the board.</p>
+<div class="actions"><button class="primary" id="setupOpen">Open pairing for 3 minutes</button><button id="setupStop" hidden>Stop pairing</button></div>
+<p class="msg" id="setupMsg" role="status" aria-live="polite"></p></div></li>
+<li class="step" id="stepChoose"><span class="num" aria-hidden="true">3</span>
+<div><p class="step-title">Choose the device on your computer</p>
+<p class="step-text">Open the Bluetooth settings and pick <b id="setupName">the device</b>. This page updates by itself when it connects.</p>
+<p class="waiting" id="setupWait" hidden><span class="pulse" aria-hidden="true"></span>Waiting for a computer…</p></div></li>
+</ol>
+</div>
+
 <div class="hero" id="hero" data-tone="idle">
 <div class="hero-head">
 <span class="pulse" aria-hidden="true"></span>
@@ -49,7 +68,7 @@
 <p class="msg" id="heroMsg" role="status" aria-live="polite"></p>
 </div>
 
-<div class="block">
+<div class="block" id="movementBlock">
 <h2>Movement</h2>
 <p class="state" id="state">—</p>
 <p class="sub" id="next">&nbsp;</p>

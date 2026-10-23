@@ -363,8 +363,8 @@ ToolOutput callBaseTool(Controller& c, const std::string& name, JsonVariantConst
     ParseError perr;
     if (!args.isNull() && !parseStartRequest(args.as<JsonObjectConst>(), minutes, perr))
       return {errorJson(perr.code, perr.field, perr.message), true};
-    if (minutes) c.startFor(*minutes);
-    else c.start();
+    CmdResult started = minutes ? c.startFor(*minutes) : c.start();
+    if (!started.ok) return {errorJson(started.error, started.field, started.message), true};
   } else if (name == "pause") c.pause();
   else if (name == "stop") c.stop();
   else if (name == "move_now") {

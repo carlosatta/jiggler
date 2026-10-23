@@ -399,6 +399,20 @@ void test_schedule_routes_and_status_extras() {
   TEST_ASSERT_TRUE(parse(handleApiEx(none, "GET", "/api/status", "").body)["schedule"].isNull());
 }
 
+void test_a_window_that_opens_before_any_computer_is_paired_starts_once_one_is() {
+  Env e;
+  e.controller.stop();
+  e.setSchedules({entry("work", kWeekdays, 9 * 60, 120)});
+  e.clock.paired = false;
+  e.tickAt(0, 9, 0);                  // the window opens, nothing is paired: it cannot start
+  TEST_ASSERT_FALSE(e.running());
+  e.clock.paired = true;              // a computer pairs while the window is still open
+  e.tickAt(0, 9, 30);
+  TEST_ASSERT_TRUE(e.running());
+  e.tickAt(0, 11, 0);
+  TEST_ASSERT_FALSE(e.running());
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_window_covers_the_start_minute_but_not_the_end_minute);
@@ -420,6 +434,7 @@ int main() {
   RUN_TEST(test_nothing_happens_while_the_clock_is_not_synced_and_then_the_schedule_takes_over_after_a_boot);
   RUN_TEST(test_saving_without_a_clock_still_does_not_stop_anything_when_the_clock_arrives);
   RUN_TEST(test_overlapping_windows_keep_it_running_until_the_last_one_closes);
+  RUN_TEST(test_a_window_that_opens_before_any_computer_is_paired_starts_once_one_is);
   RUN_TEST(test_enabling_a_schedule_after_all_were_off_starts_from_a_clean_look_at_the_clock);
   RUN_TEST(test_the_posix_timezone_reaches_the_platform);
   RUN_TEST(test_status_reports_local_time_and_whether_a_window_is_open);

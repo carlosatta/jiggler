@@ -41,8 +41,8 @@ class Controller {
 
   void begin();
   Status status() const;
-  void start();                        // run until told otherwise (clears any time limit)
-  CmdResult startFor(uint32_t minutes);  // run, then stop by itself; 1..kMaxRunMinutes (invalid_minutes)
+  CmdResult start();                   // run until told otherwise (clears any time limit); error: no_computer_paired
+  CmdResult startFor(uint32_t minutes);  // run, then stop by itself; 1..kMaxRunMinutes; errors: invalid_minutes, no_computer_paired
   void pause();
   void stop();
   CmdResult moveNow();
@@ -52,7 +52,7 @@ class Controller {
   std::optional<Plan> tick();
 
  private:
-  void startLocked();
+  CmdResult startLocked();
   void scheduleNextLocked();
   uint32_t remainingMsLocked() const;
   std::optional<Plan> fireLocked();

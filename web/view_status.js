@@ -63,7 +63,7 @@
     var running = s.state === 'running';
     $('state').textContent = running ? 'Running' : 'Stopped';
     var next = $('next');
-    if (!running) next.textContent = 'No movement scheduled. Press Start.';
+    if (!running) next.textContent = 'Not running. Press Start to keep the computer awake.';
     else {
       var parts = [];
       if (!s.mouseConnected && s.msToNextMove === 0) parts.push('Waiting for a computer to connect.');
@@ -94,9 +94,38 @@
     $('bMove').disabled = !s.mouseConnected;
   }
 
+  // ---- first-time setup: shown while no computer is paired ----
+  function renderSetup(status, elapsed) {
+    var bt = status.bluetooth;
+    var needed = !!bt && !bt.peerCount;
+    $('setup').hidden = !needed;
+    $('hero').hidden = needed;
+    $('movementBlock').hidden = needed;
+    if (!needed) return;
+    var p = bt.pairing || {};
+    var open = !!p.open && p.remainingMs != null;
+    $('setupName').textContent = '“' + ((status.device && status.device.bleName) || 'the device') + '”';
+    $('stepPair').className = 'step' + (open ? ' done' : ' active');
+    $('stepPair').querySelector('.num').textContent = open ? '✓' : '2';
+    $('stepChoose').className = 'step' + (open ? ' active' : '');
+    $('setupWait').hidden = !open;
+    $('setupOpen').hidden = open;
+    $('setupStop').hidden = !open;
+    $('setupPairText').textContent = open
+      ? 'Pairing is open: closes in ' + fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It closes by itself as soon as a computer pairs.'
+      : 'Pairing is closed, so nobody can connect by accident. Open it for 3 minutes. You can also tap the BOOT button once on the board.';
+  }
+  $('setupOpen').onclick = function () {
+    $('setupOpen').disabled = true;
+    ACTIONS.pair.run().then(function (r) { say(r[1] === 'bad' ? r[0] : '', r[1], 'setupMsg'); App.poll(); }).catch(function () {}).then(function () { $('setupOpen').disabled = false; });
+  };
+  $('setupStop').onclick = function () {
+    ACTIONS.closePairing.run().then(function (r) { say(r[1] === 'bad' ? r[0] : '', r[1], 'setupMsg'); App.poll(); }).catch(function () {});
+  };
+
   App.view('status', {
-    onStatus: function (s) { renderHero(s, 0); renderMotion(s, 0); renderFacts(s); },
-    onTick: function (s, elapsed) { renderHero(s, elapsed); renderMotion(s, elapsed); }
+    onStatus: function (s) { renderSetup(s, 0); renderHero(s, 0); renderMotion(s, 0); renderFacts(s); },
+    onTick: function (s, elapsed) { renderSetup(s, elapsed); renderHero(s, elapsed); renderMotion(s, elapsed); }
   });
 
   // ---- run for ----

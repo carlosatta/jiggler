@@ -249,6 +249,7 @@ void ScheduleEngine::begin() {
   }
   first_ = true;
   wasOpen_ = false;
+  startPending_ = false;
 }
 
 ScheduleSettings ScheduleEngine::settings() const {
@@ -293,8 +294,13 @@ void ScheduleEngine::tick() {
   if (!now) return;
   const bool open = anyWindowOpenLocked(*now);
   if (first_ || open != wasOpen_) {
-    if (open) controller_.start();
-    else controller_.stop();
+    if (open) startPending_ = !controller_.start().ok;
+    else {
+      controller_.stop();
+      startPending_ = false;
+    }
+  } else if (open && startPending_) {
+    startPending_ = !controller_.start().ok;
   }
   first_ = false;
   wasOpen_ = open;

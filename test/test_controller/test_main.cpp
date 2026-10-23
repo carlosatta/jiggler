@@ -281,6 +281,42 @@ void test_start_for_deadline_survives_the_millis_wraparound() {
   TEST_ASSERT_TRUE(f.c.status().runState == RunState::Stopped);
 }
 
+void test_it_cannot_run_without_a_paired_computer() {
+  FakeClock clock;
+  clock.paired = false;
+  XorShiftRng rng{1};
+  MemStore store;
+  Controller c{clock, rng, store};
+  c.begin();
+  TEST_ASSERT_TRUE(c.status().runState == RunState::Stopped);   // a board with nothing paired boots stopped
+  CmdResult r = c.start();
+  TEST_ASSERT_FALSE(r.ok);
+  TEST_ASSERT_EQUAL_STRING("no_computer_paired", r.error.c_str());
+  TEST_ASSERT_FALSE(c.startFor(10).ok);
+  TEST_ASSERT_TRUE(c.status().runState == RunState::Stopped);
+  clock.now = 1000000;
+  TEST_ASSERT_FALSE(c.tick().has_value());                       // and never moves
+  clock.paired = true;                                           // a computer pairs
+  TEST_ASSERT_TRUE(c.start().ok);
+  TEST_ASSERT_TRUE(c.status().runState == RunState::Running);
+}
+
+void test_forgetting_every_computer_stops_a_running_jiggler() {
+  FakeClock clock;
+  XorShiftRng rng{1};
+  MemStore store;
+  Controller c{clock, rng, store};
+  c.begin();
+  TEST_ASSERT_TRUE(c.status().runState == RunState::Running);
+  clock.paired = false;
+  clock.now = 100;
+  c.tick();
+  TEST_ASSERT_TRUE(c.status().runState == RunState::Stopped);
+  clock.paired = true;                                           // pairing again does not restart it by itself
+  c.tick();
+  TEST_ASSERT_TRUE(c.status().runState == RunState::Stopped);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_begin_is_running_with_interval_in_bounds);
@@ -303,5 +339,7 @@ int main() {
   RUN_TEST(test_plain_start_stop_and_pause_clear_the_deadline);
   RUN_TEST(test_start_for_rejects_out_of_range_minutes);
   RUN_TEST(test_start_for_deadline_survives_the_millis_wraparound);
+  RUN_TEST(test_it_cannot_run_without_a_paired_computer);
+  RUN_TEST(test_forgetting_every_computer_stops_a_running_jiggler);
   return UNITY_END();
 }

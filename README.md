@@ -29,7 +29,7 @@ pio device monitor                     # serial log at 115200 baud
 Then:
 
 1. **Join the setup network.** On first boot the board opens a WiFi access point called `Jiggler-Setup`. Connect to it, pick your WiFi network, and set an API token.
-2. **Pair it.** On the computer, pair the Bluetooth device named *MX Master 3S*. Pairing is **always closed** until you open a window: tap BOOT once on the board, or press *Open pairing* in the dashboard (**Computers**). The window lasts 3 minutes and closes as soon as a computer pairs. Do this first, then choose the device on the computer.
+2. **Pair it.** On the computer, pair the Bluetooth device named *MX Master 3S*. Pairing is **always closed** until you open a window: tap BOOT once on the board, or press *Open pairing* in the dashboard (**Computers**). The window lasts 3 minutes and closes as soon as a computer pairs. The dashboard walks you through it on a new board (Status → *Set up your Jiggler*). The jiggler cannot run until a computer is paired.
 3. **Open the dashboard** at `http://jiggler.local/` and enter the token. Press **Start**.
 
 ```sh

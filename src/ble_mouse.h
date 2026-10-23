@@ -20,6 +20,7 @@ class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::Bl
   bool connected() const { return connected_; }
   std::string address() const;
   std::string name() const { return name_; }
+  int pairedCount() const { return NimBLEDevice::getNumBonds(); }
 
   // jig::BleLink
   std::vector<std::string> bondedAddresses() override;

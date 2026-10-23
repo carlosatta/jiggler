@@ -52,7 +52,7 @@ Body size caps: 4096 bytes for scripts and MCP, 2048 for devices and automations
 | POST | `/api/stop` | Stop completely |
 | POST | `/api/move` | Queue one movement now. `202 {"queued":true}`, or `409 mouse_not_connected` |
 
-`start`, `pause` and `stop` return the new status. A plain `start`, `pause` or `stop` clears any time limit. Bad `minutes` answer `400 invalid_minutes`.
+`start`, `pause` and `stop` return the new status. `start` (with or without `minutes`) answers `409 no_computer_paired` while no computer is paired: the jiggler cannot run then, a board with nothing paired boots stopped, and forgetting every computer stops it. A plain `start`, `pause` or `stop` clears any time limit. Bad `minutes` answer `400 invalid_minutes`.
 
 ```json
 {

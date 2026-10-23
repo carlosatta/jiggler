@@ -10,8 +10,8 @@ void Controller::begin() {
   const Config loaded = store_.load();
   Config validated;
   config_ = applyPatch(loaded, ConfigPatch{}, validated) ? Config{} : validated;
-  state_ = RunState::Running;
-  scheduleNextLocked();
+  state_ = platform_.computerPaired() ? RunState::Running : RunState::Stopped;
+  if (state_ == RunState::Running) scheduleNextLocked();
 }
 
 Status Controller::status() const {
@@ -36,10 +36,20 @@ Status Controller::status() const {
   return s;
 }
 
-void Controller::start() {
+namespace {
+CmdResult noComputer() {
+  CmdResult r;
+  r.error = "no_computer_paired";
+  r.message = "pair a computer first: there is nothing to keep awake yet";
+  return r;
+}
+}  // namespace
+
+CmdResult Controller::start() {
   std::lock_guard<std::mutex> lock(mutex_);
-  startLocked();
-  hasStopAt_ = false;
+  CmdResult r = startLocked();
+  if (r.ok) hasStopAt_ = false;
+  return r;
 }
 
 CmdResult Controller::startFor(uint32_t minutes) {
@@ -51,15 +61,18 @@ CmdResult Controller::startFor(uint32_t minutes) {
     return r;
   }
   std::lock_guard<std::mutex> lock(mutex_);
-  startLocked();
+  r = startLocked();
+  if (!r.ok) return r;
   stopAtMs_ = platform_.nowMs() + minutes * 60000u;
   hasStopAt_ = true;
-  r.ok = true;
   return r;
 }
 
-void Controller::startLocked() {
-  if (state_ == RunState::Running) return;
+CmdResult Controller::startLocked() {
+  if (!platform_.computerPaired()) return noComputer();
+  CmdResult ok;
+  ok.ok = true;
+  if (state_ == RunState::Running) return ok;
   if (state_ == RunState::Paused) {
     dueMs_ = platform_.nowMs() + pausedRemainingMs_;
     state_ = RunState::Running;
@@ -67,6 +80,7 @@ void Controller::startLocked() {
     state_ = RunState::Running;
     scheduleNextLocked();
   }
+  return ok;
 }
 
 void Controller::pause() {
@@ -118,6 +132,10 @@ CmdResult Controller::updateConfig(const ConfigPatch& patch) {
 std::optional<Plan> Controller::tick() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (hasStopAt_ && static_cast<int32_t>(platform_.nowMs() - stopAtMs_) >= 0) {
+    state_ = RunState::Stopped;
+    hasStopAt_ = false;
+  }
+  if (state_ == RunState::Running && !platform_.computerPaired()) {  // every computer was forgotten
     state_ = RunState::Stopped;
     hasStopAt_ = false;
   }
