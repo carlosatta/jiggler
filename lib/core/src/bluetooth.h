@@ -16,6 +16,22 @@ constexpr uint32_t kMinPairingSec = 30;
 constexpr uint32_t kMaxPairingSec = 600;
 constexpr uint32_t kDefaultPairingSec = 120;
 constexpr size_t kMaxPeerLabelLen = 32;
+// The stack keeps kStackBondSlots bonds and, when full, silently evicts the OLDEST one to make room. Refused
+// pairings briefly occupy a slot (the bond is written before we learn who it is), so the owner's computers are
+// capped well below the slot count: an intruder can then never push a real bond out.
+constexpr size_t kMaxPairedComputers = 3;
+constexpr size_t kStackBondSlots = 5;
+
+// Decide, once a link has finished pairing and its identity is known, whether it must be dropped.
+//  known:       the computer was already bonded before this link came up
+//  pairingOpen: the owner's window (or first run) is open
+//  knownBonds:  how many computers were bonded before this link came up
+// A closed window refuses every unknown computer, whether or not it asked to bond.
+inline bool refuseNewPeer(bool known, bool pairingOpen, size_t knownBonds) {
+  if (known) return false;
+  if (!pairingOpen) return true;
+  return knownBonds >= kMaxPairedComputers;
+}
 
 // What the core needs from the Bluetooth stack. Addresses are lowercase "aa:bb:cc:dd:ee:ff" identity addresses.
 struct BleLink {
@@ -73,7 +89,7 @@ class BluetoothManager {
   void applyLocked();
   bool pairingOpenLocked();
   std::string labelForLocked(const std::string& id);
-  void saveLabelsLocked();
+  bool saveLabelsLocked();
 
   Platform& platform_;
   BleLink& link_;
@@ -81,6 +97,7 @@ class BluetoothManager {
   std::mutex mutex_;
   std::map<std::string, std::string> labels_;      // id -> label
   std::map<std::string, uint32_t> connectedSince_;  // address -> millis of first sight (status() is polled)
+  bool labelsDirty_ = false;  // default names handed out since the last save; tick() persists them
   bool held_ = false;
   bool windowOpen_ = false;
   uint32_t windowUntilMs_ = 0;

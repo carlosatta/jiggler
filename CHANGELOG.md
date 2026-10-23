@@ -6,6 +6,7 @@
 - **Dashboard redesign.** Four sections (Stato, Computer, Movimento, Sistema), connection-first home, inline confirmations, offline and restart recovery, light/dark, phone bottom bar and desktop side rail. Split into `web/` modules with JS tests.
 - **API token change** (`PUT /api/token`, Sistema → Sicurezza). Version and BLE identity in `GET /api/status`.
 - **Installable page.** Web manifest and icons served by the board.
+- Pairing is refused for unknown computers while closed (also when they do not ask to bond) and capped at 3 computers; disconnect closes an open window; forgetting a connected computer drops its link; default names never repeat.
 - LED: fast blink while pairing is open, short flash every 3 s while hidden. BOOT: tap = pairing, hold 3 s = network mode.
 - Fixes: the page is streamed from flash (the heap copy broke once the page grew).
 

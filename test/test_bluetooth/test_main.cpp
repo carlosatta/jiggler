@@ -37,13 +37,9 @@ struct FakeBleLink : BleLink {
     auto it = std::find(bonded.begin(), bonded.end(), a);
     if (it == bonded.end()) return false;
     bonded.erase(it);
-    connected.erase(std::remove(connected.begin(), connected.end(), a), connected.end());
     return true;
   }
-  void forgetAllBonds() override {
-    bonded.clear();
-    connected.clear();
-  }
+  void forgetAllBonds() override { bonded.clear(); }
   void setAdvertising(bool on) override { advertising = on; }
   void setPairingOpen(bool open) override { pairingOpen = open; }
 };
@@ -51,8 +47,9 @@ struct FakeBleLink : BleLink {
 struct Env {
   FakeClock clock;
   FakeBleLink link;
-  MemBlobStore blobs;
+  FlakyBlobStore blobs;
   BluetoothManager bt{clock, link, blobs};
+  FlakyBlobStore* flaky() { return &blobs; }
   Env(std::vector<std::string> bonded = {}) {
     link.bonded = std::move(bonded);
     bt.begin();
@@ -393,6 +390,82 @@ void test_device_info_in_status() {
   TEST_ASSERT_EQUAL_STRING("00:1f:20:fd:3b:76", d["device"]["bleAddress"].as<const char*>());
 }
 
+void test_disconnect_closes_an_open_pairing_window() {
+  Env e({kA});
+  TEST_ASSERT_TRUE(e.bt.startPairing(120).ok);
+  TEST_ASSERT_TRUE(e.bt.disconnect().ok);
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_TRUE(s.held);
+  TEST_ASSERT_FALSE(s.pairingOpen);
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
+  TEST_ASSERT_FALSE(s.pairingRemainingMs.has_value());
+}
+
+void test_rename_reports_a_full_storage() {
+  Env e({kA});
+  e.bt.status();
+  e.flaky()->failPuts = true;
+  CmdResult r = e.bt.rename(kIdA, "Ufficio");
+  TEST_ASSERT_FALSE(r.ok);
+  TEST_ASSERT_EQUAL_STRING("storage_error", r.error.c_str());
+}
+
+void test_reading_the_status_never_writes_storage() {
+  Env e({kA, kB});
+  e.blobs.data.clear();
+  e.bt.status();
+  TEST_ASSERT_TRUE(e.blobs.data.empty());
+}
+
+void test_default_names_are_persisted_by_tick_not_by_status() {
+  Env e({kA});
+  e.bt.status();
+  TEST_ASSERT_TRUE(e.blobs.data.empty());
+  e.bt.tick();
+  TEST_ASSERT_TRUE(e.blobs.data.count("peers") == 1);
+}
+
+void test_default_names_never_repeat_after_a_forget() {
+  Env e({kA, kB});
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_EQUAL_STRING("Computer 1", s.peers[0].label.c_str());
+  TEST_ASSERT_EQUAL_STRING("Computer 2", s.peers[1].label.c_str());
+  e.bt.forget(kIdA);
+  e.link.bonded.push_back("aa:bb:cc:dd:ee:03");
+  s = e.bt.status();
+  TEST_ASSERT_EQUAL_UINT32(2, s.peers.size());
+  TEST_ASSERT_EQUAL_STRING("Computer 2", s.peers[0].label.c_str());
+  TEST_ASSERT_EQUAL_STRING("Computer 1", s.peers[1].label.c_str());  // the lowest free number, never a duplicate
+}
+
+void test_forgetting_a_connected_computer_drops_its_link() {
+  Env e({kA, kB});
+  e.link.connected = {kA};
+  TEST_ASSERT_TRUE(e.bt.forget(kIdA).ok);
+  TEST_ASSERT_TRUE(e.link.connected.empty());
+  TEST_ASSERT_FALSE(e.bt.status().connected);
+}
+
+void test_forget_all_while_connected_drops_the_link_and_reopens_pairing() {
+  Env e({kA});
+  e.link.connected = {kA};
+  TEST_ASSERT_TRUE(e.bt.forgetAll().ok);
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_FALSE(s.connected);
+  TEST_ASSERT_TRUE(s.firstRun);
+  TEST_ASSERT_TRUE(s.pairingOpen);
+}
+
+void test_refusal_policy() {
+  // known computer: always allowed
+  TEST_ASSERT_FALSE(refuseNewPeer(true, false, 3));
+  // pairing closed: an unknown computer is refused whether or not it asked for a bond
+  TEST_ASSERT_TRUE(refuseNewPeer(false, false, 1));
+  // pairing open: allowed while there is room, refused once the paired limit is reached
+  TEST_ASSERT_FALSE(refuseNewPeer(false, true, kMaxPairedComputers - 1));
+  TEST_ASSERT_TRUE(refuseNewPeer(false, true, kMaxPairedComputers));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_first_run_pairing_is_open_without_timeout);
@@ -413,5 +486,13 @@ int main() {
   RUN_TEST(test_status_carries_a_bluetooth_summary);
   RUN_TEST(test_change_token);
   RUN_TEST(test_device_info_in_status);
+  RUN_TEST(test_disconnect_closes_an_open_pairing_window);
+  RUN_TEST(test_rename_reports_a_full_storage);
+  RUN_TEST(test_reading_the_status_never_writes_storage);
+  RUN_TEST(test_default_names_are_persisted_by_tick_not_by_status);
+  RUN_TEST(test_default_names_never_repeat_after_a_forget);
+  RUN_TEST(test_forgetting_a_connected_computer_drops_its_link);
+  RUN_TEST(test_forget_all_while_connected_drops_the_link_and_reopens_pairing);
+  RUN_TEST(test_refusal_policy);
   return UNITY_END();
 }

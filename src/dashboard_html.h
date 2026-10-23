@@ -387,7 +387,8 @@ var JigLib = (function () {
     'the current token is not correct': 'Il token attuale non è corretto.',
     'the current token is required': 'Inserisci il token attuale.',
     'must be 8 to 40 printable characters without spaces': 'Da 8 a 40 caratteri, senza spazi.',
-    'could not save the token (storage full?)': 'Memoria piena: token non salvato.'
+    'could not save the token (storage full?)': 'Memoria piena: token non salvato.',
+    'could not save the name (storage full?)': 'Memoria piena: nome non salvato.'
   };
 
   function tr(message) { return MESSAGES[message] || message || 'Valore non valido.'; }
@@ -753,7 +754,7 @@ var App = (function () {
   }
 
   function renderPairing(status, elapsed) {
-    var bt = status.bluetooth;
+    var bt = status && status.bluetooth;
     if (!bt) return;
     var p = bt.pairing || {};
     var timed = p.open && p.remainingMs != null;

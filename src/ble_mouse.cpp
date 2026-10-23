@@ -9,6 +9,9 @@
 
 #include "hid_report_map.h"
 
+static_assert(CONFIG_BT_NIMBLE_MAX_BONDS >= jig::kStackBondSlots,
+              "the bond store must have the slots bluetooth.h assumes (see platformio.ini)");
+
 namespace {
 
 constexpr uint8_t kMouseReportId = 1;
@@ -90,8 +93,9 @@ void BleMouse::linkUp(uint16_t handle, const std::string& peerAddress) {
 }
 
 // Pairing finished (the identity address is now known). A computer that was not bonded before this link came
-// up is refused unless the owner opened a pairing window: its bond is removed and the link dropped.
-void BleMouse::linkIdentified(uint16_t handle, const std::string& idAddress, bool bonded) {
+// up is refused unless the owner opened a pairing window (and there is room): its bond, if it made one, is
+// removed and the link dropped. This holds even when it paired without asking to bond.
+void BleMouse::linkIdentified(uint16_t handle, const std::string& idAddress, bool) {
   bool refuse = false;
   {
     std::lock_guard<std::mutex> lock(linksMutex_);
@@ -99,7 +103,7 @@ void BleMouse::linkIdentified(uint16_t handle, const std::string& idAddress, boo
       if (l.handle != handle) continue;
       l.address = idAddress;
       const bool known = std::find(l.bondedBefore.begin(), l.bondedBefore.end(), idAddress) != l.bondedBefore.end();
-      refuse = bonded && !known && !pairingOpen_;
+      refuse = jig::refuseNewPeer(known, pairingOpen_, l.bondedBefore.size());
     }
   }
   if (!refuse) return;

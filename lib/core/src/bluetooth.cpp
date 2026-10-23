@@ -63,6 +63,7 @@ void BluetoothManager::begin() {
 
 void BluetoothManager::tick() {
   std::lock_guard<std::mutex> lock(mutex_);
+  if (labelsDirty_ && saveLabelsLocked()) labelsDirty_ = false;
   if (windowOpen_ && static_cast<int32_t>(platform_.nowMs() - windowUntilMs_) >= 0) windowOpen_ = false;
   applyLocked();
 }
@@ -77,19 +78,26 @@ void BluetoothManager::applyLocked() {
 std::string BluetoothManager::labelForLocked(const std::string& id) {
   auto it = labels_.find(id);
   if (it != labels_.end()) return it->second;
-  const std::string label = "Computer " + std::to_string(labels_.size() + 1);
+  // the lowest "Computer N" not in use, so a name is never handed out twice
+  size_t n = 1;
+  std::string label;
+  for (;; ++n) {
+    label = "Computer " + std::to_string(n);
+    const bool used = std::any_of(labels_.begin(), labels_.end(), [&](const auto& kv) { return kv.second == label; });
+    if (!used) break;
+  }
   labels_[id] = label;
-  saveLabelsLocked();
+  labelsDirty_ = true;  // status() is a read path (HTTP task): persisting waits for tick()
   return label;
 }
 
-void BluetoothManager::saveLabelsLocked() {
+bool BluetoothManager::saveLabelsLocked() {
   JsonDocument doc;
   JsonObject o = doc.to<JsonObject>();
   for (const auto& kv : labels_) o[kv.first] = kv.second;
   std::string out;
   serializeJson(doc, out);
-  blobs_.put(kLabelsKey, out);
+  return blobs_.put(kLabelsKey, out);
 }
 
 BluetoothStatus BluetoothManager::status() {
@@ -154,6 +162,7 @@ CmdResult BluetoothManager::stopPairing() {
 CmdResult BluetoothManager::disconnect() {
   std::lock_guard<std::mutex> lock(mutex_);
   held_ = true;
+  windowOpen_ = false;  // a hidden device cannot be paired with, so an open window would only lie
   link_.disconnectAll();
   connectedSince_.clear();
   applyLocked();
@@ -171,10 +180,13 @@ CmdResult BluetoothManager::forget(const std::string& id) {
   std::lock_guard<std::mutex> lock(mutex_);
   for (const std::string& address : link_.bondedAddresses()) {
     if (peerId(address) != id) continue;
+    const std::vector<std::string> connected = link_.connectedAddresses();
     link_.forgetBond(address);
+    // removing a bond does not end the link on the real stack: drop it, or the computer stays connected unlisted
+    if (std::find(connected.begin(), connected.end(), address) != connected.end()) link_.disconnectAll();
     labels_.erase(id);
     connectedSince_.erase(address);
-    saveLabelsLocked();
+    if (!saveLabelsLocked()) labelsDirty_ = true;
     applyLocked();
     return ok();
   }
@@ -184,9 +196,10 @@ CmdResult BluetoothManager::forget(const std::string& id) {
 CmdResult BluetoothManager::forgetAll() {
   std::lock_guard<std::mutex> lock(mutex_);
   link_.forgetAllBonds();
+  link_.disconnectAll();
   labels_.clear();
   connectedSince_.clear();
-  saveLabelsLocked();
+  if (!saveLabelsLocked()) labelsDirty_ = true;
   applyLocked();
   return ok();
 }
@@ -199,8 +212,13 @@ CmdResult BluetoothManager::rename(const std::string& id, const std::string& raw
   std::lock_guard<std::mutex> lock(mutex_);
   for (const std::string& address : link_.bondedAddresses()) {
     if (peerId(address) != id) continue;
+    const std::string previous = labels_.count(id) ? labels_[id] : std::string();
     labels_[id] = label;
-    saveLabelsLocked();
+    if (!saveLabelsLocked()) {
+      if (previous.empty()) labels_.erase(id); else labels_[id] = previous;
+      return fail("storage_error", "could not save the name (storage full?)");
+    }
+    labelsDirty_ = false;
     return ok();
   }
   return fail("not_found", "no such paired computer");

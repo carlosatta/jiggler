@@ -11,7 +11,7 @@
   }
 
   function renderPairing(status, elapsed) {
-    var bt = status.bluetooth;
+    var bt = status && status.bluetooth;
     if (!bt) return;
     var p = bt.pairing || {};
     var timed = p.open && p.remainingMs != null;

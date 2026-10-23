@@ -61,8 +61,10 @@ void test_held_flashes_once_every_three_seconds() {
 }
 
 void test_pairing_has_priority_over_held() {
-  LedContext c{false, true, true, 130, 0, false};
-  TEST_ASSERT_FALSE(ledLevel(c));  // fast-blink phase "off", not the held pattern
+  LedContext c{false, true, true, 110, 0, false};
+  TEST_ASSERT_TRUE(ledLevel(c));  // pairing blink is "on" at 110 ms; the held pattern would be "off"
+  c.nowMs = 130;
+  TEST_ASSERT_FALSE(ledLevel(c));  // pairing blink "off"; the held pattern is also off here, so the first check is what pins the priority
 }
 
 void test_context_falls_back_to_the_connection_pattern() {
