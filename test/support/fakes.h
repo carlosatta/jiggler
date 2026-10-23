@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -40,6 +41,22 @@ struct FakeMouse : MouseSink {
   }
   void click() override { calls.push_back("click"); }
   void scroll(int8_t notches) override { calls.push_back("scroll " + std::to_string(notches)); }
+};
+
+struct MemBlobStore : BlobStore {
+  std::map<std::string, std::string> data;
+  std::string get(const std::string& key) override {
+    auto it = data.find(key);
+    return it == data.end() ? std::string() : it->second;
+  }
+  void put(const std::string& key, const std::string& value) override { data[key] = value; }
+  void remove(const std::string& key) override { data.erase(key); }
+  std::vector<std::string> keys(const std::string& prefix) override {
+    std::vector<std::string> out;
+    for (const auto& kv : data)
+      if (kv.first.rfind(prefix, 0) == 0) out.push_back(kv.first);
+    return out;
+  }
 };
 
 struct MemStore : ConfigStore {

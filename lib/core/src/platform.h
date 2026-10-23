@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
 #include "config.h"
 
@@ -40,6 +42,15 @@ struct ConfigStore {
   virtual ~ConfigStore() = default;
   virtual Config load() = 0;
   virtual void save(const Config& config) = 0;
+};
+
+// Small key/value persistence for JSON blobs (devices, scripts, automations). get() returns "" if absent.
+struct BlobStore {
+  virtual ~BlobStore() = default;
+  virtual std::string get(const std::string& key) = 0;
+  virtual void put(const std::string& key, const std::string& value) = 0;
+  virtual void remove(const std::string& key) = 0;
+  virtual std::vector<std::string> keys(const std::string& prefix) = 0;
 };
 
 }  // namespace jig
