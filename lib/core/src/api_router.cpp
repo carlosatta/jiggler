@@ -21,10 +21,13 @@ std::optional<HttpResponse> rejectBody(size_t contentLength, bool captured) {
 bool authorized(const std::string& header, const std::string& token) {
   static const std::string kPrefix = "Bearer ";
   if (token.empty() || header.compare(0, kPrefix.size(), kPrefix) != 0) return false;
-  const std::string presented = header.substr(kPrefix.size());
-  uint8_t diff = presented.size() != token.size();
-  for (size_t i = 0; i < token.size(); i++)
-    diff |= static_cast<uint8_t>(token[i]) ^ (i < presented.size() ? static_cast<uint8_t>(presented[i]) : 0);
+  return constantTimeEquals(header.substr(kPrefix.size()), token);
+}
+
+bool constantTimeEquals(const std::string& presented, const std::string& expected) {
+  uint8_t diff = presented.size() != expected.size();
+  for (size_t i = 0; i < expected.size(); i++)
+    diff |= static_cast<uint8_t>(expected[i]) ^ (i < presented.size() ? static_cast<uint8_t>(presented[i]) : 0);
   return diff == 0;
 }
 

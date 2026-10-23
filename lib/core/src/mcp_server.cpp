@@ -92,6 +92,7 @@ bool hasScripts(const ApiContext& c) { return c.scripts != nullptr; }
 bool hasAutomations(const ApiContext& c) { return c.automations != nullptr; }
 bool hasNetwork(const ApiContext& c) { return c.network != nullptr; }
 bool hasRestart(const ApiContext& c) { return static_cast<bool>(c.restart); }
+bool hasBluetooth(const ApiContext& c) { return c.bluetooth != nullptr; }
 
 const ExtTool kExtTools[] = {
     {"list_profiles", hasDevices},   {"get_devices", hasDevices},         {"set_devices", hasDevices},
@@ -99,6 +100,8 @@ const ExtTool kExtTools[] = {
     {"run_script", hasAutomations},  {"get_automations", hasAutomations}, {"set_automations", hasAutomations},
     {"press_key", hasAutomations},   {"type_text", hasAutomations},       {"get_network", hasNetwork},
     {"set_network", hasNetwork},     {"restart", hasRestart},
+    {"get_bluetooth", hasBluetooth}, {"start_pairing", hasBluetooth},     {"disconnect_bluetooth", hasBluetooth},
+    {"reconnect_bluetooth", hasBluetooth}, {"forget_computer", hasBluetooth},
 };
 
 const ExtTool* findExtTool(const ApiContext& ctx, const std::string& name) {
@@ -206,6 +209,22 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
     } else if (name == "restart") {
       addTool(tools, t.name, "Restart the device (needed after changing devices or network).", &schema);
       schema["properties"].to<JsonObject>();
+    } else if (name == "get_bluetooth") {
+      addTool(tools, t.name, "Get the Bluetooth state: which computer is connected and for how long, whether pairing is open, and the paired computers.", &schema);
+      schema["properties"].to<JsonObject>();
+    } else if (name == "start_pairing") {
+      addTool(tools, t.name, "Open the pairing window so a new computer can pair (default 120 s). While it is closed, new computers are refused.", &schema);
+      addNumberProp(schema["properties"].to<JsonObject>(), "seconds", "integer", 30, 600, "How long the window stays open (default 120).");
+    } else if (name == "disconnect_bluetooth") {
+      addTool(tools, t.name, "Disconnect the computer and hide the device until reconnect_bluetooth (it stays powered and keeps its pairings).", &schema);
+      schema["properties"].to<JsonObject>();
+    } else if (name == "reconnect_bluetooth") {
+      addTool(tools, t.name, "Make the device visible again so paired computers can reconnect.", &schema);
+      schema["properties"].to<JsonObject>();
+    } else if (name == "forget_computer") {
+      addTool(tools, t.name, "Forget one paired computer (it will have to pair again). Use the id from get_bluetooth.", &schema);
+      addProp(schema["properties"].to<JsonObject>(), "id", "string", "The computer id from get_bluetooth.");
+      schema["required"].add("id");
     }
   }
 }
@@ -248,6 +267,14 @@ ToolOutput callExtTool(ApiContext& ctx, const std::string& name, JsonVariantCons
   if (name == "set_automations") return wrapArray(ctx, "automations", "/api/automations", args);
   if (name == "get_network") return viaRoute(ctx, "GET", "/api/network");
   if (name == "restart") return viaRoute(ctx, "POST", "/api/restart");
+  if (name == "get_bluetooth") return viaRoute(ctx, "GET", "/api/bluetooth");
+  if (name == "start_pairing") return viaRoute(ctx, "POST", "/api/bluetooth/pairing", args.isNull() ? "" : serialize(args));
+  if (name == "disconnect_bluetooth") return viaRoute(ctx, "POST", "/api/bluetooth/disconnect");
+  if (name == "reconnect_bluetooth") return viaRoute(ctx, "POST", "/api/bluetooth/reconnect");
+  if (name == "forget_computer") {
+    if (!args["id"].is<const char*>() || args["id"].as<std::string>().empty()) return argError("id", "is required");
+    return viaRoute(ctx, "DELETE", "/api/bluetooth/peers/" + args["id"].as<std::string>());
+  }
   if (name == "set_network") return viaRoute(ctx, "PUT", "/api/network", args.isNull() ? "{}" : serialize(args));
 
   if (name == "save_script") {

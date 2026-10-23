@@ -50,6 +50,13 @@ struct ConfigStore {
   virtual void save(const Config& config) = 0;
 };
 
+// Where the API token lives (NVS on the device).
+struct TokenVault {
+  virtual ~TokenVault() = default;
+  virtual std::string load() = 0;                      // "" when never set
+  virtual bool save(const std::string& token) = 0;     // false = not stored
+};
+
 // Small key/value persistence for JSON blobs (devices, scripts, automations). get() returns "" if absent.
 struct BlobStore {
   virtual ~BlobStore() = default;

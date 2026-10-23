@@ -37,6 +37,19 @@ struct Env {
   DeviceRegistry devices{blobs};
   ScriptLibrary scripts{blobs};
   AutomationEngine automations{clock, rng, scripts, blobs};
+  struct Link : BleLink {
+    std::vector<std::string> bonded{"aa:bb:cc:dd:ee:01"}, connected;
+    int disconnects = 0;
+    bool advertising = true, pairingOpen = false;
+    std::vector<std::string> bondedAddresses() override { return bonded; }
+    std::vector<std::string> connectedAddresses() override { return connected; }
+    void disconnectAll() override { disconnects++; connected.clear(); }
+    bool forgetBond(const std::string& a) override { bonded.clear(); return !a.empty(); }
+    void forgetAllBonds() override { bonded.clear(); }
+    void setAdvertising(bool on) override { advertising = on; }
+    void setPairingOpen(bool open) override { pairingOpen = open; }
+  } link;
+  BluetoothManager bluetooth{clock, link, blobs};
   int restarts = 0;
   ApiContext ctx{controller};
 
@@ -44,6 +57,8 @@ struct Env {
     controller.begin();
     devices.begin();
     automations.begin();
+    bluetooth.begin();
+    ctx.bluetooth = &bluetooth;
     ctx.network = &net;
     ctx.devices = &devices;
     ctx.scripts = &scripts;
@@ -90,7 +105,8 @@ void test_tools_list_includes_new_tools() {
   const char* expected[] = {"get_status", "start", "pause", "stop", "move_now", "set_config",
                             "list_profiles", "get_devices", "set_devices", "list_scripts", "save_script",
                             "delete_script", "run_script", "get_automations", "set_automations", "press_key",
-                            "type_text", "get_network", "set_network", "restart"};
+                            "type_text", "get_network", "set_network", "restart", "get_bluetooth", "start_pairing",
+                            "disconnect_bluetooth", "reconnect_bluetooth", "forget_computer"};
   const size_t n = sizeof(expected) / sizeof(expected[0]);
   TEST_ASSERT_EQUAL_UINT32(n, tools.size());
   for (size_t i = 0; i < n; i++) {
@@ -258,6 +274,33 @@ void test_network_tools_validate() {  // RF5
   TEST_ASSERT_EQUAL_INT(1, e.net.saves);
 }
 
+void test_bluetooth_tools() {
+  Env e;
+  McpReply g = e.tool("get_bluetooth");
+  TEST_ASSERT_FALSE(isError(g));
+  JsonDocument gd = toolText(g);
+  TEST_ASSERT_FALSE(gd["connected"].as<bool>());
+  TEST_ASSERT_EQUAL_STRING("aabbccddee01", gd["peers"][0]["id"].as<const char*>());
+
+  McpReply p = e.tool("start_pairing", "{\"seconds\":45}");
+  TEST_ASSERT_FALSE(isError(p));
+  TEST_ASSERT_EQUAL_UINT32(45000, toolText(p)["pairing"]["remainingMs"].as<uint32_t>());
+  TEST_ASSERT_TRUE(e.link.pairingOpen);
+  TEST_ASSERT_FALSE(isError(e.tool("start_pairing")));  // default window
+  TEST_ASSERT_TRUE(isError(e.tool("start_pairing", "{\"seconds\":5}")));
+  TEST_ASSERT_TRUE(isError(e.tool("start_pairing", "{\"seconds\":\"x\"}")));
+
+  TEST_ASSERT_TRUE(toolText(e.tool("disconnect_bluetooth"))["held"].as<bool>());
+  TEST_ASSERT_EQUAL_INT(1, e.link.disconnects);
+  TEST_ASSERT_FALSE(toolText(e.tool("reconnect_bluetooth"))["held"].as<bool>());
+
+  TEST_ASSERT_TRUE(isError(e.tool("forget_computer", "{}")));
+  TEST_ASSERT_TRUE(isError(e.tool("forget_computer", "{\"id\":\"000000000000\"}")));
+  McpReply f = e.tool("forget_computer", "{\"id\":\"aabbccddee01\"}");
+  TEST_ASSERT_FALSE(isError(f));
+  TEST_ASSERT_TRUE(toolText(f)["pairing"]["firstRun"].as<bool>());
+}
+
 void test_restart_tool_calls_callback() {
   Env e;
   McpReply r = e.tool("restart");
@@ -288,6 +331,7 @@ int main() {
   RUN_TEST(test_type_text_tool);
   RUN_TEST(test_press_key_tool);
   RUN_TEST(test_network_tools_validate);
+  RUN_TEST(test_bluetooth_tools);
   RUN_TEST(test_restart_tool_calls_callback);
   RUN_TEST(test_existing_tools_still_work_through_ex);
   return UNITY_END();

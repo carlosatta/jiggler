@@ -14,6 +14,100 @@ int statusForCmdError(const std::string& error) {
   return 400;
 }
 
+HttpResponse bluetoothRoute(ApiContext& ctx, const std::string& method, const std::string& path, const std::string& body) {
+  BluetoothManager* bt = ctx.bluetooth;
+  if (!bt) return json(404, errorJson("not_found"));
+  auto reply = [&](const CmdResult& r) {
+    if (r.ok) return json(200, bluetoothToJson(bt->status()));
+    return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
+  };
+  static const std::string kBase = "/api/bluetooth";
+  const std::string rest = path.substr(kBase.size());  // "", "/pairing", "/peers/<id>", ...
+
+  if (rest.empty()) {
+    if (method != "GET") return json(405, errorJson("method_not_allowed"));
+    return json(200, bluetoothToJson(bt->status()));
+  }
+  if (rest == "/pairing") {
+    if (method == "DELETE") return reply(bt->stopPairing());
+    if (method != "POST") return json(405, errorJson("method_not_allowed"));
+    if (body.size() > kMaxSmallBodyBytes) return json(413, errorJson("payload_too_large"));
+    int64_t seconds = kDefaultPairingSec;
+    if (!body.empty()) {
+      JsonDocument doc;
+      if (deserializeJson(doc, body) || !doc.is<JsonObject>()) return json(400, errorJson("bad_json", "", "body must be a JSON object"));
+      if (!doc["seconds"].isNull()) {
+        if (!doc["seconds"].is<int64_t>()) return json(400, errorJson("invalid_seconds", "seconds", "must be an integer"));
+        seconds = doc["seconds"].as<int64_t>();
+      }
+    }
+    if (seconds < 0 || seconds > 1000000) seconds = 0;  // out of range: let the manager reject it
+    return reply(bt->startPairing(static_cast<uint32_t>(seconds)));
+  }
+  if (rest == "/disconnect" || rest == "/reconnect") {
+    if (method != "POST") return json(405, errorJson("method_not_allowed"));
+    return reply(rest == "/disconnect" ? bt->disconnect() : bt->reconnect());
+  }
+  if (rest == "/peers") {
+    if (method != "DELETE") return json(405, errorJson("method_not_allowed"));
+    return reply(bt->forgetAll());
+  }
+  if (rest.rfind("/peers/", 0) == 0) {
+    const std::string id = rest.substr(7);
+    if (id.empty() || id.find('/') != std::string::npos) return json(404, errorJson("not_found"));
+    if (method == "DELETE") return reply(bt->forget(id));
+    if (method != "PUT") return json(405, errorJson("method_not_allowed"));
+    if (body.size() > kMaxSmallBodyBytes) return json(413, errorJson("payload_too_large"));
+    JsonDocument doc;
+    if (deserializeJson(doc, body) || !doc.is<JsonObject>()) return json(400, errorJson("bad_json", "", "body must be a JSON object"));
+    if (!doc["label"].is<const char*>()) return json(400, errorJson("invalid_label", "label", "must be a string"));
+    return reply(bt->rename(id, doc["label"].as<std::string>()));
+  }
+  return json(404, errorJson("not_found"));
+}
+
+bool validToken(const std::string& t) {
+  if (t.size() < 8 || t.size() > 40) return false;
+  for (unsigned char c : t)
+    if (c < 0x21 || c > 0x7E) return false;  // printable ASCII, no spaces
+  return true;
+}
+
+HttpResponse tokenRoute(ApiContext& ctx, const std::string& method, const std::string& body) {
+  if (!ctx.tokens) return json(404, errorJson("not_found"));
+  if (method != "PUT") return json(405, errorJson("method_not_allowed"));
+  if (body.size() > kMaxSmallBodyBytes) return json(413, errorJson("payload_too_large"));
+  JsonDocument doc;
+  if (deserializeJson(doc, body) || !doc.is<JsonObject>()) return json(400, errorJson("bad_json", "", "body must be a JSON object"));
+  if (!doc["current"].is<const char*>()) return json(400, errorJson("invalid_token", "current", "the current token is required"));
+  if (!doc["token"].is<const char*>() || !validToken(doc["token"].as<std::string>()))
+    return json(400, errorJson("invalid_token", "token", "must be 8 to 40 printable characters without spaces"));
+  if (!constantTimeEquals(doc["current"].as<std::string>(), ctx.tokens->load()))
+    return json(403, errorJson("wrong_current", "current", "the current token is not correct"));
+  if (!ctx.tokens->save(doc["token"].as<std::string>()))
+    return json(507, errorJson("storage_error", "", "could not save the token (storage full?)"));
+  return json(200, "{\"changed\":true}");
+}
+
+HttpResponse statusWithExtras(ApiContext& ctx, HttpResponse base) {
+  if (base.status != 200 || base.body.empty() || base.body.back() != '}') return base;
+  std::string extra;
+  if (ctx.bluetooth) extra += ",\"bluetooth\":" + bluetoothSummaryJson(ctx.bluetooth->status());
+  if (!ctx.info.version.empty()) {
+    JsonDocument doc;
+    doc["version"] = ctx.info.version;
+    doc["bleName"] = ctx.info.bleName;
+    doc["bleAddress"] = ctx.info.bleAddress;
+    std::string device;
+    serializeJson(doc, device);
+    extra += ",\"device\":" + device;
+  }
+  if (extra.empty()) return base;
+  base.body.pop_back();
+  base.body += extra + "}";
+  return base;
+}
+
 HttpResponse networkRoute(ApiContext& ctx, const std::string& method, const std::string& body) {
   if (!ctx.network) return json(404, errorJson("not_found"));
   if (method == "GET") return json(200, networkToJson(ctx.network->load()));
@@ -115,6 +209,9 @@ HttpResponse scriptsRoute(ApiContext& ctx, const std::string& method, const std:
 
 HttpResponse handleApiEx(ApiContext& ctx, const std::string& method, const std::string& path,
                          const std::string& body) {
+  if (path == "/api/status" && method == "GET") return statusWithExtras(ctx, handleApi(ctx.controller, method, path, body));
+  if (path == "/api/bluetooth" || path.rfind("/api/bluetooth/", 0) == 0) return bluetoothRoute(ctx, method, path, body);
+  if (path == "/api/token") return tokenRoute(ctx, method, body);
   if (path == "/api/network") return networkRoute(ctx, method, body);
   if (path == "/api/devices") return devicesRoute(ctx, method, body);
   if (path == "/api/automations") return automationsRoute(ctx, method, body);

@@ -5,12 +5,19 @@
 
 #include "api_router.h"
 #include "automation.h"
+#include "bluetooth.h"
 #include "controller.h"
 #include "devices.h"
 #include "network_settings.h"
 #include "script.h"
 
 namespace jig {
+
+struct DeviceInfo {
+  std::string version;
+  std::string bleName;
+  std::string bleAddress;
+};
 
 // Services are optional (nullptr = routes answer 404) so the router can grow without breaking callers.
 struct ApiContext {
@@ -19,6 +26,9 @@ struct ApiContext {
   DeviceRegistry* devices = nullptr;
   ScriptLibrary* scripts = nullptr;
   AutomationEngine* automations = nullptr;
+  BluetoothManager* bluetooth = nullptr;
+  TokenVault* tokens = nullptr;
+  DeviceInfo info;  // shown in /api/status when its version is set
   std::function<void()> restart;
 };
 

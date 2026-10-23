@@ -1,0 +1,417 @@
+#include <unity.h>
+
+#include <ArduinoJson.h>
+
+#include <algorithm>
+#include <string>
+
+#include "api_ex.h"
+#include "bluetooth.h"
+#include "controller.h"
+#include "fakes.h"
+
+using namespace jig;
+
+void setUp() {}
+void tearDown() {}
+
+namespace {
+
+const char* kA = "aa:bb:cc:dd:ee:01";
+const char* kB = "aa:bb:cc:dd:ee:02";
+const char* kIdA = "aabbccddee01";
+const char* kIdB = "aabbccddee02";
+
+struct FakeBleLink : BleLink {
+  std::vector<std::string> bonded, connected;
+  bool advertising = true;
+  bool pairingOpen = false;
+  int disconnects = 0;
+  std::vector<std::string> bondedAddresses() override { return bonded; }
+  std::vector<std::string> connectedAddresses() override { return connected; }
+  void disconnectAll() override {
+    disconnects++;
+    connected.clear();
+  }
+  bool forgetBond(const std::string& a) override {
+    auto it = std::find(bonded.begin(), bonded.end(), a);
+    if (it == bonded.end()) return false;
+    bonded.erase(it);
+    connected.erase(std::remove(connected.begin(), connected.end(), a), connected.end());
+    return true;
+  }
+  void forgetAllBonds() override {
+    bonded.clear();
+    connected.clear();
+  }
+  void setAdvertising(bool on) override { advertising = on; }
+  void setPairingOpen(bool open) override { pairingOpen = open; }
+};
+
+struct Env {
+  FakeClock clock;
+  FakeBleLink link;
+  MemBlobStore blobs;
+  BluetoothManager bt{clock, link, blobs};
+  Env(std::vector<std::string> bonded = {}) {
+    link.bonded = std::move(bonded);
+    bt.begin();
+  }
+};
+
+JsonDocument parse(const std::string& s) {
+  JsonDocument doc;
+  TEST_ASSERT_TRUE_MESSAGE(!deserializeJson(doc, s), s.c_str());
+  return doc;
+}
+
+struct Api {
+  FakeClock clock;
+  XorShiftRng rng{1};
+  MemStore config;
+  Controller controller{clock, rng, config};
+  FakeBleLink link;
+  MemBlobStore blobs;
+  BluetoothManager bt{clock, link, blobs};
+  struct Vault : TokenVault {
+    std::string token = "token-iniziale";
+    bool fail = false;
+    std::string load() override { return token; }
+    bool save(const std::string& t) override {
+      if (fail) return false;
+      token = t;
+      return true;
+    }
+  } vault;
+  ApiContext ctx{controller};
+  Api(std::vector<std::string> bonded = {kA}) {
+    controller.begin();
+    link.bonded = std::move(bonded);
+    bt.begin();
+    ctx.bluetooth = &bt;
+    ctx.tokens = &vault;
+  }
+  HttpResponse call(const std::string& method, const std::string& path, const std::string& body = "") {
+    return handleApiEx(ctx, method, path, body);
+  }
+};
+
+}  // namespace
+
+void test_first_run_pairing_is_open_without_timeout() {
+  Env e;
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_TRUE(s.pairingOpen);
+  TEST_ASSERT_TRUE(s.firstRun);
+  TEST_ASSERT_FALSE(s.pairingRemainingMs.has_value());
+  TEST_ASSERT_TRUE(e.link.pairingOpen);
+  TEST_ASSERT_TRUE(s.peers.empty());
+}
+
+void test_with_a_bond_pairing_is_closed() {
+  Env e({kA});
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_FALSE(s.pairingOpen);
+  TEST_ASSERT_FALSE(s.firstRun);
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
+}
+
+void test_pairing_window_counts_down_and_closes() {
+  Env e({kA});
+  e.clock.now = 1000;
+  TEST_ASSERT_TRUE(e.bt.startPairing(120).ok);
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_TRUE(s.pairingOpen);
+  TEST_ASSERT_EQUAL_UINT32(120000, *s.pairingRemainingMs);
+  TEST_ASSERT_TRUE(e.link.pairingOpen);
+  e.clock.now = 61000;
+  TEST_ASSERT_EQUAL_UINT32(60000, *e.bt.status().pairingRemainingMs);
+  e.clock.now = 120999;
+  e.bt.tick();
+  TEST_ASSERT_TRUE(e.link.pairingOpen);
+  e.clock.now = 121000;
+  e.bt.tick();
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
+  TEST_ASSERT_FALSE(e.bt.status().pairingOpen);
+}
+
+void test_pairing_window_survives_clock_wraparound() {
+  Env e({kA});
+  e.clock.now = 0xFFFFFF00u;
+  TEST_ASSERT_TRUE(e.bt.startPairing(30).ok);
+  const uint32_t t0 = e.clock.now;
+  e.clock.now = t0 + 29999;
+  e.bt.tick();
+  TEST_ASSERT_TRUE(e.link.pairingOpen);
+  e.clock.now = t0 + 30000;
+  e.bt.tick();
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
+}
+
+void test_pairing_seconds_are_bounded() {
+  Env e({kA});
+  for (uint32_t bad : {0u, 29u, 601u, 100000u}) {
+    CmdResult r = e.bt.startPairing(bad);
+    TEST_ASSERT_FALSE_MESSAGE(r.ok, std::to_string(bad).c_str());
+    TEST_ASSERT_EQUAL_STRING("invalid_seconds", r.error.c_str());
+  }
+  TEST_ASSERT_TRUE(e.bt.startPairing(30).ok);
+  TEST_ASSERT_TRUE(e.bt.startPairing(600).ok);
+}
+
+void test_stop_pairing_closes_the_window() {
+  Env e({kA});
+  e.bt.startPairing(120);
+  TEST_ASSERT_TRUE(e.bt.stopPairing().ok);
+  TEST_ASSERT_FALSE(e.bt.status().pairingOpen);
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
+}
+
+void test_disconnect_holds_the_link_until_reconnect() {
+  Env e({kA});
+  e.link.connected = {kA};
+  TEST_ASSERT_TRUE(e.bt.disconnect().ok);
+  TEST_ASSERT_EQUAL_INT(1, e.link.disconnects);
+  TEST_ASSERT_FALSE(e.link.advertising);
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_TRUE(s.held);
+  TEST_ASSERT_FALSE(s.connected);
+  e.bt.tick();
+  TEST_ASSERT_FALSE(e.link.advertising);  // stays hidden: the computer cannot reconnect behind your back
+  TEST_ASSERT_TRUE(e.bt.reconnect().ok);
+  TEST_ASSERT_TRUE(e.link.advertising);
+  TEST_ASSERT_FALSE(e.bt.status().held);
+}
+
+void test_starting_pairing_releases_a_hold() {
+  Env e({kA});
+  e.bt.disconnect();
+  TEST_ASSERT_TRUE(e.bt.startPairing(60).ok);
+  TEST_ASSERT_TRUE(e.link.advertising);
+  TEST_ASSERT_FALSE(e.bt.status().held);
+}
+
+void test_peers_get_stable_default_labels_and_can_be_renamed() {
+  Env e({kA, kB});
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_EQUAL_UINT32(2, s.peers.size());
+  TEST_ASSERT_EQUAL_STRING(kIdA, s.peers[0].id.c_str());
+  TEST_ASSERT_EQUAL_STRING("Computer 1", s.peers[0].label.c_str());
+  TEST_ASSERT_EQUAL_STRING("Computer 2", s.peers[1].label.c_str());
+
+  TEST_ASSERT_TRUE(e.bt.rename(kIdA, "MacBook di Carlo").ok);
+  BluetoothManager again(e.clock, e.link, e.blobs);
+  again.begin();
+  TEST_ASSERT_EQUAL_STRING("MacBook di Carlo", again.status().peers[0].label.c_str());
+  TEST_ASSERT_EQUAL_STRING("Computer 2", again.status().peers[1].label.c_str());
+}
+
+void test_rename_validation() {
+  Env e({kA});
+  for (const char* bad : {"", "   ", "tab\there"}) {
+    CmdResult r = e.bt.rename(kIdA, bad);
+    TEST_ASSERT_FALSE_MESSAGE(r.ok, bad);
+    TEST_ASSERT_EQUAL_STRING_MESSAGE("invalid_label", r.error.c_str(), bad);
+  }
+  TEST_ASSERT_FALSE(e.bt.rename(kIdA, std::string(33, 'x')).ok);
+  TEST_ASSERT_TRUE(e.bt.rename(kIdA, std::string(32, 'x')).ok);
+  CmdResult unknown = e.bt.rename("000000000000", "x");
+  TEST_ASSERT_EQUAL_STRING("not_found", unknown.error.c_str());
+  TEST_ASSERT_EQUAL_STRING(std::string(32, 'x').c_str(), e.bt.status().peers[0].label.c_str());
+}
+
+void test_forget_one_and_all() {
+  Env e({kA, kB});
+  TEST_ASSERT_TRUE(e.bt.forget(kIdA).ok);
+  TEST_ASSERT_EQUAL_UINT32(1, e.link.bonded.size());
+  TEST_ASSERT_EQUAL_STRING(kB, e.link.bonded[0].c_str());
+  CmdResult unknown = e.bt.forget(kIdA);
+  TEST_ASSERT_EQUAL_STRING("not_found", unknown.error.c_str());
+
+  TEST_ASSERT_TRUE(e.bt.forgetAll().ok);
+  TEST_ASSERT_TRUE(e.link.bonded.empty());
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_TRUE(s.firstRun);          // back to the factory state: pairing is open again
+  TEST_ASSERT_TRUE(s.pairingOpen);
+  TEST_ASSERT_TRUE(e.link.pairingOpen);
+  TEST_ASSERT_TRUE(s.peers.empty());
+}
+
+void test_connected_computer_and_duration() {
+  Env e({kA, kB});
+  e.link.connected = {kB};
+  e.clock.now = 1000;
+  e.bt.status();  // first sight of the connection
+  e.clock.now = 61000;
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_TRUE(s.connected);
+  TEST_ASSERT_EQUAL_STRING("Computer 2", s.connectedLabel->c_str());
+  TEST_ASSERT_EQUAL_UINT32(60000, *s.connectedForMs);
+  TEST_ASSERT_FALSE(s.peers[0].connected);
+  TEST_ASSERT_TRUE(s.peers[1].connected);
+
+  e.link.connected.clear();
+  s = e.bt.status();
+  TEST_ASSERT_FALSE(s.connected);
+  TEST_ASSERT_FALSE(s.connectedLabel.has_value());
+  TEST_ASSERT_FALSE(s.connectedForMs.has_value());
+}
+
+void test_connection_unknown_to_the_manager_counts_from_first_sight() {
+  Env e({kA});
+  e.link.connected = {kA};  // e.g. connected before the manager saw the callback
+  e.clock.now = 5000;
+  TEST_ASSERT_EQUAL_UINT32(0, *e.bt.status().connectedForMs);
+  e.clock.now = 9000;
+  TEST_ASSERT_EQUAL_UINT32(4000, *e.bt.status().connectedForMs);
+}
+
+void test_unbonded_connection_is_shown_with_its_address() {
+  Env e;  // first run: a computer is connected but its bond is not in the list yet
+  e.link.connected = {kA};
+  BluetoothStatus s = e.bt.status();
+  TEST_ASSERT_TRUE(s.connected);
+  TEST_ASSERT_TRUE(s.connectedLabel.has_value());
+}
+
+void test_bluetooth_routes() {
+  Api a;
+  HttpResponse g = a.call("GET", "/api/bluetooth");
+  TEST_ASSERT_EQUAL_INT(200, g.status);
+  JsonDocument d = parse(g.body);
+  TEST_ASSERT_FALSE(d["connected"].as<bool>());
+  TEST_ASSERT_FALSE(d["held"].as<bool>());
+  TEST_ASSERT_FALSE(d["pairing"]["open"].as<bool>());
+  TEST_ASSERT_TRUE(g.body.find("\"remainingMs\":null") != std::string::npos);
+  TEST_ASSERT_TRUE(g.body.find("\"computer\":null") != std::string::npos);
+  TEST_ASSERT_EQUAL_STRING(kIdA, d["peers"][0]["id"].as<const char*>());
+  TEST_ASSERT_EQUAL_STRING(kA, d["peers"][0]["address"].as<const char*>());
+
+  HttpResponse p = a.call("POST", "/api/bluetooth/pairing", "{\"seconds\":90}");
+  TEST_ASSERT_EQUAL_INT(200, p.status);
+  TEST_ASSERT_TRUE(parse(p.body)["pairing"]["open"].as<bool>());
+  TEST_ASSERT_EQUAL_UINT32(90000, parse(p.body)["pairing"]["remainingMs"].as<uint32_t>());
+  TEST_ASSERT_EQUAL_INT(200, a.call("POST", "/api/bluetooth/pairing").status);  // default window
+  TEST_ASSERT_EQUAL_UINT32(120000, parse(a.call("GET", "/api/bluetooth").body)["pairing"]["remainingMs"].as<uint32_t>());
+  TEST_ASSERT_FALSE(parse(a.call("DELETE", "/api/bluetooth/pairing").body)["pairing"]["open"].as<bool>());
+
+  HttpResponse bad = a.call("POST", "/api/bluetooth/pairing", "{\"seconds\":5}");
+  TEST_ASSERT_EQUAL_INT(400, bad.status);
+  TEST_ASSERT_EQUAL_STRING("invalid_seconds", parse(bad.body)["error"].as<const char*>());
+  for (const char* body : {"{", "{\"seconds\":\"x\"}", "{\"seconds\":1.5}", "[]"})
+    TEST_ASSERT_EQUAL_INT_MESSAGE(400, a.call("POST", "/api/bluetooth/pairing", body).status, body);
+
+  TEST_ASSERT_TRUE(parse(a.call("POST", "/api/bluetooth/disconnect").body)["held"].as<bool>());
+  TEST_ASSERT_FALSE(parse(a.call("POST", "/api/bluetooth/reconnect").body)["held"].as<bool>());
+
+  HttpResponse ren = a.call("PUT", std::string("/api/bluetooth/peers/") + kIdA, "{\"label\":\"Studio\"}");
+  TEST_ASSERT_EQUAL_INT(200, ren.status);
+  TEST_ASSERT_EQUAL_STRING("Studio", parse(ren.body)["peers"][0]["label"].as<const char*>());
+  TEST_ASSERT_EQUAL_INT(400, a.call("PUT", std::string("/api/bluetooth/peers/") + kIdA, "{\"label\":\"\"}").status);
+  TEST_ASSERT_EQUAL_INT(400, a.call("PUT", std::string("/api/bluetooth/peers/") + kIdA, "{}").status);
+  TEST_ASSERT_EQUAL_INT(404, a.call("PUT", "/api/bluetooth/peers/000000000000", "{\"label\":\"x\"}").status);
+
+  TEST_ASSERT_EQUAL_INT(404, a.call("DELETE", "/api/bluetooth/peers/000000000000").status);
+  TEST_ASSERT_EQUAL_INT(200, a.call("DELETE", std::string("/api/bluetooth/peers/") + kIdA).status);
+  TEST_ASSERT_TRUE(a.link.bonded.empty());
+  TEST_ASSERT_EQUAL_INT(200, a.call("DELETE", "/api/bluetooth/peers").status);
+
+  TEST_ASSERT_EQUAL_INT(405, a.call("PUT", "/api/bluetooth").status);
+  TEST_ASSERT_EQUAL_INT(405, a.call("GET", "/api/bluetooth/disconnect").status);
+  TEST_ASSERT_EQUAL_INT(404, a.call("GET", "/api/bluetooth/nope").status);
+  a.ctx.bluetooth = nullptr;
+  TEST_ASSERT_EQUAL_INT(404, a.call("GET", "/api/bluetooth").status);
+  TEST_ASSERT_EQUAL_INT(404, a.call("POST", "/api/bluetooth/pairing").status);
+}
+
+void test_status_carries_a_bluetooth_summary() {
+  Api a;
+  a.link.connected = {kA};
+  a.clock.now = 2000;
+  a.bt.status();  // first sight of the connection
+  a.clock.now = 7000;
+  JsonDocument d = parse(a.call("GET", "/api/status").body);
+  TEST_ASSERT_TRUE(d["bluetooth"]["connected"].as<bool>());
+  TEST_ASSERT_EQUAL_STRING("Computer 1", d["bluetooth"]["computer"]["label"].as<const char*>());
+  TEST_ASSERT_EQUAL_UINT32(5000, d["bluetooth"]["computer"]["connectedForMs"].as<uint32_t>());
+  TEST_ASSERT_FALSE(d["bluetooth"]["pairing"]["open"].as<bool>());
+  TEST_ASSERT_EQUAL_UINT32(1, d["bluetooth"]["peerCount"].as<uint32_t>());
+  TEST_ASSERT_EQUAL_STRING("running", d["state"].as<const char*>());  // the original fields are untouched
+
+  a.ctx.bluetooth = nullptr;
+  TEST_ASSERT_TRUE(a.call("GET", "/api/status").body.find("bluetooth") == std::string::npos);
+}
+
+void test_change_token() {
+  Api a;
+  const std::string route = "/api/token";
+  HttpResponse ok = a.call("PUT", route, "{\"current\":\"token-iniziale\",\"token\":\"nuovo-token-1\"}");
+  TEST_ASSERT_EQUAL_INT(200, ok.status);
+  TEST_ASSERT_TRUE(parse(ok.body)["changed"].as<bool>());
+  TEST_ASSERT_EQUAL_STRING("nuovo-token-1", a.vault.token.c_str());
+
+  HttpResponse wrong = a.call("PUT", route, "{\"current\":\"sbagliato\",\"token\":\"altro-token-2\"}");
+  TEST_ASSERT_EQUAL_INT(403, wrong.status);
+  TEST_ASSERT_EQUAL_STRING("wrong_current", parse(wrong.body)["error"].as<const char*>());
+  TEST_ASSERT_EQUAL_STRING("nuovo-token-1", a.vault.token.c_str());
+
+  const struct {
+    const char* body;
+    const char* field;
+  } bad[] = {
+      {"{\"current\":\"nuovo-token-1\",\"token\":\"corto\"}", "token"},
+      {"{\"current\":\"nuovo-token-1\",\"token\":\"con spazio dentro\"}", "token"},
+      {"{\"current\":\"nuovo-token-1\",\"token\":\"àccènti-nonvalidi\"}", "token"},
+      {"{\"current\":\"nuovo-token-1\",\"token\":\"1234567890123456789012345678901234567890x\"}", "token"},
+      {"{\"current\":\"nuovo-token-1\"}", "token"},
+      {"{\"token\":\"valido-token-3\"}", "current"},
+      {"{\"current\":5,\"token\":\"valido-token-3\"}", "current"},
+  };
+  for (const auto& c : bad) {
+    HttpResponse r = a.call("PUT", route, c.body);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(400, r.status, c.body);
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(c.field, parse(r.body)["field"].as<const char*>(), c.body);
+  }
+  TEST_ASSERT_EQUAL_INT(400, a.call("PUT", route, "{").status);
+  TEST_ASSERT_EQUAL_STRING("nuovo-token-1", a.vault.token.c_str());
+
+  a.vault.fail = true;
+  HttpResponse full = a.call("PUT", route, "{\"current\":\"nuovo-token-1\",\"token\":\"valido-token-3\"}");
+  TEST_ASSERT_EQUAL_INT(507, full.status);
+  TEST_ASSERT_EQUAL_STRING("nuovo-token-1", a.vault.token.c_str());
+  TEST_ASSERT_EQUAL_INT(405, a.call("GET", route).status);
+  a.ctx.tokens = nullptr;
+  TEST_ASSERT_EQUAL_INT(404, a.call("PUT", route, "{}").status);
+}
+
+void test_device_info_in_status() {
+  Api a;
+  a.ctx.info = {"1.2.3", "MX Master 3S", "00:1f:20:fd:3b:76"};
+  JsonDocument d = parse(a.call("GET", "/api/status").body);
+  TEST_ASSERT_EQUAL_STRING("1.2.3", d["device"]["version"].as<const char*>());
+  TEST_ASSERT_EQUAL_STRING("MX Master 3S", d["device"]["bleName"].as<const char*>());
+  TEST_ASSERT_EQUAL_STRING("00:1f:20:fd:3b:76", d["device"]["bleAddress"].as<const char*>());
+}
+
+int main() {
+  UNITY_BEGIN();
+  RUN_TEST(test_first_run_pairing_is_open_without_timeout);
+  RUN_TEST(test_with_a_bond_pairing_is_closed);
+  RUN_TEST(test_pairing_window_counts_down_and_closes);
+  RUN_TEST(test_pairing_window_survives_clock_wraparound);
+  RUN_TEST(test_pairing_seconds_are_bounded);
+  RUN_TEST(test_stop_pairing_closes_the_window);
+  RUN_TEST(test_disconnect_holds_the_link_until_reconnect);
+  RUN_TEST(test_starting_pairing_releases_a_hold);
+  RUN_TEST(test_peers_get_stable_default_labels_and_can_be_renamed);
+  RUN_TEST(test_rename_validation);
+  RUN_TEST(test_forget_one_and_all);
+  RUN_TEST(test_connected_computer_and_duration);
+  RUN_TEST(test_connection_unknown_to_the_manager_counts_from_first_sight);
+  RUN_TEST(test_unbonded_connection_is_shown_with_its_address);
+  RUN_TEST(test_bluetooth_routes);
+  RUN_TEST(test_status_carries_a_bluetooth_summary);
+  RUN_TEST(test_change_token);
+  RUN_TEST(test_device_info_in_status);
+  return UNITY_END();
+}
