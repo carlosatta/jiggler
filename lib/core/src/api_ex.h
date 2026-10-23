@@ -4,6 +4,7 @@
 #include <string>
 
 #include "api_router.h"
+#include "automation.h"
 #include "controller.h"
 #include "devices.h"
 #include "network_settings.h"
@@ -17,6 +18,7 @@ struct ApiContext {
   NetworkStore* network = nullptr;
   DeviceRegistry* devices = nullptr;
   ScriptLibrary* scripts = nullptr;
+  AutomationEngine* automations = nullptr;
   std::function<void()> restart;
 };
 

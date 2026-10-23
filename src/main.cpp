@@ -8,10 +8,12 @@
 #include "led.h"
 #include "long_press.h"
 #include "movement_task.h"
+#include "automation.h"
 #include "devices.h"
 #include "nvs_blob_store.h"
 #include "nvs_config_store.h"
 #include "nvs_network_store.h"
+#include "script.h"
 #include "token_store.h"
 #include "wifi_setup.h"
 
@@ -33,8 +35,10 @@ NvsConfigStore store;
 NvsNetworkStore networkStore;
 NvsBlobStore blobs;
 jig::DeviceRegistry devices(blobs);
+jig::ScriptLibrary scripts(blobs);
 TokenStore tokens;
 jig::Controller controller(platform, rng, store);
+jig::AutomationEngine automations(platform, rng, scripts, blobs);
 jig::ApiContext api{controller};
 WifiSetup wifi(tokens, networkStore);
 HttpServer http(api, tokens);
@@ -54,9 +58,12 @@ void setup() {
 #endif
   ble.begin(resolved);
   controller.begin();
-  startMovementTask(controller, ble, platform);  // from here on the mouse works without WiFi
+  automations.begin();
+  startMovementTask(controller, automations, ble, platform);  // from here on the mouse works without WiFi
   api.network = &networkStore;
   api.devices = &devices;
+  api.scripts = &scripts;
+  api.automations = &automations;
   api.restart = scheduleRestart;
   Serial.printf("jiggler started, BLE address %s\n", NimBLEDevice::getAddress().toString().c_str());
   wifi.begin();

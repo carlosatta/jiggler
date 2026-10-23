@@ -6,6 +6,7 @@ namespace {
 
 struct Context {
   jig::Controller* controller;
+  jig::AutomationEngine* automations;
   BleMouse* mouse;
   ArduinoPlatform* platform;
 };
@@ -16,7 +17,9 @@ void sleepMs(uint32_t ms) { vTaskDelay(pdMS_TO_TICKS(ms)); }
 
 void movementTask(void*) {
   for (;;) {
-    if (auto plan = ctx.controller->tick()) {
+    auto plan = ctx.controller->tick();
+    if (!plan) plan = ctx.automations->tick(ctx.controller->status().runState == jig::RunState::Running);
+    if (plan) {
 #ifdef JIG_DEBUG
       const uint32_t started = millis();
       const size_t done = jig::runPlan(*plan, *ctx.mouse, ctx.mouse, *ctx.platform, sleepMs);
@@ -33,7 +36,8 @@ void movementTask(void*) {
 
 }  // namespace
 
-void startMovementTask(jig::Controller& controller, BleMouse& mouse, ArduinoPlatform& platform) {
-  ctx = {&controller, &mouse, &platform};
-  xTaskCreatePinnedToCore(movementTask, "movement", 4096, nullptr, 2, nullptr, 1);
+void startMovementTask(jig::Controller& controller, jig::AutomationEngine& automations, BleMouse& mouse,
+                       ArduinoPlatform& platform) {
+  ctx = {&controller, &automations, &mouse, &platform};
+  xTaskCreatePinnedToCore(movementTask, "movement", 6144, nullptr, 2, nullptr, 1);
 }
