@@ -10,11 +10,11 @@ jig::Config NvsConfigStore::load() {
   jig::Config c;
   Preferences prefs;
   prefs.begin(kNamespace, false);
-  c.minIntervalSec = prefs.getUInt("minSec", c.minIntervalSec);
-  c.maxIntervalSec = prefs.getUInt("maxSec", c.maxIntervalSec);
-  c.amplitudePx = prefs.getUShort("ampPx", c.amplitudePx);
-  c.clickProbability = prefs.getFloat("clickP", c.clickProbability);
-  c.scrollProbability = prefs.getFloat("scrollP", c.scrollProbability);
+  if (prefs.isKey("minSec")) c.minIntervalSec = prefs.getUInt("minSec");
+  if (prefs.isKey("maxSec")) c.maxIntervalSec = prefs.getUInt("maxSec");
+  if (prefs.isKey("ampPx")) c.amplitudePx = prefs.getUShort("ampPx");
+  if (prefs.isKey("clickP")) c.clickProbability = prefs.getFloat("clickP");
+  if (prefs.isKey("scrollP")) c.scrollProbability = prefs.getFloat("scrollP");
   prefs.end();
   return c;
 }
