@@ -4,6 +4,7 @@
 #include <string>
 
 #include "api_ex.h"
+#include "appearance.h"
 #include "automation.h"
 #include "controller.h"
 #include "bluetooth.h"
@@ -62,9 +63,8 @@ const Route kPageRoutes[] = {
     {"POST", "/api/stop", ""},
     {"POST", "/api/move", ""},
     {"PUT", "/api/config", "{}"},
-    {"GET", "/api/profiles", ""},
-    {"GET", "/api/devices", ""},
-    {"PUT", "/api/devices", "{\"devices\":[{\"id\":\"mouse\",\"kind\":\"mouse\",\"enabled\":true,\"profileId\":\"logitech-mx-master-3s\"}]}"},
+    {"GET", "/api/appearance", ""},
+    {"PUT", "/api/appearance", "{\"profile\":\"logitech-mx-master-3s\"}"},
     {"GET", "/api/schedules", ""},
     {"PUT", "/api/schedules", "{\"timezone\":\"Europe/Rome\",\"schedules\":[]}"},
     {"GET", "/api/network", ""},
@@ -113,8 +113,8 @@ void test_dashboard_only_references_real_routes() {
   controller.begin();
   MemBlobStore blobs;
   MemNetworkStore net;
-  DeviceRegistry devices(blobs);
-  devices.begin();
+  AppearanceStore appearance(blobs);
+  appearance.begin();
   ScriptLibrary scripts(blobs);
   AutomationEngine automations(clock, rng, scripts, blobs);
   automations.begin();
@@ -131,7 +131,7 @@ void test_dashboard_only_references_real_routes() {
   ctx.schedules = &schedules;
   ctx.tokens = &tokens;
   ctx.network = &net;
-  ctx.devices = &devices;
+  ctx.appearance = &appearance;
   ctx.scripts = &scripts;
   ctx.automations = &automations;
   ctx.restart = [&] { restarts++; };

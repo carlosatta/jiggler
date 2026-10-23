@@ -4,7 +4,7 @@
 
 - **Mouse only.** The keyboard mode is gone from the dashboard, the API and the device list; keyboards are rejected. **Scripts and automations** are removed from the product (dashboard, REST, MCP, firmware wiring). The code stays in the repository, parked, and in the tag `v0.3.1-with-scripts-keyboard`.
 - **Schedule has its own section** with the timezone, separate from Movement (five sections: Status, Computers, Movement, Schedule, System).
-- **Appearance** replaces "Bluetooth identity": pick a mouse model or a custom name, with one plain sentence about what changing it means (restart, pair again). Advanced overrides remain in the API only.
+- **Appearance** replaces "Bluetooth identity" and there is **one device, not a list**. The default is **Custom**: a neutral "Bluetooth Mouse" with the chip's own address, not a Logitech. Pick a mouse model or your own name, with one plain sentence about what changing it means (restart, pair again). API: `GET/PUT /api/appearance` replaces `/api/devices` and `/api/profiles`; MCP: `get_appearance` / `set_appearance`. Advanced overrides remain in the API only. **Upgrading a board that used the old default changes its Bluetooth name and address, so computers must pair again.**
 - The own-network password field is empty unless one was set, with an explanation instead of placeholder text.
 - First-setup fixes: the board restarts once after the WiFi portal (the dashboard could not bind port 80), and the API token is no longer written to the serial log.
 - Documentation rewritten with real screenshots (neutral data): [README](README.md), [getting started](docs/getting-started.md), [dashboard tour](docs/dashboard.md).

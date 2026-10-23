@@ -45,7 +45,7 @@ A board with no paired computer shows **Set up your Jiggler**:
 </p>
 
 1. Press **Open pairing for 3 minutes**. (Or tap the **BOOT** button once on the board; the LED blinks fast while pairing is open.)
-2. On the computer, open the Bluetooth settings and choose **MX Master 3S**. The page updates by itself as soon as it connects, and pairing closes.
+2. On the computer, open the Bluetooth settings and choose **Bluetooth Mouse** (the name you will see; you can change it later in **System → Appearance**). The page updates by itself as soon as it connects, and pairing closes.
 3. Press **Start**.
 
 The jiggler **cannot run until a computer is paired**, so nothing moves before this step is done.

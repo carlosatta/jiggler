@@ -52,11 +52,10 @@
   $('netSaveRestart').onclick = function () { saveNetwork(true); };
 
   // ---- Appearance (how the device introduces itself over Bluetooth) ----
-  var profiles = null, device = null, loadedChoice = '', loadedName = '';
+  var appearance = null, loadedProfile = '', loadedName = '';
 
   function modelLabel(id) {
-    if (id === 'custom') return 'Custom name';
-    var list = profiles ? profiles.profiles : [];
+    var list = appearance ? appearance.profiles : [];
     for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].label;
     return id;
   }
@@ -66,21 +65,21 @@
   function renderAppearance() {
     var sel = $('apModel');
     sel.textContent = '';
-    profiles.profiles.forEach(function (p) { sel.appendChild(el('option', { value: p.id, text: p.label })); });
-    sel.appendChild(el('option', { value: 'custom', text: 'Custom name…' }));
-    sel.value = device.profileId;
-    $('apName').value = device.name || '';
-    loadedChoice = sel.value;
+    sel.appendChild(el('option', { value: 'custom', text: 'Custom name' }));
+    appearance.profiles.forEach(function (p) { sel.appendChild(el('option', { value: p.id, text: p.label })); });
+    sel.value = appearance.profile;
+    $('apName').placeholder = appearance.custom.name;
+    $('apName').value = appearance.name || '';
+    loadedProfile = sel.value;
     loadedName = $('apName').value;
     showNameBox();
-    var shown = device.profileId === 'custom' ? (device.name || profiles.custom.mouse.name) : modelLabel(device.profileId);
-    $('apNow').textContent = 'Currently shown as: ' + shown + '.';
+    $('apNow').textContent = 'Currently shown as: ' + appearance.shownAs + '.';
   }
 
   function loadAppearance() {
-    Promise.all([App.call('GET', '/api/profiles'), App.call('GET', '/api/devices')]).then(function (r) {
-      profiles = r[0].data;
-      device = r[1].data.devices[0];
+    App.call('GET', '/api/appearance').then(function (res) {
+      if (res.status !== 200) return;
+      appearance = res.data;
       renderAppearance();
     }).catch(function () {});
   }
@@ -90,13 +89,12 @@
     var root = $('appearanceBox');
     clearErrors(root);
     say('', '', 'apMsg');
-    var choice = $('apModel').value, name = $('apName').value.trim();
-    if (choice === loadedChoice && (choice !== 'custom' || name === loadedName)) { say('Nothing to change.', '', 'apMsg'); return; }
-    if (choice === 'custom' && !name) { root.querySelector('[data-err="devices[0].name"]').textContent = 'Enter a name.'; return; }
-    var next = JSON.parse(JSON.stringify(device));
-    next.profileId = choice;
-    if (choice === 'custom') next.name = name; else delete next.name;
-    App.call('PUT', '/api/devices', { devices: [next] }).then(function (res) {
+    var profile = $('apModel').value, name = $('apName').value.trim();
+    if (profile === loadedProfile && (profile !== 'custom' || name === loadedName)) { say('Nothing to change.', '', 'apMsg'); return; }
+    var next = { profile: profile };
+    ['manufacturer', 'vid', 'pid', 'mac'].forEach(function (k) { if (appearance[k] !== undefined) next[k] = appearance[k]; });  // advanced values set through the API stay
+    if (profile === 'custom' && name) next.name = name;
+    App.call('PUT', '/api/appearance', next).then(function (res) {
       if (res.status === 200) { say('Saved. Restarting…', 'good', 'apMsg'); return App.restartDevice(); }
       if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Could not save.', 'bad', 'apMsg');
     }).catch(function () {});

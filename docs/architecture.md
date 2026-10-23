@@ -10,7 +10,7 @@ All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio
                         |
      +---------+--------+---------+-----------+
      v         v                  v           v
- Controller  BluetoothManager  ScheduleEngine  DeviceRegistry
+ Controller  BluetoothManager  ScheduleEngine  AppearanceStore
  (run state, (pairing windows, (weekly windows, (how the device
   timed runs) disconnect hold,  timezone)        appears)
      |        peers)                |
@@ -28,7 +28,7 @@ All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio
 - **`Controller::startFor(minutes)`** runs for a while and stops by itself (a wrap-safe deadline in `millis`). It refuses to run, and stops, while no computer is paired.
 - **`ScheduleEngine`** holds up to 8 weekly windows and a timezone (mapped to a POSIX TZ string). Once a second it compares the local time with the windows and starts or stops the controller on the edges; the first look after boot is authoritative, saving never starts or stops anything.
 - **`BluetoothManager`** owns the pairing policy: pairing is always closed unless a 3-minute window is open, which closes when a computer pairs; "disconnect" hides the device for 3 minutes; forget, labels. It only talks to the stack through `BleLink`, which `BleMouse` implements.
-- **`DeviceRegistry`** holds the single mouse's appearance (a profile or a custom name); `buildReportMap` builds the HID report map.
+- **`AppearanceStore`** holds the one device's appearance (the default custom identity, a model from the catalog, or overrides); `buildReportMap` builds the HID report map.
 - **Router entry points.** `handleApiEx(ApiContext&)` and `handleMcpEx(ApiContext&)` add the newer routes/tools and fall back to the original `handleApi` and the original six MCP tools. Services in `ApiContext` are optional: a missing one means 404 / tool not listed.
 
 ## Seams

@@ -190,9 +190,9 @@
 
 <div class="block" id="appearanceBox">
 <h2>Appearance</h2>
-<p class="hint lead">How the device introduces itself to computers over Bluetooth. Pick a mouse model, or give it your own name.</p>
-<div class="field"><label for="apModel">Shown as</label><select id="apModel"></select><div class="err" data-err="devices[0].profileId"></div></div>
-<div class="field" id="apNameBox" hidden><label for="apName">Name</label><input id="apName" maxlength="29" autocomplete="off"><div class="err" data-err="devices[0].name"></div></div>
+<p class="hint lead">How the device introduces itself to computers over Bluetooth. By default it uses a neutral name. You can give it your own, or pick a real mouse model.</p>
+<div class="field"><label for="apModel">Shown as</label><select id="apModel"></select><div class="err" data-err="profile"></div></div>
+<div class="field" id="apNameBox" hidden><label for="apName">Name (optional)</label><input id="apName" maxlength="29" autocomplete="off"><div class="err" data-err="name"></div><p class="hint">Leave it empty to use the default name shown in the field.</p></div>
 <p class="note" id="apNow">&nbsp;</p>
 <p class="hint"><b>Changing this restarts the device.</b> Computers already paired will not recognise it afterwards: on each one, remove the device in its Bluetooth settings, then pair it again from Computers → Open pairing.</p>
 <div class="actions"><button class="primary" id="apApply">Apply and restart</button></div>

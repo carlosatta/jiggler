@@ -59,7 +59,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
 
 }  // namespace
 
-void BleMouse::begin(const jig::ResolvedDevice& device) {
+void BleMouse::begin(const jig::ResolvedAppearance& device) {
   if (device.mac) {
     std::array<uint8_t, 6> base = *device.mac;
     // The Bluetooth address is the base MAC with the last byte + 2 (universal MAC layout). A profile-derived
@@ -82,11 +82,10 @@ void BleMouse::begin(const jig::ResolvedDevice& device) {
   server->advertiseOnDisconnect(false);  // BluetoothManager decides when the device is visible (see linkDown/setAdvertising)
   server->setCallbacks(new ServerCallbacks(*this));
 
-  reportMap_ = jig::buildReportMap(device.mouse, device.keyboard);
+  reportMap_ = jig::buildReportMap(true, false);  // a mouse; the keyboard collection is parked
 
   auto* hid = new NimBLEHIDDevice(server);
-  if (device.mouse) mouseInput_ = hid->inputReport(kMouseReportId);
-  if (device.keyboard) keyboardInput_ = hid->inputReport(kKeyboardReportId);
+  mouseInput_ = hid->inputReport(kMouseReportId);
   hid->manufacturer(device.identity.manufacturer);
   hid->pnp(device.identity.vidSource, device.identity.vid, device.identity.pid, device.identity.version);
   hid->hidInfo(0x00, 0x01);

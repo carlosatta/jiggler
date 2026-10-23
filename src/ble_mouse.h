@@ -9,14 +9,14 @@
 #include <vector>
 
 #include "bluetooth.h"
-#include "devices.h"
+#include "appearance.h"
 #include "platform.h"
 
 // One BLE HID device exposing a mouse and/or keyboard collection, with the identity (name, vendor,
 // VID/PID, Bluetooth address) of the first enabled device in the registry.
 class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::BleLink {
  public:
-  void begin(const jig::ResolvedDevice& device);
+  void begin(const jig::ResolvedAppearance& device);
   bool connected() const { return connected_; }
   std::string address() const;
   std::string name() const { return name_; }

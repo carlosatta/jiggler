@@ -90,7 +90,7 @@ struct ExtTool {
   bool (*available)(const ApiContext&);
 };
 
-bool hasDevices(const ApiContext& c) { return c.devices != nullptr; }
+bool hasAppearance(const ApiContext& c) { return c.appearance != nullptr; }
 bool hasScripts(const ApiContext& c) { return c.scripts != nullptr; }
 bool hasAutomations(const ApiContext& c) { return c.automations != nullptr; }
 bool hasNetwork(const ApiContext& c) { return c.network != nullptr; }
@@ -99,7 +99,7 @@ bool hasBluetooth(const ApiContext& c) { return c.bluetooth != nullptr; }
 bool hasSchedules(const ApiContext& c) { return c.schedules != nullptr; }
 
 const ExtTool kExtTools[] = {
-    {"list_profiles", hasDevices},   {"get_devices", hasDevices},         {"set_devices", hasDevices},
+    {"get_appearance", hasAppearance}, {"set_appearance", hasAppearance},
     {"list_scripts", hasScripts},    {"save_script", hasScripts},         {"delete_script", hasScripts},
     {"run_script", hasAutomations},  {"get_automations", hasAutomations}, {"set_automations", hasAutomations},
     {"press_key", hasAutomations},   {"type_text", hasAutomations},       {"get_network", hasNetwork},
@@ -120,37 +120,20 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
     if (!t.available(ctx)) continue;
     const std::string name = t.name;
     JsonObject schema;
-    if (name == "list_profiles") {
-      addTool(tools, t.name, "List the device profiles (marketing name, vendor, VID/PID) you can assign to a device, plus the custom defaults.", &schema);
+    if (name == "get_appearance") {
+      addTool(tools, t.name, "Get how the device appears to computers over Bluetooth: the chosen model (or custom), any overrides, the name currently shown, and the models you can choose.", &schema);
       schema["properties"].to<JsonObject>();
-    } else if (name == "get_devices") {
-      addTool(tools, t.name, "Get the configured devices (mouse, keyboard...): kind, enabled, profile and overrides.", &schema);
-      schema["properties"].to<JsonObject>();
-    } else if (name == "set_devices") {
+    } else if (name == "set_appearance") {
       addTool(tools, t.name,
-              "Replace the device list (max 4). The Bluetooth identity is the first enabled device's; every enabled device adds an HID function. Takes effect after a restart and needs re-pairing on the computer.",
+              "Change how the device appears over Bluetooth (a full replacement: omitted fields go back to default). Takes effect after a restart, and every paired computer must forget the device and pair again.",
               &schema);
-      JsonObject items = schema["properties"]["devices"].to<JsonObject>();
-      items["type"] = "array";
-      JsonObject item = items["items"].to<JsonObject>();
-      item["type"] = "object";
-      JsonObject p = item["properties"].to<JsonObject>();
-      addProp(p, "id", "string", "Unique id, a-z 0-9 _ -, up to 24 characters.");
-      JsonObject kind = p["kind"].to<JsonObject>();
-      kind["type"] = "string";
-      kind["enum"].add("mouse");
-      kind["enum"].add("keyboard");
-      addProp(p, "enabled", "boolean", "Whether the device is exposed.");
-      addProp(p, "profileId", "string", "A profile id from list_profiles, or custom.");
-      addProp(p, "name", "string", "Override the Bluetooth name (1-29 characters).");
+      JsonObject p = schema["properties"].to<JsonObject>();
+      addProp(p, "profile", "string", "A model id from get_appearance, or custom (default).");
+      addProp(p, "name", "string", "The Bluetooth name (1-29 characters).");
       addProp(p, "manufacturer", "string", "Override the manufacturer (1-32 characters).");
-      addNumberProp(p, "vid", "integer", 0, 65535, "Override the USB/Bluetooth vendor id.");
+      addNumberProp(p, "vid", "integer", 0, 65535, "Override the vendor id.");
       addNumberProp(p, "pid", "integer", 0, 65535, "Override the product id.");
       addProp(p, "mac", "string", "Override the Bluetooth address, AA:BB:CC:DD:EE:FF, unicast.");
-      item["required"].add("id");
-      item["required"].add("kind");
-      item["required"].add("enabled");
-      schema["required"].add("devices");
     } else if (name == "list_scripts") {
       addTool(tools, t.name, "List the stored scripts (the built-in keepalive-key plus user scripts).", &schema);
       schema["properties"].to<JsonObject>();
@@ -235,7 +218,7 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
       addProp(p, "apSsid", "string", "Access-point name (1-32 characters).");
       addProp(p, "apPassword", "string", "Access-point password (8-63 characters) or empty to generate one.");
     } else if (name == "restart") {
-      addTool(tools, t.name, "Restart the device (needed after changing devices or network).", &schema);
+      addTool(tools, t.name, "Restart the device (needed after changing the appearance or network).", &schema);
       schema["properties"].to<JsonObject>();
     } else if (name == "get_bluetooth") {
       addTool(tools, t.name, "Get the Bluetooth state: which computer is connected and for how long, whether pairing is open, and the paired computers.", &schema);
@@ -287,9 +270,8 @@ ToolOutput wrapArray(ApiContext& ctx, const char* key, const char* path, JsonVar
 }
 
 ToolOutput callExtTool(ApiContext& ctx, const std::string& name, JsonVariantConst args) {
-  if (name == "list_profiles") return viaRoute(ctx, "GET", "/api/profiles");
-  if (name == "get_devices") return viaRoute(ctx, "GET", "/api/devices");
-  if (name == "set_devices") return wrapArray(ctx, "devices", "/api/devices", args);
+  if (name == "get_appearance") return viaRoute(ctx, "GET", "/api/appearance");
+  if (name == "set_appearance") return viaRoute(ctx, "PUT", "/api/appearance", args.isNull() ? "{}" : serialize(args));
   if (name == "list_scripts") return viaRoute(ctx, "GET", "/api/scripts");
   if (name == "get_automations") return viaRoute(ctx, "GET", "/api/automations");
   if (name == "set_automations") return wrapArray(ctx, "automations", "/api/automations", args);

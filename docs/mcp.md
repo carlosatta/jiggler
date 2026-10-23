@@ -37,9 +37,8 @@ Tool failures are returned as a normal result with `isError: true` and a JSON er
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `list_profiles` | – | The mouse models you can choose (see [appearance](appearance.md)) |
-| `get_devices` | – | The configured device (a single mouse) |
-| `set_devices` | `devices[]` | Change how the device appears. Needs a restart and re-pairing |
+| `get_appearance` | – | How the device appears over Bluetooth, and the models you can choose (see [appearance](appearance.md)) |
+| `set_appearance` | `profile`, `name`, `manufacturer`, `vid`, `pid`, `mac` (all optional) | Change it (a full replacement). Needs a restart and re-pairing |
 | `get_network` | – | Network mode and AP settings |
 | `set_network` | `mode`, `apSsid`, `apPassword` (optional) | Change network settings. Needs restart |
 | `restart` | – | Restart the device |

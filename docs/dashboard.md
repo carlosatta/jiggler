@@ -58,7 +58,7 @@ Weekly windows that start and stop the jiggler for you, in the **timezone** you 
 
 - **Security.** Change the token (you need the current one).
 - **Network.** *Auto* (your home WiFi, with the setup network as a fallback) or *Own network* (the board creates a protected WiFi network). The own-network password is optional: leave it empty and one is generated the first time. See [Network](network.md).
-- **Appearance.** Which Bluetooth mouse the device pretends to be, or a name of your own. Changing it restarts the device and needs each computer to pair again. See [Appearance](appearance.md).
+- **Appearance.** The name the device shows over Bluetooth: a neutral "Bluetooth Mouse" by default, a name of your own, or a real mouse model. Changing it restarts the device and needs each computer to pair again. See [Appearance](appearance.md).
 - **Device.** Firmware version, Bluetooth name and address, and **Restart**.
 
 ## When something goes wrong

@@ -122,18 +122,18 @@ HttpResponse networkRoute(ApiContext& ctx, const std::string& method, const std:
   return json(200, networkToJson(settings));
 }
 
-HttpResponse devicesRoute(ApiContext& ctx, const std::string& method, const std::string& body) {
-  if (!ctx.devices) return json(404, errorJson("not_found"));
-  if (method == "GET") return json(200, devicesToJson(ctx.devices->list()));
+HttpResponse appearanceRoute(ApiContext& ctx, const std::string& method, const std::string& body) {
+  if (!ctx.appearance) return json(404, errorJson("not_found"));
+  if (method == "GET") return json(200, appearanceToJson(ctx.appearance->get()));
   if (method != "PUT") return json(405, errorJson("method_not_allowed"));
-  if (body.size() > kMaxMediumBodyBytes) return json(413, errorJson("payload_too_large"));
+  if (body.size() > kMaxSmallBodyBytes) return json(413, errorJson("payload_too_large"));
 
-  std::vector<DeviceConfig> devices;
+  Appearance next;
   ParseError err;
-  if (!parseDevices(body, devices, err)) return json(400, errorJson(err.code, err.field, err.message));
-  CmdResult r = ctx.devices->replace(devices);
+  if (!parseAppearance(body, next, err)) return json(400, errorJson(err.code, err.field, err.message));
+  CmdResult r = ctx.appearance->set(next);
   if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
-  return json(200, devicesToJson(ctx.devices->list(), true));
+  return json(200, appearanceToJson(ctx.appearance->get(), true));
 }
 
 HttpResponse automationsRoute(ApiContext& ctx, const std::string& method, const std::string& body) {
@@ -228,15 +228,10 @@ HttpResponse handleApiEx(ApiContext& ctx, const std::string& method, const std::
   if (path == "/api/bluetooth" || path.rfind("/api/bluetooth/", 0) == 0) return bluetoothRoute(ctx, method, path, body);
   if (path == "/api/token") return tokenRoute(ctx, method, body);
   if (path == "/api/network") return networkRoute(ctx, method, body);
-  if (path == "/api/devices") return devicesRoute(ctx, method, body);
+  if (path == "/api/appearance") return appearanceRoute(ctx, method, body);
   if (path == "/api/automations") return automationsRoute(ctx, method, body);
   if (path == "/api/schedules") return schedulesRoute(ctx, method, body);
   if (path == "/api/scripts" || path.rfind("/api/scripts/", 0) == 0) return scriptsRoute(ctx, method, path, body);
-  if (path == "/api/profiles") {
-    if (!ctx.devices) return json(404, errorJson("not_found"));
-    if (method != "GET") return json(405, errorJson("method_not_allowed"));
-    return json(200, profilesToJson());
-  }
   if (path == "/api/restart") {
     if (!ctx.restart) return json(404, errorJson("not_found"));
     if (method != "POST") return json(405, errorJson("method_not_allowed"));

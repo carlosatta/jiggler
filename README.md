@@ -9,7 +9,7 @@
   <img src="docs/images/desktop-status-light.png" alt="The Jiggler dashboard on a desktop: connected to a computer, running for 30 minutes" width="760">
 </p>
 
-Nothing to install on the computer. It sees an ordinary Bluetooth mouse (a Logitech MX Master 3S by default), and the board nudges the cursor now and then the way a hand would: curved paths, smooth acceleration, random timing, and a return to where it started so the pointer never drifts.
+Nothing to install on the computer. It sees an ordinary Bluetooth mouse (a plain "Bluetooth Mouse" by default; give it your own name or pick a real model if you like), and the board nudges the cursor now and then the way a hand would: curved paths, smooth acceleration, random timing, and a return to where it started so the pointer never drifts.
 
 ## Why it is nice to live with
 
@@ -51,7 +51,7 @@ Then, in about a minute:
 
 1. **Join `Jiggler-Setup`** (a WiFi network the board opens by itself), pick your WiFi and choose a token. The board restarts.
 2. **Open `http://jiggler.local/`** and enter the token. The page guides you: press *Open pairing* (or tap the BOOT button once on the board).
-3. **On the computer**, open the Bluetooth settings and choose *MX Master 3S*.
+3. **On the computer**, open the Bluetooth settings and choose *Bluetooth Mouse*.
 
 That is it: press **Start**. The full walkthrough, with screenshots and troubleshooting, is in [Getting started](docs/getting-started.md).
 
@@ -99,7 +99,7 @@ All logic lives in a hardware-free core that is tested on a laptop; the firmware
 ## Good to know
 
 - **One Bluetooth identity.** A classic ESP32 has one Bluetooth address, so the device shows up as one mouse. Several computers can be paired (up to 3), one connected at a time. [Bluetooth](docs/bluetooth.md).
-- **Skin-deep identity.** The device presents a real model's name and identifiers but does not implement the vendor's proprietary protocol; vendor software will not treat it as the real thing.
+- **Skin-deep identity.** If you pick a real mouse model, the device presents that model's name and identifiers but does not implement the vendor's proprietary protocol; vendor software will not treat it as the real thing.
 - **Plain HTTP.** The token travels unencrypted: use it on a network you trust. Because of that, browsers offer "Add to Home Screen" rather than a full app install.
 - **Schedules need the time**, which the board gets from the internet; in own-network mode there is no clock. [Schedules](docs/schedules.md).
 - **No OTA updates.** Flash over USB.

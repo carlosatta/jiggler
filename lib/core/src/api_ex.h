@@ -4,10 +4,10 @@
 #include <string>
 
 #include "api_router.h"
+#include "appearance.h"
 #include "automation.h"
 #include "bluetooth.h"
 #include "controller.h"
-#include "devices.h"
 #include "network_settings.h"
 #include "schedule.h"
 #include "script.h"
@@ -24,7 +24,7 @@ struct DeviceInfo {
 struct ApiContext {
   Controller& controller;
   NetworkStore* network = nullptr;
-  DeviceRegistry* devices = nullptr;
+  AppearanceStore* appearance = nullptr;
   ScriptLibrary* scripts = nullptr;
   AutomationEngine* automations = nullptr;
   BluetoothManager* bluetooth = nullptr;

@@ -33,7 +33,7 @@ Body size caps: 4096 bytes for MCP, 2048 for devices and schedules, 1024 for con
 
 | Status | `error` | Meaning |
 |---|---|---|
-| 400 | `bad_json`, `invalid_config`, `invalid_devices`, `invalid_network`, `invalid_schedule`, `invalid_minutes` | Validation failed; nothing was changed |
+| 400 | `bad_json`, `invalid_config`, `invalid_appearance`, `invalid_network`, `invalid_schedule`, `invalid_minutes` | Validation failed; nothing was changed |
 | 401 | | Missing or wrong token |
 | 404 | `not_found` | Unknown route, computer, or service not available |
 | 405 | `method_not_allowed` | Wrong HTTP method for the route |
@@ -123,20 +123,19 @@ Unknown fields are rejected.
 
 ## Appearance
 
-How the device presents itself over Bluetooth; see [appearance.md](appearance.md). Changes take effect **after a restart** and each paired computer must pair again. The dashboard uses a single mouse; keyboards are rejected (`400 invalid_devices`, field `devices[1].kind`).
+How the device presents itself over Bluetooth; see [appearance.md](appearance.md). There is one device, so this is a single object. Changes take effect **after a restart** and each paired computer must pair again.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/profiles` | The mouse models you can choose, plus the `custom` defaults |
-| GET | `/api/devices` | The configured device list (a single mouse) |
-| PUT | `/api/devices` | Replace it. Answers with the list plus `"restartRequired": true` |
+| GET | `/api/appearance` | The current setting, the name currently shown (`shownAs`), the mouse models you can choose (`profiles`) and the `custom` defaults |
+| PUT | `/api/appearance` | Replace it (omitted fields go back to the default). Answers like GET plus `"restartRequired": true`. Errors: `400 invalid_appearance` with the `field` |
 | POST | `/api/restart` | Restart the device (`202 {"restarting":true}`) |
 
 ```json
-{ "devices": [ { "id": "mouse", "kind": "mouse", "enabled": true, "profileId": "razer-orochi-v2" } ] }
+{ "profile": "custom", "name": "Desk Mouse" }
 ```
 
-Per device: `id` (1–24 chars of `a-z 0-9 _ -`), `kind` (`mouse`), `enabled`, `profileId` (a catalog id, or `custom`), and optional overrides `name` (1–29 chars), `manufacturer` (1–32), `vid`, `pid` (0–65535) and `mac` (`AA:BB:CC:DD:EE:FF`, unicast; this also changes the WiFi address).
+Fields: `profile` (`custom`, the default, or a model id from `profiles`), and optional overrides `name` (1–29 chars), `manufacturer` (1–32), `vid`, `pid` (0–65535) and `mac` (`AA:BB:CC:DD:EE:FF`, unicast; this also changes the WiFi address). A GET body can be sent back to PUT unchanged.
 
 ## Network
 

@@ -4,7 +4,7 @@ An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, contro
 
 ## 1. Bluetooth mouse
 
-- Presents itself as a mouse with a believable identity: by default a Logitech MX Master 3S (name, vendor, product id, Bluetooth address prefix). The owner can choose another mouse model or a custom name ([Appearance](docs/appearance.md)).
+- Presents itself as a mouse. By default a neutral "Bluetooth Mouse" (custom, the chip's own address); the owner can give it a name of their own or pick a real mouse model (name, vendor, product id, address prefix). There is a single device ([Appearance](docs/appearance.md)).
 - To the operating system it is an ordinary Bluetooth mouse: nothing to install on the computer.
 - One Bluetooth identity; up to 3 computers can be paired, one connected at a time.
 

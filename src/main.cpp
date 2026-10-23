@@ -9,7 +9,7 @@
 #include "bluetooth.h"
 #include "button_gesture.h"
 #include "movement_task.h"
-#include "devices.h"
+#include "appearance.h"
 #include "nvs_blob_store.h"
 #include "nvs_config_store.h"
 #include "nvs_network_store.h"
@@ -35,7 +35,7 @@ EspRng rng;
 NvsConfigStore store;
 NvsNetworkStore networkStore;
 NvsBlobStore blobs;
-jig::DeviceRegistry devices(blobs);
+jig::AppearanceStore appearance(blobs);
 TokenStore tokens;
 jig::Controller controller(platform, rng, store);
 jig::ScheduleEngine schedules(platform, controller, blobs);
@@ -54,17 +54,17 @@ void setup() {
   Serial.begin(115200);
   pinMode(kBootButtonPin, INPUT_PULLUP);
   led.begin();
-  devices.begin();
+  appearance.begin();
   uint8_t efuse[6];
   esp_efuse_mac_get_default(efuse);
-  jig::ResolvedDevice resolved = devices.resolved(efuse);
+  jig::ResolvedAppearance resolved = appearance.resolved(efuse);
   ble.begin(resolved);
   bluetooth.begin();
   controller.begin();
   schedules.begin();
   startMovementTask(controller, ble, platform);  // from here on the mouse works without WiFi
   api.network = &networkStore;
-  api.devices = &devices;
+  api.appearance = &appearance;
   api.bluetooth = &bluetooth;
   api.schedules = &schedules;
   api.tokens = &tokens;

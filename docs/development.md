@@ -16,7 +16,7 @@ Hardware: a classic `esp32dev` board (ESP32-WROOM), USB cable. Nothing else is n
 | Flash | `pio run -e esp32 -t upload --upload-port /dev/cu.usbserial-0001` |
 | Serial monitor (115200 baud) | `pio device monitor` |
 
-Suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_schedule`, `test_devices`, `test_mcp_ex`, plus `test_keyboard`, `test_script` and `test_automation` for the parked modules (see below).
+Suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_schedule`, `test_appearance`, `test_mcp_ex`, plus `test_keyboard`, `test_script` and `test_automation` for the parked modules (see below).
 
 Adjust the upload port to your system (`pio device list`).
 

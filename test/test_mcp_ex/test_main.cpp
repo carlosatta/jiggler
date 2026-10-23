@@ -34,7 +34,7 @@ struct Env {
   Controller controller{clock, rng, config};
   MemBlobStore blobs;
   MemNetworkStore net;
-  DeviceRegistry devices{blobs};
+  AppearanceStore appearance{blobs};
   ScriptLibrary scripts{blobs};
   AutomationEngine automations{clock, rng, scripts, blobs};
   ScheduleEngine schedules{clock, controller, blobs};
@@ -57,14 +57,14 @@ struct Env {
 
   Env() {
     controller.begin();
-    devices.begin();
+    appearance.begin();
     automations.begin();
     schedules.begin();
     bluetooth.begin();
     ctx.bluetooth = &bluetooth;
     ctx.schedules = &schedules;
     ctx.network = &net;
-    ctx.devices = &devices;
+    ctx.appearance = &appearance;
     ctx.scripts = &scripts;
     ctx.automations = &automations;
     ctx.restart = [this] { restarts++; };
@@ -80,7 +80,7 @@ struct Env {
 
 JsonDocument parse(const std::string& s) {
   JsonDocument doc;
-  // tools/list nests deeper than ArduinoJson's default limit of 10 (set_devices schema)
+  // tools/list nests deeper than ArduinoJson's default limit of 10 (set_appearance schema)
   TEST_ASSERT_TRUE_MESSAGE(!deserializeJson(doc, s, DeserializationOption::NestingLimit(32)), s.c_str());
   return doc;
 }
@@ -107,7 +107,7 @@ void test_tools_list_includes_new_tools() {
   JsonDocument doc = parse(r.body);  // keep the document alive while `tools` points into it
   JsonArray tools = doc["result"]["tools"].as<JsonArray>();
   const char* expected[] = {"get_status", "start", "pause", "stop", "move_now", "set_config",
-                            "list_profiles", "get_devices", "set_devices", "list_scripts", "save_script",
+                            "get_appearance", "set_appearance", "list_scripts", "save_script",
                             "delete_script", "run_script", "get_automations", "set_automations", "press_key",
                             "type_text", "get_network", "set_network", "restart", "get_bluetooth", "start_pairing",
                             "disconnect_bluetooth", "reconnect_bluetooth", "forget_computer",
@@ -168,27 +168,26 @@ void test_legacy_mcp_matches_ex_without_services() {
   TEST_ASSERT_EQUAL_INT(-32602, parse(unknown.body)["error"]["code"].as<int>());
 }
 
-void test_devices_tools() {
+void test_appearance_tools() {
   Env e;
-  McpReply p = e.tool("list_profiles");
-  TEST_ASSERT_FALSE(isError(p));
-  TEST_ASSERT_TRUE(toolText(p)["profiles"].as<JsonArray>().size() >= 3);
-  McpReply g = e.tool("get_devices");
-  TEST_ASSERT_EQUAL_UINT32(1, toolText(g)["devices"].as<JsonArray>().size());
+  McpReply g = e.tool("get_appearance");
+  TEST_ASSERT_FALSE(isError(g));
+  TEST_ASSERT_EQUAL_STRING("custom", toolText(g)["profile"].as<const char*>());   // the default is not a brand
+  TEST_ASSERT_TRUE(toolText(g)["profiles"].as<JsonArray>().size() >= 3);
 
-  McpReply ok = e.tool("set_devices",
-      "{\"devices\":[{\"id\":\"mouse\",\"kind\":\"mouse\",\"enabled\":true,\"profileId\":\"razer-orochi-v2\"}]}");
+  McpReply ok = e.tool("set_appearance", "{\"profile\":\"razer-orochi-v2\"}");
   TEST_ASSERT_FALSE(isError(ok));
   TEST_ASSERT_TRUE(toolText(ok)["restartRequired"].as<bool>());
-  TEST_ASSERT_EQUAL_STRING("razer-orochi-v2", e.devices.list()[0].profileId.c_str());
+  TEST_ASSERT_EQUAL_STRING("razer-orochi-v2", e.appearance.get().profile.c_str());
 
-  McpReply bad = e.tool("set_devices", "{\"devices\":[{\"id\":\"mouse\",\"kind\":\"mouse\",\"enabled\":true,\"mac\":\"zz\"}]}");
+  McpReply bad = e.tool("set_appearance", "{\"mac\":\"zz\"}");
   TEST_ASSERT_TRUE(isError(bad));
-  TEST_ASSERT_EQUAL_STRING("devices[0].mac", toolText(bad)["field"].as<const char*>());
-  TEST_ASSERT_EQUAL_STRING("razer-orochi-v2", e.devices.list()[0].profileId.c_str());
+  TEST_ASSERT_EQUAL_STRING("mac", toolText(bad)["field"].as<const char*>());
+  TEST_ASSERT_EQUAL_STRING("razer-orochi-v2", e.appearance.get().profile.c_str());
 
-  McpReply missing = e.tool("set_devices", "{}");
-  TEST_ASSERT_TRUE(isError(missing));
+  McpReply reset = e.tool("set_appearance", "{}");   // a full replacement: back to the default
+  TEST_ASSERT_FALSE(isError(reset));
+  TEST_ASSERT_EQUAL_STRING("custom", e.appearance.get().profile.c_str());
 }
 
 void test_script_tools_roundtrip() {
@@ -343,7 +342,7 @@ int main() {
   RUN_TEST(test_tools_without_services_are_not_listed);
   RUN_TEST(test_schedule_tools);
   RUN_TEST(test_legacy_mcp_matches_ex_without_services);
-  RUN_TEST(test_devices_tools);
+  RUN_TEST(test_appearance_tools);
   RUN_TEST(test_script_tools_roundtrip);
   RUN_TEST(test_run_script_errors);
   RUN_TEST(test_automation_tools);

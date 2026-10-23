@@ -41,7 +41,7 @@ class Device:
         self.moves = 128
         self.last_move = time.time() - 40
         self.next_move_at = time.time() + 47
-        self.devices = [{"id": "mouse", "kind": "mouse", "enabled": True, "profileId": "logitech-mx-master-3s"}]
+        self.appearance = {"profile": "custom"}
         self.network = {"mode": "auto", "apSsid": "Jiggler", "apPassword": ""}
         self.stop_at = None
         self.held_until = None
@@ -101,6 +101,17 @@ class Device:
             self.state = "stopped"
             self.stop_at = None
 
+    def appearance_json(self, restart):
+        a = dict(self.appearance)
+        prof = next((p for p in PROFILES["profiles"] if p["id"] == a["profile"]), None)
+        out = dict(a)
+        out["shownAs"] = a.get("name") or (prof["name"] if prof else PROFILES["custom"]["mouse"]["name"])
+        out["profiles"] = PROFILES["profiles"]
+        out["custom"] = PROFILES["custom"]["mouse"]
+        if restart:
+            out["restartRequired"] = True
+        return out
+
     def pid(self, address):
         return address.replace(":", "")
 
@@ -140,7 +151,7 @@ class Device:
                              "active": False, "enabledCount": sum(1 for s in self.schedules if s["enabled"]), "timezone": self.tz},
                 "moveCount": self.moves, "lastMoveAgoMs": int((now - self.last_move) * 1000), "lastMoveAt": int(self.last_move),
                 "config": self.config, "bluetooth": summary,
-                "device": {"version": "0.4.0", "bleName": "MX Master 3S", "bleAddress": "00:1f:20:00:00:01"}}
+                "device": {"version": "0.4.0", "bleName": "Bluetooth Mouse", "bleAddress": "02:aa:bb:cc:00:01"}}
 
 
 DEV = None
@@ -249,13 +260,16 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, d.config)
         if path == "/api/restart":
             return self.send(202, {"restarting": True})
-        if path == "/api/profiles":
-            return self.send(200, PROFILES)
-        if path == "/api/devices":
+        if path == "/api/appearance":
             if method == "PUT":
-                d.devices = body["devices"]
-                return self.send(200, {"devices": d.devices, "restartRequired": True})
-            return self.send(200, {"devices": d.devices})
+                b = body or {}
+                names = [p["id"] for p in PROFILES["profiles"]] + ["custom"]
+                if b.get("profile", "custom") not in names:
+                    return self.err(400, "invalid_appearance", "profile", "unknown profile")
+                d.appearance = {k: v for k, v in b.items() if k in ("profile", "name", "manufacturer", "vid", "pid", "mac")}
+                d.appearance.setdefault("profile", "custom")
+                return self.send(200, d.appearance_json(True))
+            return self.send(200, d.appearance_json(False))
         if path == "/api/network":
             if method == "PUT":
                 d.network.update(body)

@@ -21,8 +21,8 @@ Identity identity(const char* name, const char* manufacturer, uint16_t vid, uint
 }
 
 // Sources: IEEE OUI registry (00:1F:20 Logitech Europe SA, 44:5E:CD Razer Inc, 58:AD:12 Apple, Inc.);
-// Linux HID ids 0005:046D:B034 (MX Master 3S), 0005:1532:0095 (Razer Orochi V2), OpenLogi listing 046d:b35b
-// (MX Keys), Apple Bluetooth vendor 004C with product 0269 (Magic Mouse 2) / 0267 (Magic Keyboard).
+// Linux HID ids 0005:046D:B034 (MX Master 3S), 0005:1532:0095 (Razer Orochi V2),
+// Apple Bluetooth vendor 004C with product 0269 (Magic Mouse 2).
 std::vector<Profile> buildCatalog() {
   return {
       {"logitech-mx-master-3s", "Logitech MX Master 3S", DeviceKind::Mouse,
@@ -31,10 +31,6 @@ std::vector<Profile> buildCatalog() {
        identity("Razer Orochi V2", "Razer", 0x1532, 0x0095, 2, {0x44, 0x5E, 0xCD}, kAppearanceMouse)},
       {"apple-magic-mouse-2", "Apple Magic Mouse 2", DeviceKind::Mouse,
        identity("Magic Mouse 2", "Apple Inc.", 0x004C, 0x0269, 1, {0x58, 0xAD, 0x12}, kAppearanceMouse)},
-      {"logitech-mx-keys", "Logitech MX Keys", DeviceKind::Keyboard,
-       identity("MX Keys", "Logitech", 0x046D, 0xB35B, 2, {0x00, 0x1F, 0x20}, kAppearanceKeyboard)},
-      {"apple-magic-keyboard", "Apple Magic Keyboard", DeviceKind::Keyboard,
-       identity("Magic Keyboard", "Apple Inc.", 0x004C, 0x0267, 1, {0x58, 0xAD, 0x12}, kAppearanceKeyboard)},
   };
 }
 
