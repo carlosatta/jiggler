@@ -36,7 +36,7 @@ struct WifiSetup::Impl {
     std::string token = tokenParam->getValue();
     if (token.empty() || token.size() > 40) return;
     tokens.save(token);
-    Serial.printf("API token saved: %s\n", token.c_str());
+    Serial.println("API token saved");
   }
 
   void startAccessPoint() {
@@ -68,6 +68,8 @@ struct WifiSetup::Impl {
   std::unique_ptr<WiFiManagerParameter> tokenParam;  // created in begin(): NVS is not ready during static init
   bool ap = false;
   bool announced = false;
+  bool portalSeen = false;     // the setup portal ran in this boot
+  bool restartNeeded = false;  // see WifiSetup::needsRestart
   uint32_t lastReconnectMs = 0;
 };
 
@@ -75,6 +77,8 @@ WifiSetup::WifiSetup(TokenStore& tokens, jig::NetworkStore& network) : impl_(new
 WifiSetup::~WifiSetup() = default;
 
 bool WifiSetup::apMode() const { return impl_->ap; }
+
+bool WifiSetup::needsRestart() const { return impl_->restartNeeded; }
 
 void WifiSetup::begin() {
   bool wantAp = impl_->network.load().mode == jig::NetworkMode::Ap;
@@ -117,6 +121,7 @@ bool WifiSetup::loop() {
     return false;
   }
 
+  if (s.wm.getConfigPortalActive()) s.portalSeen = true;
   s.wm.process();
 
   const bool connected = WiFi.status() == WL_CONNECTED;
@@ -124,6 +129,14 @@ bool WifiSetup::loop() {
 
   if (connected && !s.wm.getConfigPortalActive() && !s.announced) {
     s.announced = true;
+    if (s.portalSeen) {
+      // First setup just finished. The portal's web server leaves port 80 occupied for a while (lwIP keeps its
+      // connections), so the dashboard server could not bind. A restart takes the normal path: join the saved
+      // WiFi, no portal, port 80 free.
+      s.restartNeeded = true;
+      Serial.println("WiFi set up: restarting to start the dashboard");
+      return false;
+    }
     configTime(0, 0, "pool.ntp.org", "time.google.com");
     MDNS.begin("jiggler");
     MDNS.addService("http", "tcp", 80);

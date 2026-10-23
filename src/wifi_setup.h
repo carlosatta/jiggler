@@ -20,6 +20,9 @@ class WifiSetup {
 
   bool apMode() const;
 
+  // True once the first-time setup portal has finished and the board should restart to start the dashboard.
+  bool needsRestart() const;
+
  private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

@@ -99,6 +99,7 @@ void loop() {
   }
   led.update(controller.status(), pairingOpen, held, now);
   if (wifi.loop()) http.begin(wifi.apMode());
+  if (wifi.needsRestart() && restartAtMs == 0) scheduleRestart();
 
   switch (bootButton.update(digitalRead(kBootButtonPin) == LOW, now)) {
     case jig::Gesture::Short:
