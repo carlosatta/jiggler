@@ -15,9 +15,10 @@ std::string TokenStore::load() {
   return token.c_str();
 }
 
-void TokenStore::save(const std::string& token) {
+bool TokenStore::save(const std::string& token) {
   Preferences prefs;
   prefs.begin(kNamespace, false);
-  prefs.putString(kKey, token.c_str());
+  const size_t written = prefs.putString(kKey, token.c_str());
   prefs.end();
+  return written == token.size();
 }

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Generate src/dashboard_html.h from the sources in web/.
+"""Generate the firmware's embedded web assets from web/.
 
-web/index.html holds the markup with two placeholders, /*__CSS__*/ and /*__JS__*/, which are replaced by
-web/app.css and by web/lib.js + web/app.js. The result is embedded in the firmware as one C++ raw string.
+  src/dashboard_html.h  web/index.html with /*__CSS__*/ replaced by web/app.css and /*__JS__*/ by the scripts
+                        in JS_ORDER, as one C++ raw string.
+  src/web_assets.h      the PWA files served without authentication: manifest and PNG icons as byte arrays.
 
-    python3 tools/build_web.py          # (re)generate the header
-    python3 tools/build_web.py --check  # exit 1 if the header is out of date (used by CI)
+    python3 tools/build_web.py          # (re)generate both headers
+    python3 tools/build_web.py --check  # exit 1 if a header is out of date (used by CI)
 """
 import pathlib
 import sys
@@ -13,6 +14,9 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 OUT = ROOT / "src" / "dashboard_html.h"
+ASSETS_OUT = ROOT / "src" / "web_assets.h"
+JS_ORDER = ["lib.js", "core.js", "view_status.js", "view_computers.js", "view_motion.js", "view_system.js", "main.js"]
+ICONS = ["icon-192.png", "icon-512.png", "apple-touch-icon.png"]
 
 HEADER = (
     "#pragma once\n\n"
@@ -23,7 +27,7 @@ HEADER = (
 def build() -> str:
     html = (WEB / "index.html").read_text()
     css = (WEB / "app.css").read_text()
-    js = (WEB / "lib.js").read_text() + "\n" + (WEB / "app.js").read_text()
+    js = "\n".join((WEB / name).read_text() for name in JS_ORDER)
 
     for marker in ("/*__CSS__*/", "/*__JS__*/"):
         if html.count(marker) != 1:
@@ -37,17 +41,42 @@ def build() -> str:
     return f'{HEADER}inline constexpr char kDashboardHtml[] = R"HTML({page})HTML";\n'
 
 
+def symbol(name: str) -> str:
+    return "k" + "".join(part.capitalize() for part in name.rsplit(".", 1)[0].split("-"))
+
+
+def assets() -> str:
+    parts = [HEADER, "#include <cstddef>\n#include <cstdint>\n\nnamespace webassets {\n\n"]
+    manifest = (WEB / "manifest.webmanifest").read_text()
+    if ')JSON"' in manifest:
+        sys.exit("the manifest contains the raw-string terminator")
+    parts.append(f'inline constexpr char kManifest[] = R"JSON({manifest})JSON";\n\n')
+    for name in ICONS:
+        data = (WEB / "icons" / name).read_bytes()
+        rows = []
+        for i in range(0, len(data), 16):
+            rows.append("    " + ", ".join(f"0x{b:02x}" for b in data[i:i + 16]) + ",")
+        parts.append(f"inline constexpr uint8_t {symbol(name)}[] = {{\n" + "\n".join(rows) + "\n};\n")
+        parts.append(f"inline constexpr size_t {symbol(name)}Size = sizeof({symbol(name)});\n\n")
+    parts.append("}  // namespace webassets\n")
+    return "".join(parts)
+
+
+def write_if_changed(path: pathlib.Path, text: str) -> None:
+    if not path.exists() or path.read_text() != text:
+        path.write_text(text)
+        print(f"wrote {path.relative_to(ROOT)} ({len(text)} bytes)")
+
+
 def main() -> int:
-    generated = build()
+    generated, generated_assets = build(), assets()
     if "--check" in sys.argv:
-        current = OUT.read_text() if OUT.exists() else ""
-        if current != generated:
-            print("src/dashboard_html.h is out of date: run python3 tools/build_web.py", file=sys.stderr)
-            return 1
-        return 0
-    if not OUT.exists() or OUT.read_text() != generated:
-        OUT.write_text(generated)
-        print(f"wrote {OUT.relative_to(ROOT)} ({len(generated)} bytes)")
+        stale = [p for p, t in ((OUT, generated), (ASSETS_OUT, generated_assets)) if (p.read_text() if p.exists() else "") != t]
+        for p in stale:
+            print(f"{p.relative_to(ROOT)} is out of date: run python3 tools/build_web.py", file=sys.stderr)
+        return 1 if stale else 0
+    write_if_changed(OUT, generated)
+    write_if_changed(ASSETS_OUT, generated_assets)
     return 0
 
 

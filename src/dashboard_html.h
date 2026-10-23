@@ -5,98 +5,246 @@ inline constexpr char kDashboardHtml[] = R"HTML(<!doctype html>
 <html lang="it">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Jiggler</title>
-<link rel="icon" href="data:,">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f3f1ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131512" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Jiggler">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
-:root{--bg:#f4f5f7;--card:#fff;--text:#15171c;--muted:#667085;--line:#e2e5ea;--accent:#2563eb;--on-accent:#fff;--ok:#15803d;--bad:#b91c1c;--warn:#b45309}
-@media (prefers-color-scheme:dark){:root{--bg:#0e1014;--card:#171a21;--text:#e8eaee;--muted:#98a2b3;--line:#272c36;--accent:#6b9bff;--on-accent:#0e1014;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24}}
+:root{
+  --bg:#f3f1ec;--surface:#fbfaf7;--text:#1d1b17;--muted:#6b665c;--line:#dedad0;
+  --accent:#0e7c66;--on-accent:#fff;--bad:#b3261e;--warn:#8a5a00;--ok:#0e7c66;
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
+  --radius:12px;--nav-h:64px;
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --bg:#131512;--surface:#1b1d19;--text:#ecebe5;--muted:#a5a396;--line:#2c2f29;
+  --accent:#4fd1b0;--on-accent:#07251d;--bad:#ff8a80;--warn:#f0b429;--ok:#4fd1b0}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-main{max-width:600px;margin:0 auto;padding:16px}
-h1{font-size:1.25rem;margin:8px 0 12px}
-h2{font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
-.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:.9rem}
-.dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}
-.chip.on .dot{background:var(--ok)}
-.tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px}
-.tabs button{flex:0 0 auto;min-height:40px;padding:6px 14px;border-radius:999px}
-.tabs button[aria-selected=true]{background:var(--accent);color:var(--on-accent);border-color:transparent}
-.tab{display:none}.tab.on{display:block}
-.state{font-size:1.6rem;font-weight:650}
-.sub{color:var(--muted);margin-top:2px}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
-.stats b{display:block;font-size:1.1rem;font-weight:600}
-.stats span{color:var(--muted);font-size:.85rem}
-.btns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-button,select,textarea{font:inherit}
-button{min-height:44px;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));min-height:100vh}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+h1,h2,p,dl,dd,ul{margin:0;padding:0}
+h1:focus{outline:none}
+h1{font-size:1.5rem;line-height:1.2;font-weight:650;margin-bottom:var(--s4)}
+h2{font-size:1.0625rem;font-weight:650;margin-bottom:var(--s2)}
+.shell{max-width:44rem;margin:0 auto;padding:0 var(--s4)}
+.brand{display:flex;align-items:center;gap:var(--s2);font-weight:650;font-size:1.0625rem;padding:max(var(--s4),env(safe-area-inset-top)) 0 var(--s3)}
+.logo{width:20px;height:20px;color:var(--accent)}
+
+/* Navigation: bottom bar on phones, left rail on wide screens */
+.nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--surface);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);z-index:5}
+.nav a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:var(--nav-h);
+  color:var(--muted);text-decoration:none;font-size:.75rem;font-weight:600}
+.nav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.nav a[aria-current=page]{color:var(--accent)}
+.nav a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px}
+@media (min-width:860px){
+  body{padding-bottom:0}
+  .shell{max-width:62rem;display:grid;grid-template-columns:12rem minmax(0,1fr);column-gap:var(--s6);align-items:start}
+  .brand{grid-column:1;padding-top:var(--s6)}
+  .nav{position:static;grid-column:1;flex-direction:column;background:none;border:0;padding:0;gap:var(--s1)}
+  .nav a{flex-direction:row;justify-content:flex-start;gap:var(--s3);min-height:44px;padding:0 var(--s3);border-radius:10px;font-size:.9375rem}
+  .nav a[aria-current=page]{background:var(--surface);box-shadow:0 0 0 1px var(--line)}
+  main{grid-column:2;grid-row:1/span 3;padding-top:var(--s6);max-width:40rem}
+}
+
+/* Content */
+main{padding-bottom:var(--s6)}
+.view>*+*{margin-top:var(--s5)}
+.block{border-top:1px solid var(--line);padding-top:var(--s4)}
+.view>h1+.block,.view>h1.sr+.hero+.block{border-top:0;padding-top:0}
+.view>.hero+.block{border-top:0}
+details.block summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;min-height:44px}
+details.block summary::-webkit-details-marker{display:none}
+details.block summary h2{margin:0}
+details.block summary::after{content:"+";font-size:1.25rem;color:var(--muted);width:24px;text-align:center}
+details.block[open] summary::after{content:"–"}
+details.block[open] summary{margin-bottom:var(--s2)}
+.block>p+form,.block>p+.field{margin-top:var(--s3)}
+.hint{color:var(--muted);font-size:.875rem;margin-top:var(--s2);max-width:65ch}
+.note{color:var(--muted);font-size:.875rem;margin-top:var(--s3)}
+.empty{color:var(--muted);padding:var(--s3) 0}
+.banner{margin-bottom:var(--s4);padding:var(--s3) var(--s4);border-radius:10px;background:var(--surface);border:1px solid var(--line);font-size:.9375rem}
+.banner.bad{border-color:var(--bad);color:var(--bad)}
+.banner.good{border-color:var(--ok);color:var(--ok)}
+
+/* Connection hero */
+.hero{--tone:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:var(--s5) var(--s4);
+  box-shadow:0 1px 2px rgb(0 0 0/.04),0 6px 18px rgb(0 0 0/.05)}
+.hero[data-tone=ok]{--tone:var(--ok);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.hero[data-tone=open]{--tone:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.hero[data-tone=warn]{--tone:var(--warn)}
+.hero-head{display:flex;gap:var(--s3);align-items:flex-start}
+.pulse{flex:none;width:14px;height:14px;border-radius:50%;background:var(--tone);margin-top:.55rem;position:relative}
+.hero[data-tone=ok] .pulse::after,.hero[data-tone=open] .pulse::after{content:"";position:absolute;inset:0;border-radius:50%;
+  background:var(--tone);animation:pulse 2.4s var(--ease) infinite}
+@keyframes pulse{from{transform:scale(1);opacity:.55}to{transform:scale(3);opacity:0}}
+@media (prefers-reduced-motion:reduce){.hero .pulse::after{animation:none!important}}
+.hero-title{font-size:1.75rem;line-height:1.2;font-weight:700;text-wrap:balance}
+.hero-detail{color:var(--muted);margin-top:var(--s1);max-width:50ch}
+.hero-actions{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s4)}
+.hero-actions:empty{display:none}
+body.offline .hero{opacity:.55}
+.hero .msg:empty,.hero .note:empty{display:none}
+
+/* Movement block */
+.state{font-size:1.375rem;font-weight:650}
+.sub{color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px}
+.actions{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s3)}
+.seg{display:flex}
+.seg button{border-radius:0;margin-left:-1px}
+.seg button:first-child{border-radius:10px 0 0 10px;margin-left:0}
+.seg button:last-child{border-radius:0 10px 10px 0}
+.seg button.primary{position:relative;z-index:1}
+.facts{margin-top:var(--s4);display:grid;gap:var(--s2)}
+.facts>div{display:flex;justify-content:space-between;gap:var(--s4);padding:var(--s2) 0;border-bottom:1px solid var(--line)}
+.facts dt{color:var(--muted)}
+.facts dd{font-variant-numeric:tabular-nums;text-align:right;overflow-wrap:anywhere}
+
+/* Controls */
+button,select,textarea,input{font:inherit}
+button{min-height:44px;padding:0 var(--s4);border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;
+  transition:background-color .15s,border-color .15s,transform .1s var(--ease)}
+button:hover:not(:disabled){border-color:var(--muted)}
+button:active:not(:disabled){transform:translateY(1px)}
 button:disabled{opacity:.45;cursor:not-allowed}
-button.primary{background:var(--accent);color:var(--on-accent);border-color:transparent}
+button.primary{background:var(--accent);color:var(--on-accent);border-color:transparent;font-weight:600}
+button.primary:hover:not(:disabled){filter:brightness(1.06);border-color:transparent}
 button.danger{color:var(--bad)}
-button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.btns .wide{grid-column:1/-1}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.field{margin-bottom:12px}
-label{display:block;font-size:.9rem;margin-bottom:4px}
-label.inline{display:flex;align-items:center;gap:8px;font-size:1rem}
-input[type=checkbox]{width:20px;height:20px}
-input,select,textarea{width:100%;min-height:44px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
-input[type=checkbox]{width:20px;min-height:20px}
-textarea{min-height:220px;font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
-.err{color:var(--bad);font-size:.85rem;min-height:1.1em;margin-top:2px}
-.hint{color:var(--muted);font-size:.8rem}
-.msg{min-height:1.4em;margin:6px 0 0}
+button.danger.confirm{background:var(--bad);color:#fff;border-color:transparent}
+button.link{border:0;background:none;min-height:36px;padding:0 var(--s2);color:var(--accent);font-weight:600}
+button.link.danger{color:var(--bad)}
+button.link.danger.confirm{background:var(--bad);color:#fff}
+.field{margin-bottom:var(--s3)}
+label{display:block;font-size:.875rem;font-weight:600;margin-bottom:var(--s1)}
+label.inline{display:flex;align-items:center;gap:var(--s2);font-weight:400;font-size:1rem}
+input,select,textarea{width:100%;min-height:44px;padding:var(--s2) var(--s3);border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+input::placeholder,textarea::placeholder{color:var(--muted);opacity:1}
+input[type=checkbox]{width:20px;height:20px;min-height:0;accent-color:var(--accent)}
+textarea{min-height:14rem;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
+input[aria-invalid=true]{border-color:var(--bad)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.inline-form{margin-top:var(--s3);display:flex;gap:var(--s3);align-items:flex-end;flex-wrap:wrap}
+.inline-form .field{margin:0;min-width:9rem}
+.err{color:var(--bad);font-size:.875rem;min-height:1.25em;margin-top:2px}
+.msg{min-height:1.5em;margin-top:var(--s2);font-size:.9375rem}
 .msg.bad{color:var(--bad)}.msg.good{color:var(--ok)}
-.dev{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
-.dev h3{margin:0 0 8px;font-size:1rem}
-#banner{display:none;background:var(--bad);color:#fff;padding:8px 12px;border-radius:10px;margin-bottom:12px}
-#login{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:16px}
-#login .card{width:100%;max-width:360px;margin:0}
+
+/* Lists */
+.list{list-style:none}
+.list>li{padding:var(--s3) 0;border-bottom:1px solid var(--line)}
+.peer-top{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);flex-wrap:wrap}
+.peer-name{font-weight:650}
+.peer-meta{color:var(--muted);font-size:.875rem}
+.peer-live{color:var(--ok);font-weight:600}
+.peer-actions{display:flex;gap:var(--s1);flex-wrap:wrap}
+.peer-edit{display:flex;gap:var(--s2);margin-top:var(--s2)}
+.peer-edit input{flex:1}
+.dev{border:1px solid var(--line);border-radius:10px;padding:var(--s3);margin-bottom:var(--s3)}
+.dev h3{margin:0 0 var(--s2);font-size:1rem}
+
+/* Login */
+.login{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:var(--s4);background:color-mix(in srgb,var(--bg) 82%,transparent);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.panel{width:100%;max-width:22rem;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:var(--s5);
+  box-shadow:0 2px 4px rgb(0 0 0/.05),0 12px 32px rgb(0 0 0/.12)}
+.panel .field{margin-top:var(--s4)}
 </style>
 </head>
 <body>
-<main>
-<h1>Jiggler</h1>
-<div id="banner" role="alert"></div>
-<div class="chips">
-<span class="chip" id="chipMouse"><span class="dot"></span><span id="txtMouse">Mouse</span></span>
-<span class="chip" id="chipWifi"><span class="dot"></span><span id="txtWifi">WiFi</span></span>
-</div>
-<nav class="tabs" role="tablist" id="tabs">
-<button role="tab" data-tab="stato" aria-selected="true">Stato</button>
-<button role="tab" data-tab="dispositivi" aria-selected="false">Dispositivi</button>
-<button role="tab" data-tab="script" aria-selected="false">Script</button>
-<button role="tab" data-tab="automazioni" aria-selected="false">Automazioni</button>
-<button role="tab" data-tab="rete" aria-selected="false">Rete</button>
+<div class="shell">
+<header class="brand">
+<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v14l3.5-3.5L13 20l2.2-1-2.5-5.5H18z" fill="currentColor"/></svg>
+<span>Jiggler</span>
+</header>
+
+<nav class="nav" id="nav" aria-label="Sezioni">
+<a href="#stato" data-view="stato"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg><span>Stato</span></a>
+<a href="#computer" data-view="computer"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="11" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg><span>Computer</span></a>
+<a href="#movimento" data-view="movimento"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg><span>Movimento</span></a>
+<a href="#sistema" data-view="sistema"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="8" cy="17" r="1.6"/></svg><span>Sistema</span></a>
 </nav>
 
-<div class="tab on" id="tab-stato">
-<section class="card">
-<h2>Stato</h2>
-<div class="state" id="state">&mdash;</div>
-<div class="sub" id="next">&nbsp;</div>
-<div class="stats">
-<div><b id="count">0</b><span>Movimenti eseguiti</span></div>
-<div><b id="last">&mdash;</b><span>Ultimo movimento</span></div>
-</div>
-</section>
+<main id="main">
+<div id="banner" class="banner" role="status" aria-live="polite" hidden></div>
 
-<section class="card">
-<h2>Controlli</h2>
-<div class="btns">
+<section class="view" id="view-stato" aria-labelledby="h-stato">
+<h1 class="sr" id="h-stato">Stato</h1>
+<div class="hero" id="hero" data-tone="idle">
+<div class="hero-head">
+<span class="pulse" aria-hidden="true"></span>
+<div>
+<p class="hero-title" id="heroTitle">Connessione…</p>
+<p class="hero-detail" id="heroDetail">&nbsp;</p>
+</div>
+</div>
+<div class="hero-actions" id="heroActions"></div>
+<p class="note" id="heroNote"></p>
+<p class="msg" id="heroMsg" role="status" aria-live="polite"></p>
+</div>
+
+<div class="block">
+<h2>Movimento</h2>
+<p class="state" id="state">—</p>
+<p class="sub" id="next">&nbsp;</p>
+<div class="actions">
+<div class="seg" role="group" aria-label="Controllo del movimento">
 <button id="bStart" class="primary">Avvia</button>
 <button id="bPause">Pausa</button>
 <button id="bStop">Ferma</button>
-<button id="bMove" class="wide">Muovi ora</button>
 </div>
-<p id="msg" class="msg" role="status" aria-live="polite"></p>
+<button id="bMove">Muovi ora</button>
+</div>
+<p class="msg" id="msg" role="status" aria-live="polite"></p>
+<dl class="facts">
+<div><dt>Ultimo movimento</dt><dd id="last">—</dd></div>
+<div><dt>Movimenti eseguiti</dt><dd id="count">0</dd></div>
+<div><dt>WiFi</dt><dd id="wifi">—</dd></div>
+</dl>
+</div>
 </section>
 
-<section class="card">
+<section class="view" id="view-computer" aria-labelledby="h-computer" hidden>
+<h1 id="h-computer">Computer</h1>
+<div class="block">
+<h2>Abbinamento</h2>
+<p id="pairInfo">&nbsp;</p>
+<div class="inline-form">
+<div class="field"><label for="pairDur">Durata</label>
+<select id="pairDur"><option value="60">1 minuto</option><option value="120" selected>2 minuti</option><option value="300">5 minuti</option><option value="600">10 minuti</option></select></div>
+<button class="primary" id="pairOpen">Apri abbinamento</button>
+<button id="pairClose">Chiudi</button>
+</div>
+<p class="msg" id="pairMsg" role="status" aria-live="polite"></p>
+<p class="hint">Con un computer già abbinato il dispositivo rifiuta i nuovi abbinamenti, così nessun altro può collegarsi. Si apre da qui oppure con un tocco breve sul pulsante BOOT della scheda (il LED lampeggia veloce).</p>
+</div>
+
+<div class="block">
+<h2>Computer abbinati</h2>
+<ul class="list" id="peers"></ul>
+<p class="empty" id="peersEmpty" hidden>Nessun computer abbinato. Sul computer apri le impostazioni Bluetooth e scegli il dispositivo.</p>
+<div class="actions"><button class="danger" id="forgetAll">Dimentica tutti</button></div>
+<p class="msg" id="peersMsg" role="status" aria-live="polite"></p>
+<p class="hint">Il Bluetooth non comunica il nome del computer, perciò vengono numerati. Per riconoscere quale è quale: scollega, osserva quale computer perde il mouse e rinominalo qui.</p>
+</div>
+</section>
+
+<section class="view" id="view-movimento" aria-labelledby="h-movimento" hidden>
+<h1 id="h-movimento">Movimento</h1>
+<div class="block">
 <h2>Configurazione</h2>
 <form id="cfg" novalidate>
 <div class="row">
@@ -108,27 +256,15 @@ textarea{min-height:220px;font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monosp
 <div class="field"><label for="clickProbability">Click casuali (%)</label><input id="clickProbability" inputmode="decimal" autocomplete="off"><div class="err" id="e_clickProbability"></div></div>
 <div class="field"><label for="scrollProbability">Scroll casuali (%)</label><input id="scrollProbability" inputmode="decimal" autocomplete="off"><div class="err" id="e_scrollProbability"></div></div>
 </div>
-<p class="hint">Intervalli 5&ndash;3600 s, ampiezza 5&ndash;600 px. Un click casuale pu&ograve; attivare ci&ograve; che si trova sotto il cursore: lascia 0% se non serve.</p>
-<button class="primary" type="submit">Salva</button>
+<p class="hint">Intervalli 5–3600 s, ampiezza 5–600 px. Un click casuale può attivare ciò che si trova sotto il cursore: lascia 0% se non serve.</p>
+<div class="actions"><button class="primary" type="submit">Salva</button></div>
 <p id="cfgMsg" class="msg" role="status" aria-live="polite"></p>
 </form>
-</section>
 </div>
 
-<div class="tab" id="tab-dispositivi">
-<section class="card">
-<h2>Dispositivi</h2>
-<p class="hint">Il computer vede un solo dispositivo Bluetooth: nome, produttore, VID/PID e indirizzo sono quelli del primo dispositivo abilitato; gli altri aggiungono solo la loro funzione (mouse o tastiera). Lascia vuoti i campi per usare i valori del profilo. Dopo il salvataggio il dispositivo si riavvia e va abbinato di nuovo al computer.</p>
-<div id="devList"></div>
-<div class="actions"><button class="primary" id="devSave">Salva e riavvia</button></div>
-<p id="devMsg" class="msg" role="status" aria-live="polite"></p>
-</section>
-</div>
-
-<div class="tab" id="tab-script">
-<section class="card">
-<h2>Script</h2>
-<p class="hint">Uno script &egrave; un elenco di passi: <b>move</b> (dx, dy), <b>click</b>, <b>scroll</b> (notches), <b>key</b> (es. F15, Ctrl+Alt+Delete), <b>type</b> (text, ASCII), <b>wait</b> (ms, oppure minMs e maxMs) e <b>repeat</b> (times, steps). Tastiera layout US.</p>
+<details class="block" id="scriptsBox">
+<summary><h2>Script</h2></summary>
+<p class="hint">Uno script è un elenco di passi: <b>move</b> (dx, dy), <b>click</b>, <b>scroll</b> (notches), <b>key</b> (es. F15, Ctrl+Alt+Delete), <b>type</b> (text, ASCII), <b>wait</b> (ms, oppure minMs e maxMs) e <b>repeat</b> (times, steps). Tastiera layout US.</p>
 <div class="field"><label for="scrSelect">Script</label><select id="scrSelect"></select></div>
 <div class="field"><label for="scrName">Nome</label><input id="scrName" autocomplete="off" placeholder="a-z 0-9 _ -"><div class="err" id="e_scrName"></div></div>
 <div class="field"><label for="scrBody">Contenuto (JSON)</label><textarea id="scrBody" spellcheck="false"></textarea><div class="err" id="e_scrBody"></div></div>
@@ -139,37 +275,72 @@ textarea{min-height:220px;font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monosp
 <button class="danger" id="scrDelete">Elimina</button>
 </div>
 <p id="scrMsg" class="msg" role="status" aria-live="polite"></p>
-</section>
-</div>
+</details>
 
-<div class="tab" id="tab-automazioni">
-<section class="card">
-<h2>Automazioni</h2>
-<p class="hint">Un&rsquo;automazione esegue uno script a intervalli casuali, solo mentre il jiggler &egrave; avviato (massimo 4).</p>
+<details class="block" id="autoBox">
+<summary><h2>Automazioni</h2></summary>
+<p class="hint">Un’automazione esegue uno script a intervalli casuali, solo mentre il jiggler è avviato (massimo 4).</p>
 <div id="autoList"></div>
 <div class="actions"><button id="autoAdd">Aggiungi</button><button class="primary" id="autoSave">Salva</button></div>
 <p id="autoMsg" class="msg" role="status" aria-live="polite"></p>
+</details>
 </section>
+
+<section class="view" id="view-sistema" aria-labelledby="h-sistema" hidden>
+<h1 id="h-sistema">Sistema</h1>
+
+<div class="block">
+<h2>Sicurezza</h2>
+<p>Il token protegge dashboard, API e MCP. Cambialo se è stato condiviso.</p>
+<form id="tokenForm" novalidate>
+<div class="field"><label for="tokCurrent">Token attuale</label><input id="tokCurrent" type="password" autocomplete="current-password"><div class="err" data-err="current"></div></div>
+<div class="field"><label for="tokNew">Nuovo token</label><input id="tokNew" type="password" autocomplete="new-password"><div class="err" data-err="token"></div></div>
+<div class="field"><label for="tokConfirm">Ripeti il nuovo token</label><input id="tokConfirm" type="password" autocomplete="new-password"><div class="err" data-err="confirm"></div></div>
+<div class="actions"><button class="primary" type="submit">Cambia token</button></div>
+<p id="tokMsg" class="msg" role="status" aria-live="polite"></p>
+</form>
 </div>
 
-<div class="tab" id="tab-rete">
-<section class="card">
+<div class="block">
 <h2>Rete</h2>
-<p class="hint"><b>Auto</b>: si collega al WiFi di casa e, se non ci riesce, apre la rete di configurazione. <b>Rete propria</b>: crea una rete WiFi protetta con questa dashboard (indirizzo 192.168.4.1), utile dove non c&rsquo;&egrave; WiFi. Tenendo premuto BOOT per 3 secondi si passa da una modalit&agrave; all&rsquo;altra. Le modifiche valgono dopo il riavvio.</p>
-<div class="field"><label for="netMode">Modalit&agrave;</label><select id="netMode"><option value="auto">Auto (WiFi di casa)</option><option value="ap">Rete propria</option></select><div class="err" data-err="mode"></div></div>
+<p class="hint"><b>Auto</b>: si collega al WiFi di casa e, se non ci riesce, apre la rete di configurazione. <b>Rete propria</b>: crea una rete WiFi protetta con questa dashboard (indirizzo 192.168.4.1), utile dove non c’è WiFi. Tenendo premuto BOOT per 3 secondi si passa da una modalità all’altra. Le modifiche valgono dopo il riavvio.</p>
+<div class="field"><label for="netMode">Modalità</label><select id="netMode"><option value="auto">Auto (WiFi di casa)</option><option value="ap">Rete propria</option></select><div class="err" data-err="mode"></div></div>
 <div class="field"><label for="netSsid">Nome della rete propria</label><input id="netSsid" autocomplete="off"><div class="err" data-err="apSsid"></div></div>
 <div class="field"><label for="netPass">Password della rete propria</label><input id="netPass" autocomplete="off" placeholder="vuota = generata al primo avvio"><div class="err" data-err="apPassword"></div></div>
 <div class="actions"><button id="netSave">Salva</button><button class="primary" id="netSaveRestart">Salva e riavvia</button></div>
 <p id="netMsg" class="msg" role="status" aria-live="polite"></p>
-</section>
 </div>
-</main>
 
-<div id="login" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
-<form class="card" id="loginForm">
-<h2 id="loginTitle">Accesso</h2>
-<div class="field"><label for="tokenInput">Token API</label><input id="tokenInput" type="password" autocomplete="off"><div class="err" id="loginErr"></div></div>
-<button class="primary" type="submit">Entra</button>
+<details class="block" id="devBox">
+<summary><h2>Identità Bluetooth</h2></summary>
+<p class="hint">Il computer vede un solo dispositivo Bluetooth: nome, produttore, VID/PID e indirizzo sono quelli del primo dispositivo abilitato; gli altri aggiungono solo la loro funzione (mouse o tastiera). Lascia vuoti i campi per usare i valori del profilo. Dopo il salvataggio il dispositivo si riavvia e i computer già abbinati potrebbero non riconoscerlo più: dovrai abbinarli di nuovo.</p>
+<div id="devList"></div>
+<div class="actions"><button class="primary" id="devSave">Salva e riavvia</button></div>
+<p id="devMsg" class="msg" role="status" aria-live="polite"></p>
+</details>
+
+<div class="block">
+<h2>Dispositivo</h2>
+<dl class="facts">
+<div><dt>Versione</dt><dd id="infoVersion">—</dd></div>
+<div><dt>Nome Bluetooth</dt><dd id="infoName">—</dd></div>
+<div><dt>Indirizzo Bluetooth</dt><dd id="infoAddress">—</dd></div>
+</dl>
+<div class="actions"><button id="restartBtn">Riavvia</button></div>
+<p id="sysMsg" class="msg" role="status" aria-live="polite"></p>
+<p class="hint" id="installHint">Per averla come app: dal menu del browser scegli “Aggiungi a schermata Home”. Sul telefono si apre a tutto schermo; l’installazione completa richiede HTTPS, che una scheda in rete locale non offre.</p>
+</div>
+</section>
+</main>
+</div>
+
+<div id="login" class="login" role="dialog" aria-modal="true" aria-labelledby="loginTitle" hidden>
+<form class="panel" id="loginForm">
+<h2 id="loginTitle">Accedi</h2>
+<p class="hint">Inserisci il token API. È quello scelto durante la configurazione; in modalità rete propria è la password della rete WiFi del dispositivo.</p>
+<div class="field"><label for="tokenInput">Token API</label><input id="tokenInput" type="password" autocomplete="current-password"><div class="err" id="loginErr"></div></div>
+<label class="inline"><input type="checkbox" id="tokenShow"> Mostra il token</label>
+<div class="actions"><button class="primary" type="submit">Entra</button></div>
 </form>
 </div>
 
@@ -208,7 +379,15 @@ var JigLib = (function () {
     'could not save the script (storage full?)': 'Memoria piena: impossibile salvare lo script.',
     'could not save the automations (storage full?)': 'Memoria piena: impossibile salvare.',
     'script is too complex (max 10000 operations)': 'Script troppo complesso (massimo 10000 operazioni).',
-    'script is too large (max 3000 bytes)': 'Script troppo grande.'
+    'script is too large (max 3000 bytes)': 'Script troppo grande.',
+    'the pairing window must last between 30 and 600 seconds': 'L’abbinamento deve durare tra 30 e 600 secondi.',
+    'no such paired computer': 'Questo computer non è più abbinato.',
+    'the name must be 1 to 32 characters': 'Il nome deve avere da 1 a 32 caratteri.',
+    'the name must not contain control characters': 'Il nome non può contenere caratteri di controllo.',
+    'the current token is not correct': 'Il token attuale non è corretto.',
+    'the current token is required': 'Inserisci il token attuale.',
+    'must be 8 to 40 printable characters without spaces': 'Da 8 a 40 caratteri, senza spazi.',
+    'could not save the token (storage full?)': 'Memoria piena: token non salvato.'
   };
 
   function tr(message) { return MESSAGES[message] || message || 'Valore non valido.'; }
@@ -224,50 +403,71 @@ var JigLib = (function () {
     return m === 1 ? '1 minuto fa' : m + ' minuti fa';
   }
 
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+  // A duration, as in "da 12 minuti" / "da 1 ora e 5 min".
+  function fmtSince(ms) {
+    var m = Math.floor(ms / 60000);
+    if (m < 1) return 'meno di un minuto';
+    if (m < 60) return plural(m, 'minuto', 'minuti');
+    var h = Math.floor(m / 60), rest = m % 60;
+    return plural(h, 'ora', 'ore') + (rest ? ' e ' + rest + ' min' : '');
+  }
+
+  // What the Stato page says about the Bluetooth link, from /api/status. Pure so the wording is testable.
+  function connectionView(bt, device) {
+    var name = (device && device.bleName) || 'il dispositivo';
+    var pairing = bt.pairing || {};
+    var timed = pairing.open && pairing.remainingMs !== null && pairing.remainingMs !== undefined;
+    var window_ = timed ? ' Abbinamento aperto, scade tra ' + fmtDuration(pairing.remainingMs) + '.' : '';
+    if (bt.connected && bt.computer) {
+      var actions = ['disconnect'];
+      if (timed) actions.push('closePairing');
+      return { tone: 'ok', title: 'Collegato a ' + bt.computer.label,
+        detail: 'da ' + fmtSince(bt.computer.connectedForMs) + ' · ' + name + '.' + window_, actions: actions };
+    }
+    if (bt.held) {
+      return { tone: 'warn', title: 'Scollegato',
+        detail: 'Il dispositivo è invisibile: nessun computer può collegarsi finché non lo riconnetti.', actions: ['reconnect'] };
+    }
+    if (pairing.open && !timed) {
+      return { tone: 'open', title: 'Pronto per l’abbinamento',
+        detail: 'Sul computer apri le impostazioni Bluetooth e scegli «' + name + '».', actions: [] };
+    }
+    if (timed) {
+      return { tone: 'open', title: 'Abbinamento aperto',
+        detail: 'Scade tra ' + fmtDuration(pairing.remainingMs) + '. Sul computer scegli «' + name + '».', actions: ['closePairing'] };
+    }
+    return { tone: 'idle', title: 'Nessun computer collegato',
+      detail: 'Si ricollega da solo quando il computer abbinato è acceso e vicino.', actions: ['pair'] };
+  }
+
+  function checkNewToken(next, confirm) {
+    if (next.length < 8 || next.length > 40 || /\s/.test(next)) return 'Da 8 a 40 caratteri, senza spazi.';
+    if (next !== confirm) return 'I due token non coincidono.';
+    return '';
+  }
+
   function hex4(n) { return '0x' + ('0000' + n.toString(16).toUpperCase()).slice(-4); }
 
-  return { MESSAGES: MESSAGES, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, hex4: hex4 };
+  return { MESSAGES: MESSAGES, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, fmtSince: fmtSince,
+    connectionView: connectionView, checkNewToken: checkNewToken, hex4: hex4 };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = JigLib;
 
-(function () {
+// Shared plumbing: DOM helpers, authenticated fetch, status polling, restart recovery. Views register themselves
+// with App.view(name, { load, onStatus, onTick }).
+var App = (function () {
   'use strict';
-  var tr = JigLib.tr, fmtDuration = JigLib.fmtDuration, fmtAgo = JigLib.fmtAgo, hex4 = JigLib.hex4;
   var KEY = 'jigglerToken';
+  var tr = JigLib.tr;
   var token = localStorage.getItem(KEY) || '';
-  var status = null, receivedAt = 0, dirty = {};
-  var FIELDS = [
-    { id: 'minIntervalSec', scale: 1 }, { id: 'maxIntervalSec', scale: 1 }, { id: 'amplitudePx', scale: 1 },
-    { id: 'clickProbability', scale: 100 }, { id: 'scrollProbability', scale: 100 }
-  ];
-  var $ = function (id) { return document.getElementById(id); };
+  var views = {}, current = '';
+  var status = null, receivedAt = 0;
+  var failures = 0, inFlight = false, restarting = false, offlineShown = false;
 
-  function banner(text) { var b = $('banner'); b.textContent = text; b.style.display = text ? 'block' : 'none'; }
-  function say(text, kind, id) { var m = $(id || 'msg'); m.textContent = text; m.className = 'msg ' + (kind || ''); }
-  function setToken(t) { token = t; if (t) localStorage.setItem(KEY, t); else localStorage.removeItem(KEY); }
-  function showLogin(error) {
-    $('loginErr').textContent = error || '';
-    $('login').style.display = 'flex';
-    $('tokenInput').value = '';
-    $('tokenInput').focus();
-  }
-
-  // body: object (sent as JSON) or string (sent as is)
-  function call(method, path, body) {
-    var opts = { method: method, headers: { 'Authorization': 'Bearer ' + token } };
-    if (body !== undefined) {
-      opts.headers['Content-Type'] = 'application/json';
-      opts.body = typeof body === 'string' ? body : JSON.stringify(body);
-    }
-    return fetch(path, opts).then(function (r) {
-      if (r.status === 401) { setToken(''); showLogin('Token non valido.'); throw new Error('unauthorized'); }
-      return r.json().catch(function () { return {}; }).then(function (data) {
-        banner('');
-        return { status: r.status, data: data };
-      });
-    }, function (e) { banner('Dispositivo non raggiungibile.'); throw e; });
-  }
+  function $(id) { return document.getElementById(id); }
 
   function el(tag, attrs, kids) {
     var e = document.createElement(tag);
@@ -279,6 +479,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = JigLib;
     (kids || []).forEach(function (c) { e.appendChild(c); });
     return e;
   }
+
   var uid = 0;
   function labeled(text, input, errKey) {
     var id = 'f' + (++uid);
@@ -295,208 +496,420 @@ if (typeof module !== 'undefined' && module.exports) module.exports = JigLib;
     if (e) { e.textContent = tr(message); return true; }
     return false;
   }
-  function restartDevice(msgId) {
-    return call('POST', '/api/restart').then(function () {
-      say('Riavvio in corso. La pagina torna raggiungibile tra pochi secondi.', 'good', msgId);
-    }).catch(function () {});
+  function say(text, kind, id) { var m = $(id || 'msg'); m.textContent = text; m.className = 'msg ' + (kind || ''); }
+
+  var bannerTimer = 0;
+  function banner(text, kind, autoHideMs) {
+    var b = $('banner');
+    clearTimeout(bannerTimer);
+    b.textContent = text || '';
+    b.className = 'banner ' + (kind || '');
+    b.hidden = !text;
+    if (text && autoHideMs) bannerTimer = setTimeout(function () { banner(''); }, autoHideMs);
   }
 
-  function setChip(id, textId, on, label) {
-    $(id).className = 'chip' + (on ? ' on' : '');
-    $(textId).textContent = label + (on ? ': connesso' : ': non connesso');
+  function setToken(t) { token = t; if (t) localStorage.setItem(KEY, t); else localStorage.removeItem(KEY); }
+  function getToken() { return token; }
+
+  function showLogin(error) {
+    $('loginErr').textContent = error || '';
+    $('login').hidden = false;
+    $('tokenInput').value = '';
+    $('tokenInput').focus();
   }
 
-  // ---- Stato -------------------------------------------------------------------------------
-  function populateForm() {
-    if (!status) return;
-    FIELDS.forEach(function (f) {
-      if (dirty[f.id]) return;
-      $(f.id).value = String(Math.round(status.config[f.id] * f.scale));
+  // body: object (sent as JSON) or string (sent as is). Resolves { status, data }; rejects when unreachable.
+  function call(method, path, body) {
+    var opts = { method: method, headers: { 'Authorization': 'Bearer ' + token } };
+    if (body !== undefined) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = typeof body === 'string' ? body : JSON.stringify(body);
+    }
+    return fetch(path, opts).then(function (r) {
+      if (r.status === 401) { setToken(''); showLogin('Token non valido.'); throw new Error('unauthorized'); }
+      return r.json().catch(function () { return {}; }).then(function (data) {
+        failures = 0;
+        document.body.classList.remove('offline');
+        if (offlineShown && !restarting) { banner(''); offlineShown = false; }
+        return { status: r.status, data: data };
+      });
+    }, function (e) {
+      failures++;
+      if (!restarting && failures >= 2) {
+        document.body.classList.add('offline');
+        banner('Dispositivo non raggiungibile. Riprovo da solo.', 'bad');
+        offlineShown = true;
+      }
+      throw e;
     });
   }
 
-  function render() {
-    if (!status) return;
-    var s = status;
-    setChip('chipMouse', 'txtMouse', s.mouseConnected, 'Mouse');
-    setChip('chipWifi', 'txtWifi', s.wifiConnected, 'WiFi');
-    $('state').textContent = { running: 'In esecuzione', paused: 'In pausa', stopped: 'Fermo' }[s.state] || s.state;
-    $('count').textContent = s.moveCount;
-    if (s.lastMoveAt !== null) $('last').textContent = new Date(s.lastMoveAt * 1000).toLocaleTimeString('it-IT');
-    else if (s.lastMoveAgoMs !== null) $('last').textContent = fmtAgo(s.lastMoveAgoMs);
-    else $('last').textContent = 'mai';
-    $('bStart').disabled = s.state === 'running';
-    $('bPause').disabled = s.state !== 'running';
-    $('bStop').disabled = s.state === 'stopped';
-    $('bMove').disabled = !s.mouseConnected;
-    populateForm();
-    tick();
+  // Two-step button: the first click arms it for 4 s ("Conferma: …"), the second runs the action.
+  function confirmInline(btn, armedText, action) {
+    var original = btn.textContent, armed = false, timer = 0;
+    function reset() { armed = false; clearTimeout(timer); btn.textContent = original; btn.classList.remove('confirm'); }
+    btn.addEventListener('click', function () {
+      if (!armed) {
+        armed = true;
+        btn.textContent = armedText;
+        btn.classList.add('confirm');
+        timer = setTimeout(reset, 4000);
+        return;
+      }
+      reset();
+      action();
+    });
+    btn.isArmed = function () { return armed; };
   }
 
-  function tick() {
-    if (!status) return;
-    var el = $('next');
-    if (status.state === 'paused') el.textContent = 'Il prossimo movimento riprende con Avvia.';
-    else if (status.state === 'stopped') el.textContent = 'Nessun movimento programmato.';
-    else if (!status.mouseConnected && status.msToNextMove === 0) el.textContent = 'In attesa che il mouse si colleghi al computer.';
-    else {
-      var left = Math.max(0, status.msToNextMove - (performance.now() - receivedAt));
-      el.textContent = 'Prossimo movimento tra ' + fmtDuration(left);
+  // ---- views and routing ------------------------------------------------------------------
+  function view(name, impl) { views[name] = impl; }
+  function reloadCurrent() { if (views[current] && views[current].load && token) views[current].load(); }
+
+  function route() {
+    var name = (location.hash || '#stato').slice(1);
+    if (!views[name]) name = 'stato';
+    var changed = name !== current;
+    current = name;
+    document.querySelectorAll('.view').forEach(function (v) { v.hidden = v.id !== 'view-' + name; });
+    document.querySelectorAll('#nav a').forEach(function (a) {
+      if (a.getAttribute('data-view') === name) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    if (changed) {
+      var h = document.querySelector('#view-' + name + ' h1');
+      if (h && document.documentElement.getAttribute('data-ready')) { h.tabIndex = -1; h.focus({ preventScroll: true }); }
+      window.scrollTo(0, 0);
     }
+    reloadCurrent();
   }
 
-  var inFlight = false;
+  // ---- status polling ---------------------------------------------------------------------
   function poll() {
-    if (!token || inFlight) return;
+    if (!token || inFlight || restarting || document.hidden) return;
     inFlight = true;
     call('GET', '/api/status').then(function (res) {
       status = res.data;
       receivedAt = performance.now();
-      render();
+      Object.keys(views).forEach(function (n) { if (views[n].onStatus) views[n].onStatus(status); });
     }).catch(function () {}).then(function () { inFlight = false; });
   }
 
-  function action(method, path, okText) {
-    return call(method, path).then(function (res) {
-      if (res.status >= 400) say(res.data.error === 'mouse_not_connected' ? 'Il mouse non è collegato al computer.' : 'Operazione non riuscita.', 'bad');
-      else say(okText || '', 'good');
-      poll();
+  function tick() {
+    if (!status) return;
+    Object.keys(views).forEach(function (n) { if (views[n].onTick) views[n].onTick(status, performance.now() - receivedAt); });
+  }
+
+  // ---- restart ----------------------------------------------------------------------------
+  function waitForDevice() {
+    restarting = true;
+    banner('Riavvio in corso… la pagina torna da sola.', '');
+    var started = performance.now();
+    function probe() {
+      fetch('/api/status', { headers: { 'Authorization': 'Bearer ' + token } }).then(function (r) {
+        if (r.ok) {
+          restarting = false;
+          failures = 0;
+          document.body.classList.remove('offline');
+          banner('Dispositivo di nuovo online.', 'good', 4000);
+          reloadCurrent();
+          poll();
+        } else { again(); }
+      }, again);
+    }
+    function again() {
+      if (performance.now() - started > 60000) {
+        restarting = false;
+        banner('Il dispositivo non risponde. Controlla alimentazione e rete, poi ricarica la pagina.', 'bad');
+        return;
+      }
+      setTimeout(probe, 1500);
+    }
+    setTimeout(probe, 3000);
+  }
+
+  function restartDevice() {
+    return call('POST', '/api/restart').then(function (res) {
+      if (res.status === 200 || res.status === 202) waitForDevice();
     }).catch(function () {});
   }
 
-  $('bStart').onclick = function () { action('POST', '/api/start', 'Avviato.'); };
-  $('bPause').onclick = function () { action('POST', '/api/pause', 'In pausa.'); };
-  $('bStop').onclick = function () { action('POST', '/api/stop', 'Fermato.'); };
-  $('bMove').onclick = function () {
-    action('POST', '/api/move', 'Movimento in corso.');
-    setTimeout(poll, 1500);
+  return {
+    $: $, el: el, labeled: labeled, clearErrors: clearErrors, showError: showError, say: say, banner: banner,
+    call: call, setToken: setToken, getToken: getToken, showLogin: showLogin, confirmInline: confirmInline,
+    view: view, route: route, poll: poll, tick: tick, restartDevice: restartDevice, reloadCurrent: reloadCurrent,
+    status: function () { return status; }
   };
+})();
 
-  FIELDS.forEach(function (f) {
-    $(f.id).addEventListener('input', function () { dirty[f.id] = true; });
+// Stato: the connection hero (which computer, since when, disconnect/pair) and the jiggler controls.
+(function () {
+  'use strict';
+  var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
+  var fmtDuration = JigLib.fmtDuration, fmtAgo = JigLib.fmtAgo;
+  var ACTIONS = {
+    disconnect: { label: 'Disconnetti', primary: false, run: function () {
+      return App.call('POST', '/api/bluetooth/disconnect').then(function (r) {
+        return r.status === 200 ? ['Scollegato. Il dispositivo resta invisibile finché non premi Riconnetti.', 'good'] : fail(r);
+      }); } },
+    reconnect: { label: 'Riconnetti', primary: true, run: function () {
+      return App.call('POST', '/api/bluetooth/reconnect').then(function (r) {
+        return r.status === 200 ? ['Di nuovo visibile: il computer si ricollega da solo.', 'good'] : fail(r);
+      }); } },
+    pair: { label: 'Abbina un computer', primary: true, run: function () {
+      return App.call('POST', '/api/bluetooth/pairing', { seconds: 120 }).then(function (r) {
+        return r.status === 200 ? ['Abbinamento aperto per 2 minuti.', 'good'] : fail(r);
+      }); } },
+    closePairing: { label: 'Chiudi abbinamento', primary: false, run: function () {
+      return App.call('DELETE', '/api/bluetooth/pairing').then(function (r) {
+        return r.status === 200 ? ['Abbinamento chiuso.', 'good'] : fail(r);
+      }); } }
+  };
+  function fail(r) { return [tr(r.data && r.data.message) || 'Operazione non riuscita.', 'bad']; }
+
+  var shownActions = "";
+
+  function adjusted(status, elapsed) {
+    var bt = JSON.parse(JSON.stringify(status.bluetooth || { pairing: {}, peerCount: 0 }));
+    if (bt.pairing && bt.pairing.remainingMs != null) bt.pairing.remainingMs = Math.max(0, bt.pairing.remainingMs - elapsed);
+    if (bt.computer) bt.computer.connectedForMs += elapsed;
+    return bt;
+  }
+
+  function renderHero(status, elapsed) {
+    var v = JigLib.connectionView(adjusted(status, elapsed), status.device);
+    $('hero').setAttribute('data-tone', v.tone);
+    $('heroTitle').textContent = v.title;
+    $('heroDetail').textContent = v.detail;
+    var key = v.actions.join(',');
+    if (key !== shownActions) {
+      shownActions = key;
+      var box = $('heroActions');
+      box.textContent = '';
+      v.actions.forEach(function (name) {
+        var a = ACTIONS[name];
+        var b = el('button', { text: a.label, class: a.primary ? 'primary' : '' });
+        b.onclick = function () {
+          b.disabled = true;
+          say('', '', 'heroMsg');
+          a.run().then(function (r) { say(r[0], r[1], 'heroMsg'); App.poll(); }).catch(function () {}).then(function () { b.disabled = false; });
+        };
+        box.appendChild(b);
+      });
+      $('heroNote').textContent = key.indexOf('disconnect') >= 0
+        ? 'Disconnetti non spegne il dispositivo: lo scollega e lo nasconde finché non lo riconnetti.' : '';
+    }
+  }
+
+  function renderMotion(s, elapsed) {
+    $('state').textContent = { running: 'In esecuzione', paused: 'In pausa', stopped: 'Fermo' }[s.state] || s.state;
+    var next = $('next');
+    if (s.state === 'paused') next.textContent = 'Il movimento riprende con Avvia.';
+    else if (s.state === 'stopped') next.textContent = 'Nessun movimento programmato.';
+    else if (!s.mouseConnected && s.msToNextMove === 0) next.textContent = 'In attesa che un computer si colleghi.';
+    else next.textContent = 'Prossimo movimento tra ' + fmtDuration(Math.max(0, s.msToNextMove - elapsed));
+  }
+
+  function renderFacts(s) {
+    $('count').textContent = s.moveCount;
+    if (s.lastMoveAt !== null) $('last').textContent = new Date(s.lastMoveAt * 1000).toLocaleTimeString('it-IT');
+    else if (s.lastMoveAgoMs !== null) $('last').textContent = fmtAgo(s.lastMoveAgoMs);
+    else $('last').textContent = 'mai';
+    $('wifi').textContent = s.wifiConnected ? 'Collegato' : 'Non collegato';
+    $('bStart').disabled = s.state === 'running';
+    $('bPause').disabled = s.state !== 'running';
+    $('bStop').disabled = s.state === 'stopped';
+    $('bMove').disabled = !s.mouseConnected;
+  }
+
+  App.view('stato', {
+    onStatus: function (s) { renderHero(s, 0); renderMotion(s, 0); renderFacts(s); },
+    onTick: function (s, elapsed) { renderHero(s, elapsed); renderMotion(s, elapsed); }
   });
+
+  function control(method, path, okText) {
+    return App.call(method, path).then(function (res) {
+      if (res.status >= 400) say(res.data.error === 'mouse_not_connected' ? 'Nessun computer collegato: abbinane uno dalla sezione Computer.' : 'Operazione non riuscita.', 'bad');
+      else say(okText, 'good');
+      App.poll();
+    }).catch(function () {});
+  }
+  $('bStart').onclick = function () { control('POST', '/api/start', 'Avviato.'); };
+  $('bPause').onclick = function () { control('POST', '/api/pause', 'In pausa.'); };
+  $('bStop').onclick = function () { control('POST', '/api/stop', 'Fermato.'); };
+  $('bMove').onclick = function () { control('POST', '/api/move', 'Movimento in corso.'); setTimeout(App.poll, 1500); };
+})();
+
+// Computer: pairing window and the list of paired computers (rename, forget).
+(function () {
+  'use strict';
+  var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
+  var peers = [], shown = '', editing = null, lastFetch = 0, busy = false;
+
+  function reply(res, okText, id) {
+    if (res.status === 200) { say(okText, 'good', id); return true; }
+    say(tr(res.data && res.data.message) || 'Operazione non riuscita.', 'bad', id);
+    return false;
+  }
+
+  function renderPairing(status, elapsed) {
+    var bt = status.bluetooth;
+    if (!bt) return;
+    var p = bt.pairing || {};
+    var timed = p.open && p.remainingMs != null;
+    var firstRun = bt.peerCount === 0;
+    if (timed) $('pairInfo').textContent = 'Abbinamento aperto: scade tra ' + JigLib.fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '.';
+    else if (p.open) $('pairInfo').textContent = 'Nessun computer abbinato: l’abbinamento resta aperto finché non ne colleghi uno.';
+    else $('pairInfo').textContent = 'Abbinamento chiuso: nessun nuovo computer può collegarsi.';
+    $('pairOpen').disabled = busy || (p.open && !timed);
+    $('pairOpen').textContent = timed ? 'Riapri (' + ($('pairDur').selectedOptions[0].text) + ')' : 'Apri abbinamento';
+    $('pairClose').disabled = busy || !timed;
+    $('pairDur').disabled = firstRun && p.open;
+  }
+
+  function peerRow(p) {
+    var li = el('li');
+    if (editing === p.id) {
+      var input = el('input', { autocomplete: 'off', 'aria-label': 'Nome del computer', maxlength: '32' });
+      input.value = p.label;
+      var save = el('button', { class: 'primary', text: 'Salva' });
+      var cancel = el('button', { text: 'Annulla' });
+      var err = el('div', { class: 'err' });
+      function done() { editing = null; shown = ''; draw(); }
+      function commit() {
+        var name = input.value.trim();
+        if (!name) { err.textContent = 'Scrivi un nome.'; return; }
+        App.call('PUT', '/api/bluetooth/peers/' + p.id, { label: name }).then(function (res) {
+          if (res.status === 200) { done(); load(); } else err.textContent = tr(res.data && res.data.message);
+        }).catch(function () {});
+      }
+      save.onclick = commit;
+      cancel.onclick = done;
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') commit(); if (e.key === 'Escape') done(); });
+      li.appendChild(el('div', { class: 'peer-edit' }, [input, save, cancel]));
+      li.appendChild(err);
+      setTimeout(function () { input.focus(); input.select(); }, 0);
+      return li;
+    }
+    var meta = el('div', { class: 'peer-meta' });
+    if (p.connected) meta.appendChild(el('span', { class: 'peer-live', text: 'Collegato adesso' }));
+    else meta.appendChild(document.createTextNode('Abbinato'));
+    meta.appendChild(document.createTextNode(' · ' + p.address));
+    var rename = el('button', { class: 'link', text: 'Rinomina' });
+    rename.onclick = function () { editing = p.id; shown = ''; draw(); };
+    var forget = el('button', { class: 'link danger', text: 'Dimentica' });
+    App.confirmInline(forget, 'Conferma: dimentica', function () {
+      App.call('DELETE', '/api/bluetooth/peers/' + p.id).then(function (res) {
+        reply(res, '«' + p.label + '» dimenticato. Per usarlo di nuovo va abbinato daccapo.', 'peersMsg');
+        load(); App.poll();
+      }).catch(function () {});
+    });
+    li.appendChild(el('div', { class: 'peer-top' }, [
+      el('div', {}, [el('div', { class: 'peer-name', text: p.label }), meta]),
+      el('div', { class: 'peer-actions' }, [rename, forget])
+    ]));
+    return li;
+  }
+
+  function draw() {
+    var key = JSON.stringify(peers) + '|' + editing;
+    if (key === shown) return;
+    shown = key;
+    var list = $('peers');
+    list.textContent = '';
+    peers.forEach(function (p) { list.appendChild(peerRow(p)); });
+    $('peersEmpty').hidden = peers.length > 0;
+    $('forgetAll').hidden = peers.length === 0;
+  }
+
+  function armed() {
+    return !!document.querySelector('#peers .confirm') || $('forgetAll').classList.contains('confirm');
+  }
+
+  function load() {
+    lastFetch = performance.now();
+    App.call('GET', '/api/bluetooth').then(function (res) {
+      if (res.status !== 200) return;
+      peers = res.data.peers;
+      if (editing === null && !armed()) draw();
+    }).catch(function () {});
+  }
+
+  App.view('computer', {
+    load: load,
+    onStatus: function (s) {
+      renderPairing(s, 0);
+      if (!$('view-computer').hidden && performance.now() - lastFetch > 2000) load();
+    },
+    onTick: function (s, elapsed) { renderPairing(s, elapsed); }
+  });
+
+  $('pairOpen').onclick = function () {
+    busy = true; renderPairing(App.status(), 0);
+    App.call('POST', '/api/bluetooth/pairing', { seconds: Number($('pairDur').value) }).then(function (res) {
+      reply(res, 'Abbinamento aperto. Sul computer scegli il dispositivo dall’elenco Bluetooth.', 'pairMsg');
+    }).catch(function () {}).then(function () { busy = false; App.poll(); });
+  };
+  $('pairClose').onclick = function () {
+    busy = true; renderPairing(App.status(), 0);
+    App.call('DELETE', '/api/bluetooth/pairing').then(function (res) {
+      reply(res, 'Abbinamento chiuso.', 'pairMsg');
+    }).catch(function () {}).then(function () { busy = false; App.poll(); });
+  };
+  App.confirmInline($('forgetAll'), 'Conferma: dimentica tutti', function () {
+    App.call('DELETE', '/api/bluetooth/peers').then(function (res) {
+      reply(res, 'Tutti i computer sono stati dimenticati. L’abbinamento è di nuovo aperto.', 'peersMsg');
+      load(); App.poll();
+    }).catch(function () {});
+  });
+})();
+
+// Movimento: random-movement configuration, scripts and automations.
+(function () {
+  'use strict';
+  var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
+  var labeled = App.labeled, clearErrors = App.clearErrors, showError = App.showError;
+  var FIELDS = [
+    { id: 'minIntervalSec', scale: 1 }, { id: 'maxIntervalSec', scale: 1 }, { id: 'amplitudePx', scale: 1 },
+    { id: 'clickProbability', scale: 100 }, { id: 'scrollProbability', scale: 100 }
+  ];
+  var dirty = {}, config = null;
 
   function fieldError(id, text) { var e = $('e_' + id); if (e) e.textContent = text; }
 
+  function populate(s) {
+    config = s.config;
+    FIELDS.forEach(function (f) {
+      if (dirty[f.id] || document.activeElement === $(f.id)) return;
+      $(f.id).value = String(Math.round(s.config[f.id] * f.scale));
+    });
+  }
+  FIELDS.forEach(function (f) { $(f.id).addEventListener('input', function () { dirty[f.id] = true; }); });
+
   $('cfg').addEventListener('submit', function (ev) {
     ev.preventDefault();
-    FIELDS.forEach(function (f) { fieldError(f.id, ''); });
-    if (!status) return;
+    FIELDS.forEach(function (f) { fieldError(f.id, ''); $(f.id).removeAttribute('aria-invalid'); });
+    if (!config) return;
     var body = {}, invalid = false;
     FIELDS.forEach(function (f) {
       var raw = $(f.id).value.trim().replace(',', '.');
       if (raw === '') { fieldError(f.id, 'Campo obbligatorio.'); invalid = true; return; }
       var n = Number(raw);
       if (!isFinite(n)) { fieldError(f.id, 'Inserisci un numero.'); invalid = true; return; }
-      if (n !== Math.round(status.config[f.id] * f.scale)) body[f.id] = n / f.scale;
+      if (n !== Math.round(config[f.id] * f.scale)) body[f.id] = n / f.scale;
     });
     if (invalid) return;
     say('', '', 'cfgMsg');
     if (Object.keys(body).length === 0) { say('Nessuna modifica da salvare.', '', 'cfgMsg'); return; }
-    call('PUT', '/api/config', body).then(function (res) {
-      if (res.status === 200) { dirty = {}; say('Configurazione salvata.', 'good', 'cfgMsg'); poll(); return; }
+    App.call('PUT', '/api/config', body).then(function (res) {
+      if (res.status === 200) { dirty = {}; say('Configurazione salvata.', 'good', 'cfgMsg'); App.poll(); return; }
       var d = res.data;
-      if (d.field && $('e_' + d.field)) fieldError(d.field, tr(d.message));
+      if (d.field && $('e_' + d.field)) { fieldError(d.field, tr(d.message)); $(d.field).setAttribute('aria-invalid', 'true'); }
       else say('Salvataggio non riuscito.', 'bad', 'cfgMsg');
     }).catch(function () {});
   });
 
-  // ---- Dispositivi -------------------------------------------------------------------------
-  var profiles = null, devices = [];
-
-
-  function profileFor(kind, id) {
-    if (id !== 'custom') {
-      var list = profiles.profiles;
-      for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
-    }
-    var c = profiles.custom[kind];
-    return { id: 'custom', name: c.name, manufacturer: c.manufacturer, vid: c.vid, pid: c.pid, oui: null };
-  }
-
-  function refreshPlaceholders(card, kind) {
-    var p = profileFor(kind, card.querySelector('[data-k=profileId]').value);
-    card.querySelector('[data-k=name]').placeholder = p.name;
-    card.querySelector('[data-k=manufacturer]').placeholder = p.manufacturer;
-    card.querySelector('[data-k=vid]').placeholder = hex4(p.vid);
-    card.querySelector('[data-k=pid]').placeholder = hex4(p.pid);
-    card.querySelector('[data-k=mac]').placeholder = p.oui ? p.oui + ':xx:xx:xx (il resto dal chip)' : 'indirizzo del chip (nessuna sostituzione)';
-  }
-
-  function renderDevices() {
-    var box = $('devList');
-    box.textContent = '';
-    devices.forEach(function (d, i) {
-      var card = el('div', { class: 'dev' });
-      card.setAttribute('data-index', String(i));
-      card.appendChild(el('h3', { text: d.kind === 'mouse' ? 'Mouse (' + d.id + ')' : 'Tastiera (' + d.id + ')' }));
-
-      var enabled = el('input', { type: 'checkbox' });
-      enabled.setAttribute('data-k', 'enabled');
-      enabled.checked = d.enabled;
-      var enabledLabel = el('label', { class: 'inline' }, [enabled, el('span', { text: 'Abilitato' })]);
-      card.appendChild(el('div', { class: 'field' }, [enabledLabel]));
-
-      var sel = el('select');
-      sel.setAttribute('data-k', 'profileId');
-      profiles.profiles.filter(function (p) { return p.kind === d.kind; }).forEach(function (p) {
-        sel.appendChild(el('option', { value: p.id, text: p.label }));
-      });
-      sel.appendChild(el('option', { value: 'custom', text: 'Personalizzato' }));
-      sel.value = d.profileId;
-      card.appendChild(labeled('Profilo', sel, 'devices[' + i + '].profileId'));
-
-      [['name', 'Nome Bluetooth'], ['manufacturer', 'Produttore'], ['vid', 'VID'], ['pid', 'PID'], ['mac', 'Indirizzo Bluetooth (MAC)']].forEach(function (f) {
-        var inp = el('input', { autocomplete: 'off' });
-        inp.setAttribute('data-k', f[0]);
-        var cur = d[f[0]];
-        if (cur !== undefined && cur !== null) inp.value = (f[0] === 'vid' || f[0] === 'pid') ? hex4(cur) : cur;
-        card.appendChild(labeled(f[1], inp, 'devices[' + i + '].' + f[0]));
-      });
-      sel.addEventListener('change', function () { refreshPlaceholders(card, d.kind); });
-      refreshPlaceholders(card, d.kind);
-      box.appendChild(card);
-    });
-  }
-
-  function loadDevices() {
-    Promise.all([call('GET', '/api/profiles'), call('GET', '/api/devices')]).then(function (r) {
-      profiles = r[0].data;
-      devices = r[1].data.devices;
-      renderDevices();
-    }).catch(function () {});
-  }
-
-  $('devSave').onclick = function () {
-    var root = $('devList');
-    clearErrors(root);
-    say('', '', 'devMsg');
-    var out = [], bad = false;
-    root.querySelectorAll('.dev').forEach(function (card, i) {
-      var base = devices[i];
-      var d = { id: base.id, kind: base.kind, enabled: card.querySelector('[data-k=enabled]').checked, profileId: card.querySelector('[data-k=profileId]').value };
-      ['name', 'manufacturer', 'mac'].forEach(function (k) {
-        var v = card.querySelector('[data-k=' + k + ']').value.trim();
-        if (v !== '') d[k] = v;
-      });
-      ['vid', 'pid'].forEach(function (k) {
-        var v = card.querySelector('[data-k=' + k + ']').value.trim();
-        if (v === '') return;
-        var n = Number(v);
-        if (!isFinite(n) || Math.floor(n) !== n) { showError(root, 'devices[' + i + '].' + k, 'must be an integer from 0 to 65535'); bad = true; return; }
-        d[k] = n;
-      });
-      out.push(d);
-    });
-    if (bad) return;
-    call('PUT', '/api/devices', { devices: out }).then(function (res) {
-      if (res.status === 200) { say('Salvato. Riavvio…', 'good', 'devMsg'); return restartDevice('devMsg'); }
-      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Salvataggio non riuscito.', 'bad', 'devMsg');
-      else say('Controlla i campi evidenziati.', 'bad', 'devMsg');
-    }).catch(function () {});
-  };
-
-  // ---- Script ------------------------------------------------------------------------------
+  // ---- Script ----
   var scriptList = [], builtin = false, isNew = false;
   var TEMPLATE = '{\n  "steps": [\n    { "op": "key", "key": "F15" },\n    { "op": "wait", "minMs": 500, "maxMs": 1500 }\n  ]\n}';
 
@@ -506,48 +919,43 @@ if (typeof module !== 'undefined' && module.exports) module.exports = JigLib;
     $('scrRun').disabled = isNew;
     $('scrName').disabled = !isNew;
   }
-
   function renderScriptSelect(selected) {
     var sel = $('scrSelect');
     sel.textContent = '';
     scriptList.forEach(function (s) { sel.appendChild(el('option', { value: s.name, text: s.name + (s.builtin ? ' (predefinito)' : '') })); });
     if (selected) sel.value = selected;
   }
-
   function openScript(name) {
-    call('GET', '/api/scripts/' + encodeURIComponent(name)).then(function (res) {
+    App.call('GET', '/api/scripts/' + encodeURIComponent(name)).then(function (res) {
       if (res.status !== 200) { say('Script non trovato.', 'bad', 'scrMsg'); return; }
       isNew = false;
       builtin = res.data.builtin;
       $('scrName').value = res.data.name;
       $('scrBody').value = JSON.stringify(res.data.script, null, 2);
-      clearErrors($('tab-script'));
+      clearErrors($('scriptsBox'));
       setScriptButtons();
     }).catch(function () {});
   }
-
   function loadScripts(selected) {
-    call('GET', '/api/scripts').then(function (res) {
+    return App.call('GET', '/api/scripts').then(function (res) {
       scriptList = res.data.scripts;
       renderScriptSelect(selected);
       if (scriptList.length && !isNew) openScript($('scrSelect').value);
       else setScriptButtons();
     }).catch(function () {});
   }
-
   function scriptError(res) {
-    var d = res.data, root = $('tab-script');
-    clearErrors(root);
+    var d = res.data;
+    clearErrors($('scriptsBox'));
     if (d.field === 'name') { $('e_scrName').textContent = tr(d.message); return; }
     $('e_scrBody').textContent = (d.field ? d.field + ': ' : '') + tr(d.message);
   }
-
   $('scrSelect').addEventListener('change', function () { isNew = false; openScript($('scrSelect').value); });
   $('scrNew').onclick = function () {
     isNew = true; builtin = false;
     $('scrName').value = '';
     $('scrBody').value = TEMPLATE;
-    clearErrors($('tab-script'));
+    clearErrors($('scriptsBox'));
     say('', '', 'scrMsg');
     setScriptButtons();
     $('scrName').focus();
@@ -555,36 +963,33 @@ if (typeof module !== 'undefined' && module.exports) module.exports = JigLib;
   $('scrSave').onclick = function () {
     var name = $('scrName').value.trim();
     say('', '', 'scrMsg');
-    clearErrors($('tab-script'));
+    clearErrors($('scriptsBox'));
     if (!name) { $('e_scrName').textContent = 'Inserisci un nome.'; return; }
-    call('PUT', '/api/scripts/' + encodeURIComponent(name), $('scrBody').value).then(function (res) {
+    App.call('PUT', '/api/scripts/' + encodeURIComponent(name), $('scrBody').value).then(function (res) {
       if (res.status === 200) { isNew = false; say('Script salvato.', 'good', 'scrMsg'); loadScripts(name); }
       else scriptError(res);
     }).catch(function () {});
   };
   $('scrRun').onclick = function () {
-    call('POST', '/api/scripts/' + encodeURIComponent($('scrName').value.trim()) + '/run').then(function (res) {
+    App.call('POST', '/api/scripts/' + encodeURIComponent($('scrName').value.trim()) + '/run').then(function (res) {
       if (res.status === 202) say('Script avviato.', 'good', 'scrMsg');
-      else say(res.data.error === 'mouse_not_connected' ? 'Il dispositivo non è collegato al computer.' : 'Esecuzione non riuscita.', 'bad', 'scrMsg');
+      else say(res.data.error === 'mouse_not_connected' ? 'Nessun computer collegato.' : 'Esecuzione non riuscita.', 'bad', 'scrMsg');
     }).catch(function () {});
   };
-  $('scrDelete').onclick = function () {
-    var name = $('scrName').value.trim();
-    call('DELETE', '/api/scripts/' + encodeURIComponent(name)).then(function (res) {
+  App.confirmInline($('scrDelete'), 'Conferma: elimina', function () {
+    App.call('DELETE', '/api/scripts/' + encodeURIComponent($('scrName').value.trim())).then(function (res) {
       if (res.status === 200) { isNew = false; say('Script eliminato.', 'good', 'scrMsg'); loadScripts(); }
       else say(tr(res.data.message) || 'Eliminazione non riuscita.', 'bad', 'scrMsg');
     }).catch(function () {});
-  };
+  });
 
-  // ---- Automazioni -------------------------------------------------------------------------
+  // ---- Automazioni ----
   var autos = [];
-
   function renderAutos() {
     var box = $('autoList');
     box.textContent = '';
     autos.forEach(function (a, i) {
       var row = el('div', { class: 'dev' });
-      row.setAttribute('data-index', String(i));
       var id = el('input', { autocomplete: 'off' });
       id.setAttribute('data-k', 'id');
       id.value = a.id;
@@ -614,25 +1019,23 @@ if (typeof module !== 'undefined' && module.exports) module.exports = JigLib;
     });
     $('autoAdd').disabled = autos.length >= 4;
   }
-
   function collectAutos() {
     var out = [];
     $('autoList').querySelectorAll('.dev').forEach(function (row) {
       var g = function (k) { return row.querySelector('[data-k=' + k + ']'); };
-      out.push({ id: g('id').value.trim(), script: g('script').value, minIntervalSec: Number(g('minIntervalSec').value), maxIntervalSec: Number(g('maxIntervalSec').value), enabled: g('enabled').checked });
+      out.push({ id: g('id').value.trim(), script: g('script').value, minIntervalSec: Number(g('minIntervalSec').value),
+        maxIntervalSec: Number(g('maxIntervalSec').value), enabled: g('enabled').checked });
     });
     autos = out;
     return out;
   }
-
   function loadAutos() {
-    Promise.all([call('GET', '/api/scripts'), call('GET', '/api/automations')]).then(function (r) {
+    Promise.all([App.call('GET', '/api/scripts'), App.call('GET', '/api/automations')]).then(function (r) {
       scriptList = r[0].data.scripts;
       autos = r[1].data.automations;
       renderAutos();
     }).catch(function () {});
   }
-
   $('autoAdd').onclick = function () {
     collectAutos();
     var n = 1;
@@ -644,62 +1047,204 @@ if (typeof module !== 'undefined' && module.exports) module.exports = JigLib;
     var root = $('autoList');
     clearErrors(root);
     say('', '', 'autoMsg');
-    call('PUT', '/api/automations', { automations: collectAutos() }).then(function (res) {
+    App.call('PUT', '/api/automations', { automations: collectAutos() }).then(function (res) {
       if (res.status === 200) { autos = res.data.automations; renderAutos(); say('Automazioni salvate.', 'good', 'autoMsg'); return; }
       if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Salvataggio non riuscito.', 'bad', 'autoMsg');
       else say('Controlla i campi evidenziati.', 'bad', 'autoMsg');
     }).catch(function () {});
   };
 
-  // ---- Rete --------------------------------------------------------------------------------
+  $('scriptsBox').addEventListener('toggle', function () { if ($('scriptsBox').open) loadScripts(); });
+  $('autoBox').addEventListener('toggle', function () { if ($('autoBox').open) loadAutos(); });
+
+  App.view('movimento', {
+    load: function () {
+      if (App.status()) populate(App.status());
+      if ($('scriptsBox').open) loadScripts();
+      if ($('autoBox').open) loadAutos();
+    },
+    onStatus: function (s) { populate(s); }
+  });
+})();
+
+// Sistema: token, network, Bluetooth identity, device info, restart.
+(function () {
+  'use strict';
+  var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr, hex4 = JigLib.hex4;
+  var labeled = App.labeled, clearErrors = App.clearErrors, showError = App.showError;
+
+  // ---- Token ----
+  $('tokenForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var root = $('tokenForm');
+    clearErrors(root);
+    say('', '', 'tokMsg');
+    var current = $('tokCurrent').value, next = $('tokNew').value, confirm = $('tokConfirm').value;
+    if (!current) { showError(root, 'current', 'the current token is required'); return; }
+    var problem = JigLib.checkNewToken(next, confirm);
+    if (problem) { root.querySelector('[data-err="' + (next === confirm ? 'token' : 'confirm') + '"]').textContent = problem; return; }
+    App.call('PUT', '/api/token', { current: current, token: next }).then(function (res) {
+      if (res.status === 200) {
+        App.setToken(next);
+        $('tokCurrent').value = $('tokNew').value = $('tokConfirm').value = '';
+        say('Token cambiato. Questo browser usa già quello nuovo; ricordati di aggiornare gli altri client e le configurazioni MCP.', 'good', 'tokMsg');
+        return;
+      }
+      var d = res.data;
+      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Cambio non riuscito.', 'bad', 'tokMsg');
+    }).catch(function () {});
+  });
+
+  // ---- Network ----
   function loadNetwork() {
-    call('GET', '/api/network').then(function (res) {
+    App.call('GET', '/api/network').then(function (res) {
       $('netMode').value = res.data.mode;
       $('netSsid').value = res.data.apSsid;
       $('netPass').value = res.data.apPassword;
     }).catch(function () {});
   }
   function saveNetwork(restart) {
-    clearErrors($('tab-rete'));
+    var root = $('view-sistema');
+    ['mode', 'apSsid', 'apPassword'].forEach(function (k) { root.querySelector('[data-err="' + k + '"]').textContent = ''; });
     say('', '', 'netMsg');
-    var body = { mode: $('netMode').value, apSsid: $('netSsid').value, apPassword: $('netPass').value };
-    call('PUT', '/api/network', body).then(function (res) {
+    App.call('PUT', '/api/network', { mode: $('netMode').value, apSsid: $('netSsid').value, apPassword: $('netPass').value }).then(function (res) {
       if (res.status === 200) {
-        say('Salvato.', 'good', 'netMsg');
-        if (restart) return restartDevice('netMsg');
+        say(restart ? 'Salvato. Riavvio…' : 'Salvato: vale dal prossimo riavvio.', 'good', 'netMsg');
+        if (restart) App.restartDevice();
         return;
       }
       var d = res.data;
-      if (!d.field || !showError($('tab-rete'), d.field, d.message)) say(tr(d.message) || 'Salvataggio non riuscito.', 'bad', 'netMsg');
+      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Salvataggio non riuscito.', 'bad', 'netMsg');
     }).catch(function () {});
   }
   $('netSave').onclick = function () { saveNetwork(false); };
   $('netSaveRestart').onclick = function () { saveNetwork(true); };
 
-  // ---- Tabs and login ----------------------------------------------------------------------
-  var LOADERS = { dispositivi: loadDevices, script: function () { loadScripts(); }, automazioni: loadAutos, rete: loadNetwork };
-  function showTab(name) {
-    document.querySelectorAll('#tabs button').forEach(function (b) { b.setAttribute('aria-selected', b.getAttribute('data-tab') === name ? 'true' : 'false'); });
-    document.querySelectorAll('.tab').forEach(function (t) { t.className = 'tab' + (t.id === 'tab-' + name ? ' on' : ''); });
-    if (LOADERS[name] && token) LOADERS[name]();
+  // ---- Bluetooth identity ----
+  var profiles = null, devices = [];
+  function profileFor(kind, id) {
+    if (id !== 'custom') {
+      var list = profiles.profiles;
+      for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    }
+    var c = profiles.custom[kind];
+    return { id: 'custom', name: c.name, manufacturer: c.manufacturer, vid: c.vid, pid: c.pid, oui: null };
   }
-  document.querySelectorAll('#tabs button').forEach(function (b) {
-    b.addEventListener('click', function () { showTab(b.getAttribute('data-tab')); });
+  function refreshPlaceholders(card, kind) {
+    var p = profileFor(kind, card.querySelector('[data-k=profileId]').value);
+    card.querySelector('[data-k=name]').placeholder = p.name;
+    card.querySelector('[data-k=manufacturer]').placeholder = p.manufacturer;
+    card.querySelector('[data-k=vid]').placeholder = hex4(p.vid);
+    card.querySelector('[data-k=pid]').placeholder = hex4(p.pid);
+    card.querySelector('[data-k=mac]').placeholder = p.oui ? p.oui + ':xx:xx:xx (il resto dal chip)' : 'indirizzo del chip (nessuna sostituzione)';
+  }
+  function renderDevices() {
+    var box = $('devList');
+    box.textContent = '';
+    devices.forEach(function (d, i) {
+      var card = el('div', { class: 'dev' });
+      card.appendChild(el('h3', { text: d.kind === 'mouse' ? 'Mouse (' + d.id + ')' : 'Tastiera (' + d.id + ')' }));
+      var enabled = el('input', { type: 'checkbox' });
+      enabled.setAttribute('data-k', 'enabled');
+      enabled.checked = d.enabled;
+      card.appendChild(el('div', { class: 'field' }, [el('label', { class: 'inline' }, [enabled, el('span', { text: 'Abilitato' })])]));
+      var sel = el('select');
+      sel.setAttribute('data-k', 'profileId');
+      profiles.profiles.filter(function (p) { return p.kind === d.kind; }).forEach(function (p) {
+        sel.appendChild(el('option', { value: p.id, text: p.label }));
+      });
+      sel.appendChild(el('option', { value: 'custom', text: 'Personalizzato' }));
+      sel.value = d.profileId;
+      card.appendChild(labeled('Profilo', sel, 'devices[' + i + '].profileId'));
+      [['name', 'Nome Bluetooth'], ['manufacturer', 'Produttore'], ['vid', 'VID'], ['pid', 'PID'], ['mac', 'Indirizzo Bluetooth (MAC)']].forEach(function (f) {
+        var inp = el('input', { autocomplete: 'off' });
+        inp.setAttribute('data-k', f[0]);
+        var cur = d[f[0]];
+        if (cur !== undefined && cur !== null) inp.value = (f[0] === 'vid' || f[0] === 'pid') ? hex4(cur) : cur;
+        card.appendChild(labeled(f[1], inp, 'devices[' + i + '].' + f[0]));
+      });
+      sel.addEventListener('change', function () { refreshPlaceholders(card, d.kind); });
+      refreshPlaceholders(card, d.kind);
+      box.appendChild(card);
+    });
+  }
+  function loadDevices() {
+    Promise.all([App.call('GET', '/api/profiles'), App.call('GET', '/api/devices')]).then(function (r) {
+      profiles = r[0].data;
+      devices = r[1].data.devices;
+      renderDevices();
+    }).catch(function () {});
+  }
+  App.confirmInline($('devSave'), 'Conferma: salva e riavvia', function () {
+    var root = $('devList');
+    clearErrors(root);
+    say('', '', 'devMsg');
+    var out = [], bad = false;
+    root.querySelectorAll('.dev').forEach(function (card, i) {
+      var base = devices[i];
+      var d = { id: base.id, kind: base.kind, enabled: card.querySelector('[data-k=enabled]').checked, profileId: card.querySelector('[data-k=profileId]').value };
+      ['name', 'manufacturer', 'mac'].forEach(function (k) {
+        var v = card.querySelector('[data-k=' + k + ']').value.trim();
+        if (v !== '') d[k] = v;
+      });
+      ['vid', 'pid'].forEach(function (k) {
+        var v = card.querySelector('[data-k=' + k + ']').value.trim();
+        if (v === '') return;
+        var n = Number(v);
+        if (!isFinite(n) || Math.floor(n) !== n) { showError(root, 'devices[' + i + '].' + k, 'must be an integer from 0 to 65535'); bad = true; return; }
+        d[k] = n;
+      });
+      out.push(d);
+    });
+    if (bad) return;
+    App.call('PUT', '/api/devices', { devices: out }).then(function (res) {
+      if (res.status === 200) { say('Salvato. Riavvio…', 'good', 'devMsg'); return App.restartDevice(); }
+      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Salvataggio non riuscito.', 'bad', 'devMsg');
+      else say('Controlla i campi evidenziati.', 'bad', 'devMsg');
+    }).catch(function () {});
   });
+  $('devBox').addEventListener('toggle', function () { if ($('devBox').open) loadDevices(); });
 
+  // ---- Device info and restart ----
+  function renderInfo(s) {
+    if (!s.device) return;
+    $('infoVersion').textContent = s.device.version;
+    $('infoName').textContent = s.device.bleName;
+    $('infoAddress').textContent = s.device.bleAddress;
+  }
+  App.confirmInline($('restartBtn'), 'Conferma: riavvia', function () { say('', '', 'sysMsg'); App.restartDevice(); });
+
+  App.view('sistema', {
+    load: function () { loadNetwork(); if ($('devBox').open) loadDevices(); if (App.status()) renderInfo(App.status()); },
+    onStatus: renderInfo
+  });
+})();
+
+// Boot: login, routing, polling.
+(function () {
+  'use strict';
+  var $ = App.$;
+
+  $('tokenShow').addEventListener('change', function () { $('tokenInput').type = $('tokenShow').checked ? 'text' : 'password'; });
   $('loginForm').addEventListener('submit', function (ev) {
     ev.preventDefault();
     var t = $('tokenInput').value.trim();
     if (!t) { $('loginErr').textContent = 'Inserisci il token.'; return; }
-    setToken(t);
-    $('login').style.display = 'none';
-    poll();
+    App.setToken(t);
+    $('login').hidden = true;
+    App.poll();
+    App.reloadCurrent();
   });
 
-  if (!token) showLogin('');
-  poll();
-  setInterval(poll, 1000);
-  setInterval(tick, 250);
+  window.addEventListener('hashchange', App.route);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) App.poll(); });
+
+  App.route();
+  document.documentElement.setAttribute('data-ready', '1');
+  if (!App.getToken()) App.showLogin('');
+  App.poll();
+  setInterval(App.poll, 1000);
+  setInterval(App.tick, 250);
 })();
 </script>
 </body>

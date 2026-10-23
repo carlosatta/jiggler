@@ -10,6 +10,7 @@
 #include "dashboard_html.h"
 #include "json_codec.h"
 #include "mcp_server.h"
+#include "web_assets.h"
 
 struct HttpServer::Impl {
   Impl(jig::ApiContext& a, TokenStore& t) : api(a), tokens(t), server(80) {}
@@ -75,6 +76,14 @@ struct HttpServer::Impl {
   TokenStore& tokens;
   AsyncWebServer server;
   bool captive = false;
+
+  void servePng(const char* path, const uint8_t* data, size_t size) {
+    server.on(path, HTTP_GET, [data, size](AsyncWebServerRequest* req) {
+      AsyncWebServerResponse* res = req->beginResponse(200, "image/png", data, size);
+      res->addHeader("Cache-Control", "public, max-age=86400");
+      req->send(res);
+    });
+  }
 };
 
 HttpServer::HttpServer(jig::ApiContext& api, TokenStore& tokens) : impl_(new Impl(api, tokens)) {}
@@ -84,10 +93,18 @@ void HttpServer::begin(bool captive) {
   Impl* s = impl_.get();
   s->captive = captive;
   s->server.on("/", HTTP_GET, [](AsyncWebServerRequest* req) {
-    AsyncWebServerResponse* res = req->beginResponse(200, "text/html", kDashboardHtml);
+    AsyncWebServerResponse* res = req->beginResponse(200, "text/html", reinterpret_cast<const uint8_t*>(kDashboardHtml), sizeof(kDashboardHtml) - 1);  // streamed from flash, never copied to the heap
     res->addHeader("Cache-Control", "no-store");
     req->send(res);
   });
+  s->server.on("/manifest.webmanifest", HTTP_GET, [](AsyncWebServerRequest* req) {
+    AsyncWebServerResponse* res = req->beginResponse(200, "application/manifest+json", reinterpret_cast<const uint8_t*>(webassets::kManifest), sizeof(webassets::kManifest) - 1);
+    res->addHeader("Cache-Control", "public, max-age=86400");
+    req->send(res);
+  });
+  s->servePng("/icon-192.png", webassets::kIcon192, webassets::kIcon192Size);
+  s->servePng("/icon-512.png", webassets::kIcon512, webassets::kIcon512Size);
+  s->servePng("/apple-touch-icon.png", webassets::kAppleTouchIcon, webassets::kAppleTouchIconSize);
   s->server.onRequestBody([s](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
     Impl::onBody(s, req, data, len, index, total);
   });

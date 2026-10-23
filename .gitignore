@@ -3,3 +3,4 @@
 .superpowers/
 .impeccable/
 .playwright-mcp/
+__pycache__/

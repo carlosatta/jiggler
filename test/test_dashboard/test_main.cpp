@@ -6,7 +6,9 @@
 #include "api_ex.h"
 #include "automation.h"
 #include "controller.h"
+#include "bluetooth.h"
 #include "dashboard_html.h"
+#include "web_assets.h"
 #include "fakes.h"
 
 using namespace jig;
@@ -20,6 +22,27 @@ struct MemNetworkStore : NetworkStore {
   NetworkSettings stored;
   NetworkSettings load() override { return stored; }
   void save(const NetworkSettings& s) override { stored = s; }
+};
+
+struct FakeLink : BleLink {
+  std::vector<std::string> bonded{"aa:bb:cc:dd:ee:ff"};
+  std::vector<std::string> bondedAddresses() override { return bonded; }
+  std::vector<std::string> connectedAddresses() override { return {}; }
+  void disconnectAll() override {}
+  bool forgetBond(const std::string& a) override {
+    for (auto it = bonded.begin(); it != bonded.end(); ++it)
+      if (*it == a) { bonded.erase(it); return true; }
+    return false;
+  }
+  void forgetAllBonds() override { bonded.clear(); }
+  void setAdvertising(bool) override {}
+  void setPairingOpen(bool) override {}
+};
+
+struct MemTokens : TokenVault {
+  std::string token = "tok";
+  std::string load() override { return token; }
+  bool save(const std::string& t) override { token = t; return true; }
 };
 
 struct Route {
@@ -49,6 +72,15 @@ const Route kPageRoutes[] = {
     {"PUT", "/api/automations", "{\"automations\":[]}"},
     {"GET", "/api/network", ""},
     {"PUT", "/api/network", "{}"},
+    {"GET", "/api/bluetooth", ""},
+    {"POST", "/api/bluetooth/pairing", "{\"seconds\":120}"},
+    {"DELETE", "/api/bluetooth/pairing", ""},
+    {"POST", "/api/bluetooth/disconnect", ""},
+    {"POST", "/api/bluetooth/reconnect", ""},
+    {"PUT", "/api/bluetooth/peers/aabbccddeeff", "{\"label\":\"Mac\"}"},
+    {"DELETE", "/api/bluetooth/peers/aabbccddeeff", ""},
+    {"DELETE", "/api/bluetooth/peers", ""},
+    {"PUT", "/api/token", "{\"current\":\"tok\",\"token\":\"newtoken99\"}"},
     {"POST", "/api/restart", ""},
 };
 
@@ -89,8 +121,15 @@ void test_dashboard_only_references_real_routes() {
   ScriptLibrary scripts(blobs);
   AutomationEngine automations(clock, rng, scripts, blobs);
   automations.begin();
+  FakeLink link;
+  MemBlobStore peerBlobs;
+  BluetoothManager bluetooth(clock, link, peerBlobs);
+  bluetooth.begin();
+  MemTokens tokens;
   int restarts = 0;
   ApiContext ctx{controller};
+  ctx.bluetooth = &bluetooth;
+  ctx.tokens = &tokens;
   ctx.network = &net;
   ctx.devices = &devices;
   ctx.scripts = &scripts;
@@ -120,10 +159,29 @@ void test_dashboard_never_injects_html() {
     TEST_ASSERT_TRUE_MESSAGE(html.find(sink) == std::string::npos, sink);
 }
 
+void test_pwa_assets_are_served_and_referenced() {
+  const std::string html = kDashboardHtml;
+  for (const char* ref : {"/manifest.webmanifest", "/icon-192.png", "/apple-touch-icon.png"})
+    TEST_ASSERT_TRUE_MESSAGE(html.find(ref) != std::string::npos, ref);
+  const std::string manifest = webassets::kManifest;
+  for (const char* key : {"\"display\": \"standalone\"", "\"start_url\"", "/icon-192.png", "/icon-512.png"})
+    TEST_ASSERT_TRUE_MESSAGE(manifest.find(key) != std::string::npos, key);
+  const uint8_t* icons[] = {webassets::kIcon192, webassets::kIcon512, webassets::kAppleTouchIcon};
+  const size_t sizes[] = {webassets::kIcon192Size, webassets::kIcon512Size, webassets::kAppleTouchIconSize};
+  for (int i = 0; i < 3; ++i) {
+    TEST_ASSERT_TRUE(sizes[i] > 1000);
+    TEST_ASSERT_EQUAL_HEX8(0x89, icons[i][0]);
+    TEST_ASSERT_EQUAL_HEX8('P', icons[i][1]);
+    TEST_ASSERT_EQUAL_HEX8('N', icons[i][2]);
+    TEST_ASSERT_EQUAL_HEX8('G', icons[i][3]);
+  }
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_dashboard_only_references_real_routes);
   RUN_TEST(test_dashboard_is_self_contained_html);
   RUN_TEST(test_dashboard_never_injects_html);
+  RUN_TEST(test_pwa_assets_are_served_and_referenced);
   return UNITY_END();
 }

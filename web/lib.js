@@ -32,7 +32,15 @@ var JigLib = (function () {
     'could not save the script (storage full?)': 'Memoria piena: impossibile salvare lo script.',
     'could not save the automations (storage full?)': 'Memoria piena: impossibile salvare.',
     'script is too complex (max 10000 operations)': 'Script troppo complesso (massimo 10000 operazioni).',
-    'script is too large (max 3000 bytes)': 'Script troppo grande.'
+    'script is too large (max 3000 bytes)': 'Script troppo grande.',
+    'the pairing window must last between 30 and 600 seconds': 'L’abbinamento deve durare tra 30 e 600 secondi.',
+    'no such paired computer': 'Questo computer non è più abbinato.',
+    'the name must be 1 to 32 characters': 'Il nome deve avere da 1 a 32 caratteri.',
+    'the name must not contain control characters': 'Il nome non può contenere caratteri di controllo.',
+    'the current token is not correct': 'Il token attuale non è corretto.',
+    'the current token is required': 'Inserisci il token attuale.',
+    'must be 8 to 40 printable characters without spaces': 'Da 8 a 40 caratteri, senza spazi.',
+    'could not save the token (storage full?)': 'Memoria piena: token non salvato.'
   };
 
   function tr(message) { return MESSAGES[message] || message || 'Valore non valido.'; }
@@ -48,9 +56,55 @@ var JigLib = (function () {
     return m === 1 ? '1 minuto fa' : m + ' minuti fa';
   }
 
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+  // A duration, as in "da 12 minuti" / "da 1 ora e 5 min".
+  function fmtSince(ms) {
+    var m = Math.floor(ms / 60000);
+    if (m < 1) return 'meno di un minuto';
+    if (m < 60) return plural(m, 'minuto', 'minuti');
+    var h = Math.floor(m / 60), rest = m % 60;
+    return plural(h, 'ora', 'ore') + (rest ? ' e ' + rest + ' min' : '');
+  }
+
+  // What the Stato page says about the Bluetooth link, from /api/status. Pure so the wording is testable.
+  function connectionView(bt, device) {
+    var name = (device && device.bleName) || 'il dispositivo';
+    var pairing = bt.pairing || {};
+    var timed = pairing.open && pairing.remainingMs !== null && pairing.remainingMs !== undefined;
+    var window_ = timed ? ' Abbinamento aperto, scade tra ' + fmtDuration(pairing.remainingMs) + '.' : '';
+    if (bt.connected && bt.computer) {
+      var actions = ['disconnect'];
+      if (timed) actions.push('closePairing');
+      return { tone: 'ok', title: 'Collegato a ' + bt.computer.label,
+        detail: 'da ' + fmtSince(bt.computer.connectedForMs) + ' · ' + name + '.' + window_, actions: actions };
+    }
+    if (bt.held) {
+      return { tone: 'warn', title: 'Scollegato',
+        detail: 'Il dispositivo è invisibile: nessun computer può collegarsi finché non lo riconnetti.', actions: ['reconnect'] };
+    }
+    if (pairing.open && !timed) {
+      return { tone: 'open', title: 'Pronto per l’abbinamento',
+        detail: 'Sul computer apri le impostazioni Bluetooth e scegli «' + name + '».', actions: [] };
+    }
+    if (timed) {
+      return { tone: 'open', title: 'Abbinamento aperto',
+        detail: 'Scade tra ' + fmtDuration(pairing.remainingMs) + '. Sul computer scegli «' + name + '».', actions: ['closePairing'] };
+    }
+    return { tone: 'idle', title: 'Nessun computer collegato',
+      detail: 'Si ricollega da solo quando il computer abbinato è acceso e vicino.', actions: ['pair'] };
+  }
+
+  function checkNewToken(next, confirm) {
+    if (next.length < 8 || next.length > 40 || /\s/.test(next)) return 'Da 8 a 40 caratteri, senza spazi.';
+    if (next !== confirm) return 'I due token non coincidono.';
+    return '';
+  }
+
   function hex4(n) { return '0x' + ('0000' + n.toString(16).toUpperCase()).slice(-4); }
 
-  return { MESSAGES: MESSAGES, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, hex4: hex4 };
+  return { MESSAGES: MESSAGES, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, fmtSince: fmtSince,
+    connectionView: connectionView, checkNewToken: checkNewToken, hex4: hex4 };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = JigLib;

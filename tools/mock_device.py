@@ -1,0 +1,306 @@
+#!/usr/bin/env python3
+"""A stand-in for the board, to develop and screenshot the dashboard without hardware.
+
+    python3 tools/mock_device.py [--port 8080] [--token mocktoken1]
+
+Serves the dashboard built from web/ plus an in-memory imitation of the API (status, Bluetooth pairing and
+peers, config, scripts, automations, devices, network, token). Not a test oracle: the firmware's host tests are.
+Scenarios can be forced for screenshots:  curl -X POST localhost:8080/__scenario/<name>
+  firstrun | connected | idle | held | pairing | many
+"""
+import argparse
+import json
+import pathlib
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tools"))
+import build_web  # noqa: E402
+
+PROFILES = {
+    "profiles": [
+        {"id": "logitech-mx-master-3s", "label": "Logitech MX Master 3S", "kind": "mouse", "name": "MX Master 3S",
+         "manufacturer": "Logitech", "vid": 1133, "pid": 45108, "oui": "00:1F:20"},
+        {"id": "razer-orochi-v2", "label": "Razer Orochi V2", "kind": "mouse", "name": "Razer Orochi V2",
+         "manufacturer": "Razer", "vid": 5426, "pid": 706, "oui": None},
+        {"id": "logitech-k380", "label": "Logitech K380", "kind": "keyboard", "name": "Keyboard K380",
+         "manufacturer": "Logitech", "vid": 1133, "pid": 45091, "oui": "00:1F:20"},
+    ],
+    "custom": {"mouse": {"name": "Jiggler Mouse", "manufacturer": "Jiggler", "vid": 4617, "pid": 1},
+               "keyboard": {"name": "Jiggler Keyboard", "manufacturer": "Jiggler", "vid": 4617, "pid": 2}},
+}
+
+
+class Device:
+    def __init__(self, token: str):
+        self.lock = threading.Lock()
+        self.token = token
+        self.config = {"minIntervalSec": 30, "maxIntervalSec": 120, "amplitudePx": 150,
+                       "clickProbability": 0, "scrollProbability": 0.1}
+        self.state = "running"
+        self.moves = 128
+        self.last_move = time.time() - 40
+        self.next_move_at = time.time() + 47
+        self.scripts = {"keepalive-key": {"builtin": True,
+                                          "script": {"steps": [{"op": "key", "key": "F15"}, {"op": "wait", "minMs": 500, "maxMs": 1500}]}}}
+        self.autos = [{"id": "keepalive-key", "script": "keepalive-key", "minIntervalSec": 60, "maxIntervalSec": 180, "enabled": False}]
+        self.devices = [{"id": "mouse", "kind": "mouse", "enabled": True, "profileId": "logitech-mx-master-3s"},
+                        {"id": "keyboard", "kind": "keyboard", "enabled": False, "profileId": "custom"}]
+        self.network = {"mode": "auto", "apSsid": "Jiggler", "apPassword": "mockpassw0rd"}
+        self.scenario("connected")
+
+    def scenario(self, name):
+        now = time.time()
+        self.held = False
+        self.window_until = None
+        self.connected_since = None
+        self.peers = []
+        if name == "firstrun":
+            pass
+        elif name in ("connected", "held", "pairing", "idle", "many"):
+            self.peers = [{"address": "a4:83:e7:12:0b:9c", "label": "Computer 1"}]
+            if name == "many":
+                self.peers += [{"address": "3c:22:fb:00:5a:11", "label": "MacBook Carlos"},
+                               {"address": "d0:03:4b:aa:10:77", "label": "Computer 3"}]
+            if name in ("connected", "pairing", "many"):
+                self.connected_since = now - 12 * 60 - 20
+            if name == "held":
+                self.held = True
+            if name == "pairing":
+                self.window_until = now + 95
+        else:
+            return False
+        return True
+
+    def pid(self, address):
+        return address.replace(":", "")
+
+    def connected_addr(self):
+        return self.peers[0]["address"] if (self.connected_since and not self.held and self.peers) else None
+
+    def bluetooth(self):
+        now = time.time()
+        if self.window_until and now >= self.window_until:
+            self.window_until = None
+        first = not self.peers
+        open_ = first or bool(self.window_until)
+        connected = self.connected_addr() is not None
+        out = {"connected": connected, "held": self.held,
+               "pairing": {"open": open_, "remainingMs": int((self.window_until - now) * 1000) if self.window_until else None, "firstRun": first},
+               "computer": None, "peers": []}
+        if connected:
+            out["computer"] = {"label": self.peers[0]["label"], "connectedForMs": int((now - self.connected_since) * 1000)}
+        for p in self.peers:
+            out["peers"].append({"id": self.pid(p["address"]), "address": p["address"], "label": p["label"],
+                                 "connected": connected and p is self.peers[0]})
+        return out
+
+    def status(self):
+        now = time.time()
+        bt = self.bluetooth()
+        summary = {k: bt[k] for k in ("connected", "held", "pairing", "computer")}
+        summary["pairing"] = {"open": bt["pairing"]["open"], "remainingMs": bt["pairing"]["remainingMs"]}
+        summary["peerCount"] = len(bt["peers"])
+        if self.state == "running" and now >= self.next_move_at:
+            self.moves += 1
+            self.last_move = now
+            self.next_move_at = now + 30 + (self.moves % 7) * 5
+        return {"state": self.state, "mouseConnected": bt["connected"], "wifiConnected": True,
+                "msToNextMove": int((self.next_move_at - now) * 1000) if self.state == "running" else None,
+                "moveCount": self.moves, "lastMoveAgoMs": int((now - self.last_move) * 1000), "lastMoveAt": int(self.last_move),
+                "config": self.config, "bluetooth": summary,
+                "device": {"version": "0.2.0", "bleName": "MX Master 3S", "bleAddress": "00:1f:20:fd:3b:76"}}
+
+
+DEV = None
+PAGE = None
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, fmt, *args):
+        pass
+
+    def send(self, status, body, ctype="application/json", extra=None):
+        data = body if isinstance(body, bytes) else (json.dumps(body) if not isinstance(body, str) else body).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def body(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(n).decode() if n else ""
+        try:
+            return json.loads(raw) if raw else {}
+        except ValueError:
+            return None
+
+    def err(self, status, code, field="", message=""):
+        e = {"error": code}
+        if field:
+            e["field"] = field
+        if message:
+            e["message"] = message
+        self.send(status, e)
+
+    def do_GET(self):
+        self.route("GET")
+
+    def do_POST(self):
+        self.route("POST")
+
+    def do_PUT(self):
+        self.route("PUT")
+
+    def do_DELETE(self):
+        self.route("DELETE")
+
+    def route(self, method):
+        path = self.path.split("?")[0]
+        if method == "GET" and path == "/":
+            return self.send(200, PAGE, "text/html")
+        if method == "GET" and path == "/manifest.webmanifest":
+            return self.send(200, (ROOT / "web" / "manifest.webmanifest").read_bytes(), "application/manifest+json")
+        if method == "GET" and path in ("/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"):
+            return self.send(200, (ROOT / "web" / "icons" / path[1:]).read_bytes(), "image/png")
+        if method == "POST" and path.startswith("/__scenario/"):
+            with DEV.lock:
+                ok = DEV.scenario(path.rsplit("/", 1)[1])
+            return self.send(200 if ok else 404, {"ok": ok})
+        if not path.startswith("/api/"):
+            return self.err(404, "not_found")
+        if self.headers.get("Authorization") != "Bearer " + DEV.token:
+            return self.send(401, {"error": "unauthorized"})
+        body = self.body() if method in ("POST", "PUT") else {}
+        with DEV.lock:
+            self.api(method, path, body)
+
+    def api(self, method, path, body):
+        d = DEV
+        if path == "/api/status" and method == "GET":
+            return self.send(200, d.status())
+        if path == "/api/start":
+            d.state = "running"; d.next_move_at = time.time() + 30
+            return self.send(200, {"state": d.state})
+        if path == "/api/pause":
+            d.state = "paused"
+            return self.send(200, {"state": d.state})
+        if path == "/api/stop":
+            d.state = "stopped"
+            return self.send(200, {"state": d.state})
+        if path == "/api/move":
+            if not d.connected_addr():
+                return self.err(409, "mouse_not_connected")
+            d.moves += 1; d.last_move = time.time()
+            return self.send(202, {"ok": True})
+        if path == "/api/config":
+            if method == "PUT":
+                for k, v in (body or {}).items():
+                    if k in ("minIntervalSec", "maxIntervalSec") and not 5 <= v <= 3600:
+                        return self.err(400, "invalid_config", k, "must be between 5 and 3600")
+                    d.config[k] = v
+            return self.send(200, d.config)
+        if path == "/api/restart":
+            return self.send(202, {"restarting": True})
+        if path == "/api/profiles":
+            return self.send(200, PROFILES)
+        if path == "/api/devices":
+            if method == "PUT":
+                d.devices = body["devices"]
+                return self.send(200, {"devices": d.devices, "restartRequired": True})
+            return self.send(200, {"devices": d.devices})
+        if path == "/api/network":
+            if method == "PUT":
+                d.network.update(body)
+            return self.send(200, d.network)
+        if path == "/api/automations":
+            if method == "PUT":
+                d.autos = body["automations"]
+            return self.send(200, {"automations": d.autos})
+        if path == "/api/scripts":
+            return self.send(200, {"scripts": [{"name": n, "builtin": s["builtin"]} for n, s in d.scripts.items()]})
+        if path.startswith("/api/scripts/"):
+            name = path.split("/")[3]
+            if path.endswith("/run"):
+                return self.send(202, {"ok": True}) if d.connected_addr() else self.err(409, "mouse_not_connected")
+            if method == "GET" and name in d.scripts:
+                return self.send(200, {"name": name, "builtin": d.scripts[name]["builtin"], "script": d.scripts[name]["script"]})
+            if method == "PUT":
+                d.scripts[name] = {"builtin": False, "script": body}
+                return self.send(200, {"name": name})
+            if method == "DELETE" and name in d.scripts:
+                if d.scripts[name]["builtin"]:
+                    return self.err(403, "read_only", "", "the built-in script cannot be removed")
+                del d.scripts[name]
+                return self.send(200, {"ok": True})
+            return self.err(404, "not_found")
+        if path == "/api/token" and method == "PUT":
+            if body.get("current") != d.token:
+                return self.err(403, "wrong_current", "current", "the current token is not correct")
+            if not 8 <= len(body.get("token", "")) <= 40:
+                return self.err(400, "invalid_token", "token", "must be 8 to 40 printable characters without spaces")
+            d.token = body["token"]
+            return self.send(200, {"ok": True})
+        if path == "/api/bluetooth" and method == "GET":
+            return self.send(200, d.bluetooth())
+        if path == "/api/bluetooth/pairing":
+            if method == "DELETE":
+                d.window_until = None
+                return self.send(200, d.bluetooth())
+            seconds = (body or {}).get("seconds", 120)
+            if not 30 <= seconds <= 600:
+                return self.err(400, "invalid_seconds", "seconds", "the pairing window must last between 30 and 600 seconds")
+            d.window_until = time.time() + seconds; d.held = False
+            return self.send(200, d.bluetooth())
+        if path == "/api/bluetooth/disconnect":
+            d.held = True; d.window_until = None
+            return self.send(200, d.bluetooth())
+        if path == "/api/bluetooth/reconnect":
+            d.held = False
+            if d.peers and not d.connected_since:
+                d.connected_since = time.time()
+            return self.send(200, d.bluetooth())
+        if path == "/api/bluetooth/peers" and method == "DELETE":
+            d.peers = []; d.connected_since = None; d.held = False
+            return self.send(200, d.bluetooth())
+        if path.startswith("/api/bluetooth/peers/"):
+            pid = path.rsplit("/", 1)[1]
+            match = [p for p in d.peers if d.pid(p["address"]) == pid]
+            if not match:
+                return self.err(404, "not_found", "", "no such paired computer")
+            if method == "DELETE":
+                d.peers.remove(match[0])
+                if not d.peers:
+                    d.connected_since = None
+                return self.send(200, d.bluetooth())
+            label = (body or {}).get("label", "").strip()
+            if not 1 <= len(label) <= 32:
+                return self.err(400, "invalid_label", "label", "the name must be 1 to 32 characters")
+            match[0]["label"] = label
+            return self.send(200, d.bluetooth())
+        return self.err(404, "not_found")
+
+
+def main():
+    global DEV, PAGE
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--token", default="mocktoken1")
+    args = ap.parse_args()
+    DEV = Device(args.token)
+    PAGE = build_web.build().split('R"HTML(', 1)[1].rsplit(')HTML"', 1)[0]
+    print(f"mock device on http://localhost:{args.port}  token: {args.token}")
+    ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+
+
+if __name__ == "__main__":
+    main()

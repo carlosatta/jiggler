@@ -7,5 +7,5 @@
 class Led {
  public:
   void begin();
-  void update(const jig::Status& status, uint32_t nowMs);
+  void update(const jig::Status& status, bool pairingOpen, bool held, uint32_t nowMs);
 };

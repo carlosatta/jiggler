@@ -10,8 +10,8 @@ constexpr uint8_t kLedPin = 2;
 
 void Led::begin() { pinMode(kLedPin, OUTPUT); }
 
-void Led::update(const jig::Status& s, uint32_t nowMs) {
+void Led::update(const jig::Status& s, bool pairingOpen, bool held, uint32_t nowMs) {
   const bool hasMoved = s.lastMoveAgoMs.has_value();
   const uint32_t lastMoveMs = hasMoved ? nowMs - *s.lastMoveAgoMs : 0;
-  digitalWrite(kLedPin, jig::ledLevel(s.mouseConnected, nowMs, lastMoveMs, hasMoved) ? HIGH : LOW);
+  digitalWrite(kLedPin, jig::ledLevel({s.mouseConnected, pairingOpen, held, nowMs, lastMoveMs, hasMoved}) ? HIGH : LOW);
 }

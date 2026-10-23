@@ -70,6 +70,25 @@ Body size caps: 4096 bytes for scripts and MCP, 2048 for devices and automations
 
 `state` is `running`, `paused` or `stopped`. `msToNextMove`, `lastMoveAgoMs` and `lastMoveAt` (Unix time, needs NTP) are `null` when unknown.
 
+## Bluetooth
+
+See [bluetooth.md](bluetooth.md) for the pairing policy. `GET /api/status` also carries a compact `"bluetooth"` object (`connected`, `held`, `pairing{open, remainingMs}`, `computer{label, connectedForMs}`, `peerCount`) and a `"device"` object (`version`, `bleName`, `bleAddress`).
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/bluetooth` | Full state: connection, pairing window (`firstRun` when no computer is paired), `computer`, and `peers[]` (`id`, `address`, `label`, `connected`) |
+| POST | `/api/bluetooth/pairing` | Open a pairing window. Body `{"seconds":120}` (30–600, optional) |
+| DELETE | `/api/bluetooth/pairing` | Close the window |
+| POST | `/api/bluetooth/disconnect` | Drop the link and hide the device until reconnect |
+| POST | `/api/bluetooth/reconnect` | Make the device visible again |
+| PUT | `/api/bluetooth/peers/<id>` | Rename a paired computer: `{"label":"MacBook"}` (1–32 chars) |
+| DELETE | `/api/bluetooth/peers/<id>` | Forget one computer (`404 not_found` if unknown) |
+| DELETE | `/api/bluetooth/peers` | Forget all computers and reopen pairing |
+
+## API token
+
+`PUT /api/token` with `{"current":"<old>","token":"<new>"}` (new token: 8–40 printable characters, no spaces). A wrong `current` answers `403 wrong_current`. The old token stops working immediately; update dashboards and MCP clients.
+
 ## Configuration
 
 | Method | Path | Description |

@@ -2,8 +2,10 @@
 
 #include <string>
 
-class TokenStore {
+#include "platform.h"
+
+class TokenStore : public jig::TokenVault {
  public:
-  std::string load();  // empty if never saved
-  void save(const std::string& token);
+  std::string load() override;  // empty if never saved
+  bool save(const std::string& token) override;
 };

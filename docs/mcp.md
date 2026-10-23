@@ -51,6 +51,11 @@ Tool failures are returned as a normal result with `isError: true` and a JSON er
 | `get_network` | – | Network mode and AP settings |
 | `set_network` | `mode`, `apSsid`, `apPassword` (optional) | Change network settings. Needs restart |
 | `restart` | – | Restart the device |
+| `get_bluetooth` | – | Connection, pairing window and paired computers |
+| `start_pairing` | `seconds` (30–600, optional) | Open a pairing window |
+| `disconnect_bluetooth` | – | Drop the link and hide the device until `reconnect_bluetooth` |
+| `reconnect_bluetooth` | – | Make the device visible again |
+| `forget_computer` | `id` | Forget one paired computer |
 
 A tool is only listed when its service is available on the device.
 

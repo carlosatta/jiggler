@@ -11,7 +11,7 @@ An ESP32 (classic `esp32dev`) that keeps a computer awake by acting as a BLE mou
 PlatformIO (`pipx install platformio`; `pio` lives in `~/.local/bin`).
 
 - Host unit tests (no board needed): `pio test -e native`
-- One suite: `pio test -e native -f test_controller` (suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_longpress`, `test_devices`, `test_keyboard`, `test_script`, `test_automation`, `test_mcp_ex`)
+- One suite: `pio test -e native -f test_controller` (suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_devices`, `test_keyboard`, `test_script`, `test_automation`, `test_mcp_ex`)
 - Build firmware: `pio run -e esp32`
 - Flash: `pio run -e esp32 -t upload --upload-port /dev/cu.usbserial-0001`
 - Serial monitor: `pio device monitor` (115200 baud)
@@ -34,7 +34,8 @@ All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio
 - **One BLE identity.** `DeviceRegistry` (`devices.*`, blob key `devices`) holds a list of devices (mouse/keyboard) chosen from `catalog()` (`profiles.*`, only verified VID/PID/OUI) or `custom`, with optional name/manufacturer/VID/PID/MAC overrides. The identity (name, vendor, PnP ID, Bluetooth address) is the *first enabled device's*; every enabled device adds an HID collection (`buildReportMap`: mouse report ID 1, keyboard report ID 2) to the same BLE device (`BleMouse`, which is mouse + keyboard sink). The classic ESP32 has one Bluetooth address, so truly separate simultaneous identities are not possible here (see the spike notes in `docs/superpowers/specs/`). Identity changes apply after a restart and need re-pairing.
 - **Scripts.** JSON `{"steps":[...]}` (ops `move`, `click`, `scroll`, `key`, `type`, `wait`, `repeat`) compiled by `compileScript` into the same `Plan`/`Step` model the mouse uses (extra step kinds `KeyDown`, `KeyUp`, `Wait`). All limits (steps, worst-case wait, nesting, coordinates, text) are enforced at compile time. `ScriptLibrary` stores up to 8 user scripts plus the read-only `keepalive-key` (F15 tap). `AutomationEngine` runs scripts on a random schedule (only while the global run state is Running) and on demand (`runNow`, `runInline`); the movement task runs `Controller::tick()` first, then the engine.
 - **Router entry points.** `handleApiEx(ApiContext&)` / `handleMcpEx(ApiContext&)` add routes/tools (`/api/profiles|devices|scripts|automations|network|restart`, MCP tools for the same) and fall back to the original `handleApi` / the original six tools; services in `ApiContext` are optional (missing = 404 / tool not listed). Body caps: `kMaxBodyBytes` 4096 transport (scripts, MCP), `kMaxSmallBodyBytes` 1024 (config, network), `kMaxMediumBodyBytes` 2048 (devices, automations).
-- **Network modes.** `auto` = home WiFi with the `Jiggler-Setup` portal fallback; `ap` = own WPA2 network (default SSID `Jiggler`, generated password printed on serial) with a DNS captive portal redirecting to the dashboard. In AP mode the token defaults to the AP password. Hold BOOT (GPIO0) 3 s to toggle the mode and restart (`LongPress`).
+- **Network modes.** `auto` = home WiFi with the `Jiggler-Setup` portal fallback; `ap` = own WPA2 network (default SSID `Jiggler`, generated password printed on serial) with a DNS captive portal redirecting to the dashboard. In AP mode the token defaults to the AP password. BOOT (GPIO0): hold 3 s toggles the mode and restarts, a short tap opens a pairing window (`ButtonGesture`).
+- **Bluetooth policy.** `BluetoothManager` (`bluetooth.*`, blob key `peers` for labels) owns pairing windows, "disconnect = drop link + hide", forget and labels; it only talks to the stack through `BleLink`, implemented by `BleMouse` (bond list via `NimBLEDevice::getBondedAddress`, refusal in `linkIdentified`, advertising held off with `advertiseOnDisconnect(false)`). First run (no bond) keeps pairing open; with a bond it is closed unless a window is open. `PUT /api/token` goes through `TokenVault`.
 - `NvsBlobStore` hashes keys to short NVS names and keeps an index blob, so blob keys can be long (`script/<name>`).
 
 ## Gotchas
@@ -50,4 +51,7 @@ All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio
 
 ## Dashboard sources
 
-Edit `web/` and run `python3 tools/build_web.py` (PlatformIO does it automatically before builds/tests); never edit `src/dashboard_html.h` by hand. Pure JS helpers live in `web/lib.js` with node tests: `node --test web/test/*.test.js`.
+Serve the page and PWA files from flash (`beginResponse` with a `const uint8_t*`), never as a `const char*`: that overload copies the whole 60+ KB page to the heap and the request dies with a connection reset. `web_assets.h` (manifest, icons) is generated too.
+
+
+Edit `web/` (script order is `JS_ORDER` in `tools/build_web.py`) and run `python3 tools/build_web.py` (PlatformIO does it automatically before builds/tests); never edit `src/dashboard_html.h` by hand. Pure JS helpers live in `web/lib.js` with node tests: `node --test web/test/*.test.js`. UI work: `python3 tools/mock_device.py` (token `mocktoken1`, scenarios via `POST /__scenario/{firstrun|connected|idle|held|pairing|many}`).

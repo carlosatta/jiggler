@@ -6,7 +6,8 @@
 #include "controller.h"
 #include "http_server.h"
 #include "led.h"
-#include "long_press.h"
+#include "bluetooth.h"
+#include "button_gesture.h"
 #include "movement_task.h"
 #include "automation.h"
 #include "devices.h"
@@ -19,7 +20,8 @@
 
 namespace {
 constexpr uint8_t kBootButtonPin = 0;
-constexpr uint32_t kBootHoldMs = 3000;
+constexpr uint32_t kPairingWindowSec = jig::kDefaultPairingSec;
+constexpr uint32_t kBluetoothTickMs = 200;
 volatile uint32_t restartAtMs = 0;
 
 void scheduleRestart() {
@@ -43,7 +45,11 @@ jig::ApiContext api{controller};
 WifiSetup wifi(tokens, networkStore);
 HttpServer http(api, tokens);
 Led led;
-jig::LongPress bootButton(kBootHoldMs);
+jig::ButtonGesture bootButton;
+jig::BluetoothManager bluetooth(platform, ble, blobs);
+bool pairingOpen = true;
+bool held = false;
+uint32_t lastBluetoothTick = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -57,6 +63,7 @@ void setup() {
   resolved.keyboard = true;  // debug builds only: in memory, never persisted
 #endif
   ble.begin(resolved);
+  bluetooth.begin();
   controller.begin();
   automations.begin();
   startMovementTask(controller, automations, ble, platform);  // from here on the mouse works without WiFi
@@ -64,22 +71,41 @@ void setup() {
   api.devices = &devices;
   api.scripts = &scripts;
   api.automations = &automations;
+  api.bluetooth = &bluetooth;
+  api.tokens = &tokens;
+  api.info = {JIG_VERSION, ble.name(), ble.address()};
   api.restart = scheduleRestart;
-  Serial.printf("jiggler started, BLE address %s\n", NimBLEDevice::getAddress().toString().c_str());
+  Serial.printf("jiggler %s started, BLE address %s\n", JIG_VERSION, NimBLEDevice::getAddress().toString().c_str());
   wifi.begin();
 }
 
 void loop() {
   const uint32_t now = millis();
-  led.update(controller.status(), now);
+  if (now - lastBluetoothTick >= kBluetoothTickMs) {
+    lastBluetoothTick = now;
+    bluetooth.tick();
+    const jig::BluetoothStatus bt = bluetooth.status();
+    pairingOpen = bt.pairingOpen;
+    held = bt.held;
+  }
+  led.update(controller.status(), pairingOpen, held, now);
   if (wifi.loop()) http.begin(wifi.apMode());
 
-  if (bootButton.update(digitalRead(kBootButtonPin) == LOW, now)) {
-    jig::NetworkSettings s = networkStore.load();
-    s.mode = s.mode == jig::NetworkMode::Ap ? jig::NetworkMode::Auto : jig::NetworkMode::Ap;
-    networkStore.save(s);
-    Serial.printf("BOOT held: network mode -> %s, restarting\n", s.mode == jig::NetworkMode::Ap ? "ap" : "auto");
-    scheduleRestart();
+  switch (bootButton.update(digitalRead(kBootButtonPin) == LOW, now)) {
+    case jig::Gesture::Short:
+      bluetooth.startPairing(kPairingWindowSec);
+      Serial.printf("BOOT pressed: pairing open for %u s\n", static_cast<unsigned>(kPairingWindowSec));
+      break;
+    case jig::Gesture::Long: {
+      jig::NetworkSettings s = networkStore.load();
+      s.mode = s.mode == jig::NetworkMode::Ap ? jig::NetworkMode::Auto : jig::NetworkMode::Ap;
+      networkStore.save(s);
+      Serial.printf("BOOT held: network mode -> %s, restarting\n", s.mode == jig::NetworkMode::Ap ? "ap" : "auto");
+      scheduleRestart();
+      break;
+    }
+    case jig::Gesture::None:
+      break;
   }
   if (restartAtMs && static_cast<int32_t>(now - restartAtMs) >= 0) ESP.restart();
   delay(10);

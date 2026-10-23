@@ -4,15 +4,36 @@
 
 #include <atomic>
 
+#include <mutex>
+#include <string>
+#include <vector>
+
+#include "bluetooth.h"
 #include "devices.h"
 #include "platform.h"
 
 // One BLE HID device exposing a mouse and/or keyboard collection, with the identity (name, vendor,
 // VID/PID, Bluetooth address) of the first enabled device in the registry.
-class BleMouse : public jig::MouseSink, public jig::KeyboardSink {
+class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::BleLink {
  public:
   void begin(const jig::ResolvedDevice& device);
   bool connected() const { return connected_; }
+  std::string address() const;
+  std::string name() const { return name_; }
+
+  // jig::BleLink
+  std::vector<std::string> bondedAddresses() override;
+  std::vector<std::string> connectedAddresses() override;
+  void disconnectAll() override;
+  bool forgetBond(const std::string& address) override;
+  void forgetAllBonds() override;
+  void setAdvertising(bool on) override;
+  void setPairingOpen(bool open) override;
+
+  // Called by the server callbacks.
+  void linkUp(uint16_t handle, const std::string& peerAddress);
+  void linkIdentified(uint16_t handle, const std::string& idAddress, bool bonded);
+  void linkDown(uint16_t handle);
   void move(int8_t dx, int8_t dy) override;
   void click() override;
   void scroll(int8_t notches) override;
@@ -20,10 +41,23 @@ class BleMouse : public jig::MouseSink, public jig::KeyboardSink {
   void keyUp() override;
 
  private:
+  void refreshConnected();
   void sendMouse(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel);
   void sendKeyboard(uint8_t modifiers, uint8_t usage);
 
+  struct Link {
+    uint16_t handle;
+    std::string address;
+    std::vector<std::string> bondedBefore;  // bonds that existed when this link came up
+  };
+
   std::atomic<bool> connected_{false};
+  std::atomic<bool> advertise_{true};
+  std::atomic<bool> pairingOpen_{true};
+  std::mutex linksMutex_;
+  std::vector<Link> links_;
+  std::string name_;
+  NimBLEServer* server_ = nullptr;
   NimBLECharacteristic* mouseInput_ = nullptr;
   NimBLECharacteristic* keyboardInput_ = nullptr;
   std::vector<uint8_t> reportMap_;
