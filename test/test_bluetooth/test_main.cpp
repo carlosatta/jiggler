@@ -200,10 +200,10 @@ void test_peers_get_stable_default_labels_and_can_be_renamed() {
   TEST_ASSERT_EQUAL_STRING("Computer 1", s.peers[0].label.c_str());
   TEST_ASSERT_EQUAL_STRING("Computer 2", s.peers[1].label.c_str());
 
-  TEST_ASSERT_TRUE(e.bt.rename(kIdA, "MacBook di Carlo").ok);
+  TEST_ASSERT_TRUE(e.bt.rename(kIdA, "Office desktop").ok);
   BluetoothManager again(e.clock, e.link, e.blobs);
   again.begin();
-  TEST_ASSERT_EQUAL_STRING("MacBook di Carlo", again.status().peers[0].label.c_str());
+  TEST_ASSERT_EQUAL_STRING("Office desktop", again.status().peers[0].label.c_str());
   TEST_ASSERT_EQUAL_STRING("Computer 2", again.status().peers[1].label.c_str());
 }
 

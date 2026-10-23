@@ -9,13 +9,11 @@
 #include "bluetooth.h"
 #include "button_gesture.h"
 #include "movement_task.h"
-#include "automation.h"
 #include "devices.h"
 #include "nvs_blob_store.h"
 #include "nvs_config_store.h"
 #include "nvs_network_store.h"
 #include "schedule.h"
-#include "script.h"
 #include "token_store.h"
 #include "wifi_setup.h"
 
@@ -38,10 +36,8 @@ NvsConfigStore store;
 NvsNetworkStore networkStore;
 NvsBlobStore blobs;
 jig::DeviceRegistry devices(blobs);
-jig::ScriptLibrary scripts(blobs);
 TokenStore tokens;
 jig::Controller controller(platform, rng, store);
-jig::AutomationEngine automations(platform, rng, scripts, blobs);
 jig::ScheduleEngine schedules(platform, controller, blobs);
 jig::ApiContext api{controller};
 WifiSetup wifi(tokens, networkStore);
@@ -62,19 +58,13 @@ void setup() {
   uint8_t efuse[6];
   esp_efuse_mac_get_default(efuse);
   jig::ResolvedDevice resolved = devices.resolved(efuse);
-#ifdef JIG_FORCE_KEYBOARD
-  resolved.keyboard = true;  // debug builds only: in memory, never persisted
-#endif
   ble.begin(resolved);
   bluetooth.begin();
   controller.begin();
-  automations.begin();
   schedules.begin();
-  startMovementTask(controller, automations, ble, platform);  // from here on the mouse works without WiFi
+  startMovementTask(controller, ble, platform);  // from here on the mouse works without WiFi
   api.network = &networkStore;
   api.devices = &devices;
-  api.scripts = &scripts;
-  api.automations = &automations;
   api.bluetooth = &bluetooth;
   api.schedules = &schedules;
   api.tokens = &tokens;

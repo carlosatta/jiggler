@@ -1,76 +1,127 @@
-# Jiggler
+<h1 align="center">Jiggler</h1>
 
-An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse (and, optionally, keyboard). It moves the cursor the way a person would, and you control it over WiFi from a web dashboard, a REST API or an MCP server, so an assistant like Claude can drive it.
+<p align="center">
+  <b>A tiny ESP32 that keeps a computer awake by pretending to be a Bluetooth mouse.</b><br>
+  Control it from a clean web dashboard, a REST API, or straight from your AI assistant.
+</p>
 
-The computer sees an ordinary Bluetooth device: nothing to install on it. By default the device presents itself as a Logitech MX Master 3S.
+<p align="center">
+  <img src="docs/images/desktop-status-light.png" alt="The Jiggler dashboard on a desktop: connected to a computer, running for 30 minutes" width="760">
+</p>
 
-## Features
+Nothing to install on the computer. It sees an ordinary Bluetooth mouse (a Logitech MX Master 3S by default), and the board nudges the cursor now and then the way a hand would: curved paths, smooth acceleration, random timing, and a return to where it started so the pointer never drifts.
 
-- **Human-like movement.** Curved Bézier paths with smooth acceleration and deceleration, random intervals, occasional clicks and scrolls, and a return to the starting point so the cursor does not drift.
-- **Configurable identity.** Pick a mouse or keyboard profile (Logitech, Razer, Apple) or define a custom one with name, manufacturer, VID/PID and Bluetooth address.
-- **Scripts and automations.** Small JSON programs (`move`, `click`, `scroll`, `key`, `type`, `wait`, `repeat`) that you can run on demand or on a random schedule, e.g. tap F15 every few minutes.
-- **Control surfaces.** Web dashboard, REST API and MCP server, all backed by the same controller.
-- **Works without WiFi.** The Bluetooth side is independent of the network. If there is no home WiFi, the device can create its own access point with a captive portal.
-- **Timed runs and schedules.** Run for 5, 10 or 30 minutes, until a time, or a custom length; or define weekly windows ("Mon–Fri 09:00 for 8 hours") that start and stop it for you. See [docs/schedules.md](docs/schedules.md).
-- **Pairing under your control.** The dashboard shows which computer is connected and since when, lets you open a 3-minute pairing window, disconnect (without powering off; the device stays hidden for 3 minutes), rename and forget computers. See [docs/bluetooth.md](docs/bluetooth.md).
-- **Status LED.** Slow blink while no computer is connected; solid when connected, with a brief flash on each movement; fast blink while pairing is open; short flash every 3 s while hidden.
-- **Installable page.** On a phone, "Add to Home Screen" opens the dashboard full-screen (web manifest and icons are served by the board).
+## Why it is nice to live with
+
+- **Safe by default.** Pairing is *closed* until you open it, for 3 minutes, from the dashboard or with one tap on the board. A stranger in Bluetooth range cannot pair. Everything else sits behind a token.
+- **Guided first setup.** A new board walks you through it: connect, open pairing, pick the device on your computer. You are done in a minute.
+- **You decide when it runs.** Start it for 5, 10 or 30 minutes, until a time of day, or until you stop it. Or set weekly schedules ("Mon-Fri, 09:00 for 8 hours") and forget about it.
+- **Always know what it is doing.** The dashboard shows which computer is connected and since when, when the next movement happens, and when a timed run ends.
+- **Disconnect without unplugging.** Drop the link and hide the device for 3 minutes, rename computers, forget the ones you no longer use.
+- **Works without internet.** The Bluetooth mouse never depends on WiFi. No WiFi at all? The board can create its own network.
+- **Talk to it.** A built-in [MCP](docs/mcp.md) server lets an assistant answer "is it running?", "keep it on for 30 minutes", or "run it Monday to Friday, 9 to 6".
+
+## See it
+
+<p align="center">
+  <img src="docs/images/setup-1-welcome.png" alt="First setup, step 1: open pairing" width="250">
+  <img src="docs/images/setup-2-pairing.png" alt="First setup, step 2: waiting for the computer" width="250">
+  <img src="docs/images/status-running.png" alt="Running for 30 minutes, connected to a computer" width="250">
+</p>
+
+<p align="center">
+  <img src="docs/images/schedule.png" alt="Weekly schedules" width="250">
+  <img src="docs/images/computers.png" alt="Paired computers" width="250">
+  <img src="docs/images/system-appearance.png" alt="Choosing how the device appears over Bluetooth" width="250">
+</p>
+
+The page adapts to phones and desktops, follows your light or dark theme, and can be added to a phone's home screen. [Take the full tour](docs/dashboard.md).
 
 ## Quick start
 
-You need a classic ESP32 dev board (`esp32dev`) and [PlatformIO](https://platformio.org) (`pipx install platformio`).
+You need a classic **ESP32 dev board** (`esp32dev`), a **USB cable and a stable USB power source**, and [PlatformIO](https://platformio.org) (`pipx install platformio`).
 
 ```sh
-pio test -e native                     # unit tests on your computer, no board needed
-pio run -e esp32 -t upload             # build and flash (add --upload-port if needed)
-pio device monitor                     # serial log at 115200 baud
+git clone git@github.com:carlosatta/jiggler.git && cd jiggler
+pio run -e esp32 -t upload          # build and flash (add --upload-port /dev/cu.usbserial-XXXX if needed)
+pio device monitor                  # optional: watch the log at 115200 baud
 ```
 
-Then:
+Then, in about a minute:
 
-1. **Join the setup network.** On first boot the board opens a WiFi access point called `Jiggler-Setup`. Connect to it, pick your WiFi network, and set an API token.
-2. **Pair it.** On the computer, pair the Bluetooth device named *MX Master 3S*. Pairing is **always closed** until you open a window: tap BOOT once on the board, or press *Open pairing* in the dashboard (**Computers**). The window lasts 3 minutes and closes as soon as a computer pairs. The dashboard walks you through it on a new board (Status → *Set up your Jiggler*). The jiggler cannot run until a computer is paired.
-3. **Open the dashboard** at `http://jiggler.local/` and enter the token. Press **Start**.
+1. **Join `Jiggler-Setup`** (a WiFi network the board opens by itself), pick your WiFi and choose a token. The board restarts.
+2. **Open `http://jiggler.local/`** and enter the token. The page guides you: press *Open pairing* (or tap the BOOT button once on the board).
+3. **On the computer**, open the Bluetooth settings and choose *MX Master 3S*.
+
+That is it: press **Start**. The full walkthrough, with screenshots and troubleshooting, is in [Getting started](docs/getting-started.md).
+
+## Control it from anywhere
 
 ```sh
 TOKEN=your-token
 curl -H "Authorization: Bearer $TOKEN" http://jiggler.local/api/status
-curl -H "Authorization: Bearer $TOKEN" -X POST http://jiggler.local/api/start
 curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-     -X PUT -d '{"minIntervalSec":20,"maxIntervalSec":60}' http://jiggler.local/api/config
+     -d '{"minutes": 30}' http://jiggler.local/api/start            # run for 30 minutes
 ```
 
-BOOT button: **tap** = open pairing for 3 minutes; **hold 3 seconds** = switch to AP mode.
-
-No home WiFi? Hold the BOOT button for 3 seconds to switch to AP mode: the board creates a `Jiggler` network (password printed on the serial monitor). See [docs/network.md](docs/network.md).
-
-## Using it from an assistant
+For an assistant, add the device as an MCP server:
 
 ```sh
 claude mcp add --transport http jiggler http://jiggler.local/mcp \
   --header "Authorization: Bearer <token>"
 ```
 
-Then ask: "is the jiggler running?", "pause it", "move every 20 to 45 seconds". See [docs/mcp.md](docs/mcp.md).
+See the [REST API](docs/api.md) and the [MCP tools](docs/mcp.md).
+
+## How it works
+
+```mermaid
+flowchart LR
+  subgraph You
+    B[Browser / phone]
+    A[Assistant via MCP]
+    S[Scripts via REST]
+  end
+  subgraph ESP32
+    H[HTTP server] --> C[Controller]
+    C --> P[Movement planner]
+    P --> BLE[Bluetooth mouse]
+    SCH[Schedules] --> C
+  end
+  B --> H
+  A --> H
+  S --> H
+  BLE -- Bluetooth --> PC[Your computer]
+```
+
+All logic lives in a hardware-free core that is tested on a laptop; the firmware is a thin layer over it. [Architecture](docs/architecture.md).
+
+## Good to know
+
+- **One Bluetooth identity.** A classic ESP32 has one Bluetooth address, so the device shows up as one mouse. Several computers can be paired (up to 3), one connected at a time. [Bluetooth](docs/bluetooth.md).
+- **Skin-deep identity.** The device presents a real model's name and identifiers but does not implement the vendor's proprietary protocol; vendor software will not treat it as the real thing.
+- **Plain HTTP.** The token travels unencrypted: use it on a network you trust. Because of that, browsers offer "Add to Home Screen" rather than a full app install.
+- **Schedules need the time**, which the board gets from the internet; in own-network mode there is no clock. [Schedules](docs/schedules.md).
+- **No OTA updates.** Flash over USB.
+- **Cursor drift is unmeasured.** The cursor returns exactly in mouse counts, but your operating system's pointer acceleration can leave a visible offset.
 
 ## Documentation
 
-See the [docs index](docs/README.md): [features](features.md), [architecture](docs/architecture.md), [REST API](docs/api.md), [Bluetooth](docs/bluetooth.md), [schedules](docs/schedules.md), [MCP](docs/mcp.md), [scripting](docs/scripting.md), [devices](docs/devices.md), [network and security](docs/network.md), [development](docs/development.md).
-
-## Limitations
-
-- **One Bluetooth identity.** A classic ESP32 has a single Bluetooth address, so mouse and keyboard are functions of one composite device rather than two separate devices ([details](docs/devices.md#limitations)).
-- **The identity is skin-deep.** The device does not implement Logitech's HID++ protocol; software like Logi Options+ will not see it as a real MX Master.
-- **Plain HTTP.** Authentication is a Bearer token over unencrypted HTTP: use it on a network you trust. Browsers only offer the full "Install app" prompt on HTTPS, so on a LAN board you get "Add to Home Screen" (standalone window) rather than an offline-capable app.
-- **Pairing is Just Works.** The board has no display, so anyone in range while a pairing window is open can pair; keep windows short.
-- **Computers are numbered, not named.** Bluetooth does not reveal the computer's name to a peripheral; rename them in the dashboard.
-- **No OTA updates.** Flash over USB.
-- **Cursor drift is unmeasured.** The cursor returns exactly in HID counts, but OS pointer acceleration can leave visible drift on a real host.
+| | |
+|---|---|
+| [Getting started](docs/getting-started.md) | Flash, first setup, pairing, troubleshooting |
+| [Dashboard tour](docs/dashboard.md) | Every section of the page |
+| [Bluetooth](docs/bluetooth.md) | Pairing policy, disconnecting, which computer is which |
+| [Schedules and timed runs](docs/schedules.md) | Run for a while, or on a weekly timetable |
+| [Appearance](docs/appearance.md) | How the device introduces itself to computers |
+| [Network and security](docs/network.md) | WiFi, own network, the token, the LED |
+| [REST API](docs/api.md) · [MCP](docs/mcp.md) | Control it from code or an assistant |
+| [Architecture](docs/architecture.md) · [Development](docs/development.md) | For contributors |
 
 ## Responsible use
 
-This is meant for keeping your own computer awake. Company-managed machines may run tools that detect new peripherals or activity patterns, and many workplaces have policies on this. Check yours before using it on a managed device.
+This is meant for keeping your own computer awake. Company-managed machines may run tools that detect new peripherals or activity patterns, and many workplaces have policies about this. Check yours before using it on a managed device.
 
 ## Project status
 
-Firmware, dashboard, REST and MCP are implemented and covered by host unit tests; hardware behaviour is verified on a board by hand. The functional spec is [features.md](features.md); design history (in Italian) is in [docs/superpowers](docs/superpowers).
+Firmware, dashboard, REST and MCP are implemented and covered by host unit tests (`pio test -e native`); hardware behaviour is verified on a board by hand. See the [changelog](CHANGELOG.md). Scripts, automations and a keyboard mode were built and then parked to keep the product focused: they remain in the code and in the git tag `v0.3.1-with-scripts-keyboard`.

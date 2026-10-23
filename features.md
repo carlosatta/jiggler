@@ -1,64 +1,61 @@
-# Jiggler ESP32 — Expected features
+# Jiggler: functional spec
 
-An ESP32-based device that keeps a computer awake by simulating a real Bluetooth mouse. Besides the base behaviour, it exposes control and status over WiFi through a dashboard, a REST API and an MCP server.
-
-This is the baseline functional spec. Later additions (multiple devices, scripts, automations, AP mode) are described in [docs/devices.md](docs/devices.md), [docs/scripting.md](docs/scripting.md) and [docs/network.md](docs/network.md).
+An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, controlled over WiFi from a dashboard, a REST API and an MCP server. This is the source of truth for what the product does; the how is in [docs/](docs/README.md).
 
 ## 1. Bluetooth mouse
 
-- Presents itself to the computer as a Logitech MX Master mouse (name, manufacturer and device identifiers consistent with a real model).
-- Bluetooth address with a Logitech prefix, so that a check does not find an Espressif device.
-- To the operating system it is a normal Bluetooth mouse: no software or driver to install on the computer being kept awake.
+- Presents itself as a mouse with a believable identity: by default a Logitech MX Master 3S (name, vendor, product id, Bluetooth address prefix). The owner can choose another mouse model or a custom name ([Appearance](docs/appearance.md)).
+- To the operating system it is an ordinary Bluetooth mouse: nothing to install on the computer.
+- One Bluetooth identity; up to 3 computers can be paired, one connected at a time.
 
-## 2. Movement
+## 2. Pairing and safety
 
-- Moves the cursor at random intervals, not on a fixed cadence, to avoid recognisable patterns.
-- "Human-like" movement: curved trajectories, gradual acceleration and deceleration, micro-oscillations. No straight-line jumps at constant speed.
-- The cursor returns close to its starting point, so it does not "drift" across the screen over the hours.
-- Occasional random clicks or scrolls, to complete the activity profile.
-- Configurable minimum and maximum interval.
+- Pairing is **always closed** by default, also on a brand-new board and after "forget all".
+- The owner opens a 3-minute window (dashboard, API, MCP, or a tap of the BOOT button). It closes by itself after 3 minutes or when a computer pairs, and can be stopped early.
+- A computer that tries to pair while it is closed is refused.
+- The dashboard shows which computer is connected and since when; computers can be renamed, forgotten, disconnected.
+- **Disconnect** drops the link and hides the device for 3 minutes (also when the computer ends the connection itself), so the computer does not reconnect at once.
+- Everything except the dashboard page itself requires the API token.
 
-## 3. WiFi connection
+## 3. Movement
 
-- The ESP32 joins the home WiFi network so that it is reachable from the dashboard, the API and MCP.
-- If it cannot connect, it starts its own temporary network (access point) where the WiFi credentials can be entered the first time, without writing them in the code.
-- Credentials are kept for subsequent restarts.
-- The Bluetooth mouse keeps working independently of WiFi: if the network drops, the jiggler keeps working.
+- Moves the cursor at random intervals with human-like curved paths, smooth acceleration and a return to the start (no drift in mouse counts).
+- Optional random left clicks and scrolls; never a right click.
+- Configurable minimum/maximum interval and size.
+- **The jiggler cannot run while no computer is paired**: it boots stopped on a new board, refuses to start, and stops if every computer is forgotten.
 
-## 4. Web dashboard
+## 4. Running it
 
-A page reachable from a browser (on the local network) to control the device without technical tools:
+- Start/stop, a test movement, and **timed runs**: 5, 10 or 30 minutes, an hour, until a time of day, or a custom number of minutes.
+- **Weekly schedules** (up to 8): days, start time, duration (may cross midnight), in a chosen timezone; they start and stop the jiggler by the clock. Needs a synced clock.
 
-- Real-time status: mouse connected or not, WiFi connected or not, time to the next movement.
-- Start and pause the jiggler.
-- Edit the intervals (minimum/maximum) and the movement amplitude.
-- A button to force a test movement right away.
-- Counter of movements performed and time of the last one.
+## 5. Network
 
-## 5. REST API
+- Joins the home WiFi; if it cannot, a setup network (`Jiggler-Setup`) collects the WiFi credentials and the API token. The board restarts once after the first setup.
+- Optional own-network mode (its own protected WiFi with a captive portal) for places without WiFi; the BOOT button (3 s) toggles it.
+- The Bluetooth mouse works independently of WiFi.
 
-An interface to control the device from scripts, automations or other programs:
+## 6. Dashboard
 
-- Read the full status.
-- Start / stop / pause.
-- Immediate movement on request.
-- Read and change the configuration (intervals, amplitude, behaviour).
+- Five sections: Status, Computers, Movement, Schedule, System. A guided first-time setup while nothing is paired.
+- Phones and desktops, light and dark, installable to the home screen, English UI.
+- Recovers by itself from restarts and lost connections; every error says what is wrong and what to do.
 
-## 6. MCP server
+## 7. REST API and MCP
 
-The device exposes an MCP server, so it can be commanded directly by an assistant such as Claude:
+- The same controller behind both, so they cannot disagree: status, start/stop (optionally for N minutes), a test movement, configuration, Bluetooth, schedules, network, appearance, token, restart. See [docs/api.md](docs/api.md) and [docs/mcp.md](docs/mcp.md).
 
-- Ask for the status ("is the jiggler active? how long until the next movement?").
-- Start, pause or stop.
-- Change the configuration by voice.
-- Make the mouse move on request.
+## 8. Physical indications
 
-## 7. Physical indications
+- Status LED: slow blink = no computer, solid = connected (brief flash per movement), fast blink = pairing open, short flash every 3 s = hidden after a disconnect.
+- BOOT button: tap = open pairing, hold 3 s = switch network mode.
+- USB power.
 
-- Status LED: shows whether the mouse is connected and flashes on every movement.
-- USB power (wall adapter or monitor USB port).
+## Not included for now
+
+A keyboard mode, scripts and automations were built and parked (see [development](docs/development.md#parked-modules)).
 
 ## Notes
 
-- The emulation is skin-deep: name and identifiers match an MX Master, but the device does not speak Logitech's proprietary protocol (HID++). To the computer it is a fully fledged Bluetooth mouse; software such as Logi Options+ would not recognise it as a real MX Master.
-- On company-managed computers there may be tools that detect new devices or activity patterns: worth keeping in mind.
+- The identity is skin-deep: the device does not speak the vendor's proprietary protocol.
+- Company-managed computers may detect new peripherals or activity patterns; check your policy.

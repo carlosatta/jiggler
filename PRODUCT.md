@@ -8,8 +8,8 @@ by the board itself, a REST API and an MCP server.
 ## Who uses it and where
 One owner, on a phone or laptop on the same network (or on the board's own WiFi), glancing at it between other
 things. Typical questions, in this order: *Is it connected, and to which computer? Is it running? How do I
-disconnect it or pair another computer?* Everything else (scripts, automations, device identity, network) is
-occasional and lives out of the way.
+disconnect it or pair another computer?* Everything else (schedules, appearance, network) is occasional and lives
+out of the way.
 
 ## Register
 Operate: a tool, not a brochure. Scannability and honest state beat decoration. English UI, plain words, no

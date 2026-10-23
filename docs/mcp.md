@@ -37,17 +37,9 @@ Tool failures are returned as a normal result with `isError: true` and a JSON er
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `list_profiles` | – | Profiles you can assign to a device, plus `custom` defaults |
-| `get_devices` | – | Configured devices |
-| `set_devices` | `devices[]` | Replace the device list. Needs restart and re-pairing |
-| `list_scripts` | – | Stored scripts |
-| `save_script` | `name`, `script` (`{"steps":[...]}`) | Create or overwrite a script |
-| `delete_script` | `name` | Delete a user script |
-| `run_script` | `name` | Run a stored script now |
-| `get_automations` | – | Scheduled automations |
-| `set_automations` | `automations[]` | Replace the automations (max 4) |
-| `press_key` | `key`, `times` (1–20, optional) | Press a key or combination, e.g. `Ctrl+C` |
-| `type_text` | `text` (up to 200 chars) | Type text (printable ASCII, US layout) |
+| `list_profiles` | – | The mouse models you can choose (see [appearance](appearance.md)) |
+| `get_devices` | – | The configured device (a single mouse) |
+| `set_devices` | `devices[]` | Change how the device appears. Needs a restart and re-pairing |
 | `get_network` | – | Network mode and AP settings |
 | `set_network` | `mode`, `apSsid`, `apPassword` (optional) | Change network settings. Needs restart |
 | `restart` | – | Restart the device |
@@ -68,4 +60,3 @@ A tool is only listed when its service is available on the device.
 - "Pause it for now." → `pause`
 - "Keep it on for the next 30 minutes." → `start` with `minutes: 30`
 - "Run it Monday to Friday, 9 to 6." → `set_schedules`
-- "Press F15 on the computer." → `press_key`

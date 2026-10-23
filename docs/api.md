@@ -21,7 +21,7 @@ curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
      -X PUT -d '{"minIntervalSec":20}' http://jiggler.local/api/config
 ```
 
-Body size caps: 4096 bytes for scripts and MCP, 2048 for devices and automations, 1024 for config and network. Larger bodies get `413 payload_too_large`.
+Body size caps: 4096 bytes for MCP, 2048 for devices and schedules, 1024 for config and network. Larger bodies get `413 payload_too_large`.
 
 ## Errors
 
@@ -33,12 +33,11 @@ Body size caps: 4096 bytes for scripts and MCP, 2048 for devices and automations
 
 | Status | `error` | Meaning |
 |---|---|---|
-| 400 | `bad_json`, `invalid_config`, `invalid_devices`, `invalid_automation`, `invalid_network`, `invalid_script` | Validation failed; nothing was changed |
+| 400 | `bad_json`, `invalid_config`, `invalid_devices`, `invalid_network`, `invalid_schedule`, `invalid_minutes` | Validation failed; nothing was changed |
 | 401 | | Missing or wrong token |
-| 403 | `read_only` | Trying to change or delete the built-in script |
-| 404 | `not_found` | Unknown route, script, or service not available |
+| 404 | `not_found` | Unknown route, computer, or service not available |
 | 405 | `method_not_allowed` | Wrong HTTP method for the route |
-| 409 | `mouse_not_connected`, `busy`, `limit_reached` | The computer is not connected, too many runs queued, or script/automation limit reached |
+| 409 | `mouse_not_connected`, `no_computer_paired` | No computer is connected, or none is paired yet |
 | 413 | `payload_too_large` | Body over the cap |
 | 415 | `unsupported_media_type` | Body sent without `Content-Type: application/json` |
 
@@ -82,9 +81,9 @@ See [bluetooth.md](bluetooth.md) for the pairing policy. `GET /api/status` also 
 | DELETE | `/api/bluetooth/pairing` | Close the window |
 | POST | `/api/bluetooth/disconnect` | Drop the link and hide the device for 3 minutes (or until reconnect) |
 | POST | `/api/bluetooth/reconnect` | Make the device visible again |
-| PUT | `/api/bluetooth/peers/<id>` | Rename a paired computer: `{"label":"MacBook"}` (1–32 chars) |
+| PUT | `/api/bluetooth/peers/<id>` | Rename a paired computer: `{"label":"Office desktop"}` (1–32 chars) |
 | DELETE | `/api/bluetooth/peers/<id>` | Forget one computer (`404 not_found` if unknown) |
-| DELETE | `/api/bluetooth/peers` | Forget all computers and reopen pairing |
+| DELETE | `/api/bluetooth/peers` | Forget all computers. Pairing stays closed until you open a window |
 
 ## Schedules
 
@@ -122,68 +121,28 @@ See [schedules.md](schedules.md). `GET /api/status` also carries `"schedule": {t
 
 Unknown fields are rejected.
 
-## Devices and profiles
+## Appearance
 
-See [devices.md](devices.md) for the model. Changes take effect **after a restart** and need re-pairing on the computer.
+How the device presents itself over Bluetooth; see [appearance.md](appearance.md). Changes take effect **after a restart** and each paired computer must pair again. The dashboard uses a single mouse; keyboards are rejected (`400 invalid_devices`, field `devices[1].kind`).
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/profiles` | Catalog of verified profiles plus the `custom` defaults |
-| GET | `/api/devices` | Configured devices |
-| PUT | `/api/devices` | Replace the whole list (1–4 devices). Answers with the list plus `"restartRequired": true` |
+| GET | `/api/profiles` | The mouse models you can choose, plus the `custom` defaults |
+| GET | `/api/devices` | The configured device list (a single mouse) |
+| PUT | `/api/devices` | Replace it. Answers with the list plus `"restartRequired": true` |
 | POST | `/api/restart` | Restart the device (`202 {"restarting":true}`) |
 
 ```json
-{
-  "devices": [
-    { "id": "mouse", "kind": "mouse", "enabled": true, "profileId": "logitech-mx-master-3s" },
-    { "id": "keyboard", "kind": "keyboard", "enabled": true, "profileId": "logitech-mx-keys",
-      "name": "MX Keys", "mac": "00:1F:20:AA:BB:CC" }
-  ]
-}
+{ "devices": [ { "id": "mouse", "kind": "mouse", "enabled": true, "profileId": "razer-orochi-v2" } ] }
 ```
 
-Per device: `id` (1–24 chars of `a-z 0-9 _ -`, unique), `kind` (`mouse`/`keyboard`), `enabled`, `profileId` (a catalog id or `custom`, and its kind must match), and optional overrides `name` (1–29 chars), `manufacturer` (1–32), `vid`, `pid` (0–65535) and `mac` (`AA:BB:CC:DD:EE:FF`, unicast). At least one device must be enabled.
-
-## Scripts
-
-See [scripting.md](scripting.md) for the script format.
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/scripts` | `{"scripts":[{"name":"keepalive-key","builtin":true}, ...]}` |
-| GET | `/api/scripts/<name>` | `{"name":..., "builtin":..., "script":{"steps":[...]}}` |
-| PUT | `/api/scripts/<name>` | Create or overwrite (body: `{"steps":[...]}`). Max 8 user scripts, else `409 limit_reached` |
-| DELETE | `/api/scripts/<name>` | Delete a user script (`403 read_only` for the built-in) |
-| POST | `/api/scripts/<name>/run` | Run now. `202 {"queued":true}`; `409` if the computer is not connected |
-
-Script names are 1–24 characters of `a-z 0-9 _ -`.
-
-## Automations
-
-An automation runs a stored script at a random interval. They only fire while the global state is `running`.
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/automations` | Current list |
-| PUT | `/api/automations` | Replace the whole list (max 4) |
-
-```json
-{
-  "automations": [
-    { "id": "keepalive-key", "script": "keepalive-key",
-      "minIntervalSec": 60, "maxIntervalSec": 180, "enabled": false }
-  ]
-}
-```
-
-`minIntervalSec` / `maxIntervalSec` range from 5 to 86400 and `max >= min`. The `script` must exist.
+Per device: `id` (1–24 chars of `a-z 0-9 _ -`), `kind` (`mouse`), `enabled`, `profileId` (a catalog id, or `custom`), and optional overrides `name` (1–29 chars), `manufacturer` (1–32), `vid`, `pid` (0–65535) and `mac` (`AA:BB:CC:DD:EE:FF`, unicast; this also changes the WiFi address).
 
 ## Network
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/network` | `{"mode":"auto","apSsid":"Jiggler","apPassword":"..."}` |
+| GET | `/api/network` | `{"mode":"auto","apSsid":"Jiggler","apPassword":""}` (the password is empty until you set one or the own network generates it) |
 | PUT | `/api/network` | Partial update. Applies after a restart |
 
 `mode` is `auto` or `ap`; `apSsid` is 1–32 characters; `apPassword` is empty (generated) or 8–63 printable ASCII characters. See [network.md](network.md).

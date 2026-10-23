@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- **Mouse only.** The keyboard mode is gone from the dashboard, the API and the device list; keyboards are rejected. **Scripts and automations** are removed from the product (dashboard, REST, MCP, firmware wiring). The code stays in the repository, parked, and in the tag `v0.3.1-with-scripts-keyboard`.
+- **Schedule has its own section** with the timezone, separate from Movement (five sections: Status, Computers, Movement, Schedule, System).
+- **Appearance** replaces "Bluetooth identity": pick a mouse model or a custom name, with one plain sentence about what changing it means (restart, pair again). Advanced overrides remain in the API only.
+- The own-network password field is empty unless one was set, with an explanation instead of placeholder text.
+- First-setup fixes: the board restarts once after the WiFi portal (the dashboard could not bind port 80), and the API token is no longer written to the serial log.
+- Documentation rewritten with real screenshots (neutral data): [README](README.md), [getting started](docs/getting-started.md), [dashboard tour](docs/dashboard.md).
+
 ## 0.3.1
 
 - **The jiggler cannot run with no computer paired.** A board with nothing paired boots stopped; `start` answers `409 no_computer_paired`; forgetting every computer stops a running jiggler; a schedule window that opens before the first pairing starts the jiggler once a computer pairs.

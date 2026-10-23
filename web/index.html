@@ -28,6 +28,7 @@
 <a href="#status" data-view="status"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg><span>Status</span></a>
 <a href="#computers" data-view="computers"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="11" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg><span>Computers</span></a>
 <a href="#movement" data-view="movement"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg><span>Movement</span></a>
+<a href="#schedule" data-view="schedule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></svg><span>Schedule</span></a>
 <a href="#system" data-view="system"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="8" cy="17" r="1.6"/></svg><span>System</span></a>
 </nav>
 
@@ -128,17 +129,6 @@
 <h1 id="h-movement">Movement</h1>
 
 <div class="block">
-<h2>Schedules</h2>
-<p class="hint lead">While a schedule’s window is open the jiggler runs by itself; it stops when the window ends. Stopping or starting it by hand is respected until the next window opens or closes.</p>
-<div class="field"><label for="tzSelect">Timezone</label><select id="tzSelect"></select><div class="err" data-err="timezone"></div></div>
-<p class="sub" id="clockNote">&nbsp;</p>
-<div id="schedList"></div>
-<p class="empty" id="schedEmpty" hidden>No schedules. Add one to start and stop the jiggler on certain days and hours.</p>
-<div class="actions"><button id="schedAdd">Add schedule</button><button class="primary" id="schedSave">Save schedules</button></div>
-<p id="schedMsg" class="msg" role="status" aria-live="polite"></p>
-</div>
-
-<div class="block">
 <h2>Configuration</h2>
 <form id="cfg" novalidate>
 <div class="row">
@@ -156,28 +146,21 @@
 </form>
 </div>
 
-<details class="block" id="scriptsBox">
-<summary><h2>Scripts</h2></summary>
-<p class="hint">A script is a list of steps: <b>move</b> (dx, dy), <b>click</b>, <b>scroll</b> (notches), <b>key</b> (e.g. F15, Ctrl+Alt+Delete), <b>type</b> (text, ASCII), <b>wait</b> (ms, or minMs and maxMs) and <b>repeat</b> (times, steps). US keyboard layout.</p>
-<div class="field"><label for="scrSelect">Script</label><select id="scrSelect"></select></div>
-<div class="field"><label for="scrName">Name</label><input id="scrName" autocomplete="off" placeholder="a-z 0-9 _ -"><div class="err" id="e_scrName"></div></div>
-<div class="field"><label for="scrBody">Content (JSON)</label><textarea id="scrBody" spellcheck="false"></textarea><div class="err" id="e_scrBody"></div></div>
-<div class="actions">
-<button class="primary" id="scrSave">Save</button>
-<button id="scrRun">Run now</button>
-<button id="scrNew">New</button>
-<button class="danger" id="scrDelete">Delete</button>
-</div>
-<p id="scrMsg" class="msg" role="status" aria-live="polite"></p>
-</details>
+</section>
 
-<details class="block" id="autoBox">
-<summary><h2>Automations</h2></summary>
-<p class="hint">An automation runs a script at random intervals, only while the jiggler is running (up to 4). Use it for extras such as tapping F15; schedules decide when the jiggler runs at all.</p>
-<div id="autoList"></div>
-<div class="actions"><button id="autoAdd">Add</button><button class="primary" id="autoSave">Save</button></div>
-<p id="autoMsg" class="msg" role="status" aria-live="polite"></p>
-</details>
+<section class="view" id="view-schedule" aria-labelledby="h-schedule" hidden>
+<h1 id="h-schedule">Schedule</h1>
+<div class="block">
+<h2>Weekly schedules</h2>
+<p class="hint lead">While a schedule’s window is open the jiggler runs by itself; it stops when the window ends. Stopping or starting it by hand is respected until the next window opens or closes.</p>
+<div class="field"><label for="tzSelect">Timezone</label><select id="tzSelect"></select><div class="err" data-err="timezone"></div></div>
+<p class="sub" id="clockNote">&nbsp;</p>
+<div id="schedList"></div>
+<p class="empty" id="schedEmpty" hidden>No schedules. Add one to start and stop the jiggler on certain days and hours.</p>
+<div class="actions"><button id="schedAdd">Add schedule</button><button class="primary" id="schedSave">Save schedules</button></div>
+<p id="schedMsg" class="msg" role="status" aria-live="polite"></p>
+</div>
+
 </section>
 
 <section class="view" id="view-system" aria-labelledby="h-system" hidden>
@@ -200,18 +183,21 @@
 <p class="hint"><b>Auto</b>: connects to your home WiFi and, if it cannot, opens the setup network. <b>Own network</b>: creates a protected WiFi network that serves this dashboard (address 192.168.4.1), for places without WiFi. Holding BOOT for 3 seconds switches between the two. Changes apply after a restart. Schedules need the home WiFi with internet access to know the time.</p>
 <div class="field"><label for="netMode">Mode</label><select id="netMode"><option value="auto">Auto (home WiFi)</option><option value="ap">Own network</option></select><div class="err" data-err="mode"></div></div>
 <div class="field"><label for="netSsid">Own network name</label><input id="netSsid" autocomplete="off"><div class="err" data-err="apSsid"></div></div>
-<div class="field"><label for="netPass">Own network password</label><input id="netPass" autocomplete="off" placeholder="empty = generated on first boot"><div class="err" data-err="apPassword"></div></div>
+<div class="field"><label for="netPass">Own network password</label><input id="netPass" autocomplete="off"><div class="err" data-err="apPassword"></div><p class="hint">Optional, 8 to 63 characters. Leave it empty and one is generated the first time the own network starts.</p></div>
 <div class="actions"><button id="netSave">Save</button><button class="primary" id="netSaveRestart">Save and restart</button></div>
 <p id="netMsg" class="msg" role="status" aria-live="polite"></p>
 </div>
 
-<details class="block" id="devBox">
-<summary><h2>Bluetooth identity</h2></summary>
-<p class="hint">The computer sees a single Bluetooth device: its name, vendor, VID/PID and address are those of the first enabled device below; the others only add their function (mouse or keyboard). Leave fields empty to use the profile’s values. After saving, the device restarts, and computers already paired may not recognise it: you will need to pair them again.</p>
-<div id="devList"></div>
-<div class="actions"><button class="primary" id="devSave">Save and restart</button></div>
-<p id="devMsg" class="msg" role="status" aria-live="polite"></p>
-</details>
+<div class="block" id="appearanceBox">
+<h2>Appearance</h2>
+<p class="hint lead">How the device introduces itself to computers over Bluetooth. Pick a mouse model, or give it your own name.</p>
+<div class="field"><label for="apModel">Shown as</label><select id="apModel"></select><div class="err" data-err="devices[0].profileId"></div></div>
+<div class="field" id="apNameBox" hidden><label for="apName">Name</label><input id="apName" maxlength="29" autocomplete="off"><div class="err" data-err="devices[0].name"></div></div>
+<p class="note" id="apNow">&nbsp;</p>
+<p class="hint"><b>Changing this restarts the device.</b> Computers already paired will not recognise it afterwards: on each one, remove the device in its Bluetooth settings, then pair it again from Computers → Open pairing.</p>
+<div class="actions"><button class="primary" id="apApply">Apply and restart</button></div>
+<p id="apMsg" class="msg" role="status" aria-live="polite"></p>
+</div>
 
 <div class="block">
 <h2>Device</h2>

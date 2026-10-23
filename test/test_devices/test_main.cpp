@@ -111,13 +111,10 @@ void test_catalog_ids_unique_and_wellformed() {
 
 void test_default_devices() {
   auto d = defaultDevices();
-  TEST_ASSERT_EQUAL_UINT32(2, d.size());
+  TEST_ASSERT_EQUAL_UINT32(1, d.size());  // the jiggler is a mouse; keyboards are not offered
   TEST_ASSERT_EQUAL_STRING("mouse", d[0].id.c_str());
   TEST_ASSERT_TRUE(d[0].kind == DeviceKind::Mouse && d[0].enabled);
   TEST_ASSERT_EQUAL_STRING("logitech-mx-master-3s", d[0].profileId.c_str());
-  TEST_ASSERT_EQUAL_STRING("keyboard", d[1].id.c_str());
-  TEST_ASSERT_TRUE(d[1].kind == DeviceKind::Keyboard && !d[1].enabled);
-  TEST_ASSERT_EQUAL_STRING("custom", d[1].profileId.c_str());
   TEST_ASSERT_FALSE(validateDevices(d).has_value());
 }
 
@@ -181,7 +178,7 @@ void test_validate_devices_table() {  // RF1
 
   { auto d = base(); d[0].profileId = "nope"; cases.push_back({"unknown profile", d}); }
   { auto d = base(); d[0].profileId = "logitech-mx-keys"; cases.push_back({"kind mismatch", d}); }
-  { auto d = base(); d[1].id = "mouse"; cases.push_back({"duplicate ids", d}); }
+  { auto d = base(); d.push_back(dev("mouse", DeviceKind::Mouse, false, "custom")); cases.push_back({"duplicate ids", d}); }
   { auto d = base(); d[0].id = "Bad Id"; cases.push_back({"bad id", d}); }
   { auto d = base(); d[0].id = ""; cases.push_back({"empty id", d}); }
   { auto d = base(); d[0].mac = "00:1F:20:AA:BB"; cases.push_back({"5-octet mac", d}); }
@@ -191,7 +188,6 @@ void test_validate_devices_table() {  // RF1
   { auto d = base(); d[0].name = ""; cases.push_back({"empty name", d}); }
   { auto d = base(); d[0].manufacturer = std::string(33, 'm'); cases.push_back({"manufacturer too long", d}); }
   { auto d = base(); d[0].enabled = false; cases.push_back({"none enabled", d}); }
-  { auto d = base(); d[0].enabled = false; d[1].enabled = true; cases.push_back({"keyboard only (the jiggler would move nothing)", d}); }
   { std::vector<DeviceConfig> d; cases.push_back({"empty list", d}); }
   { std::vector<DeviceConfig> d; for (int i = 0; i < 5; i++) d.push_back(dev(("d" + std::to_string(i)).c_str(), DeviceKind::Mouse, true, "custom")); cases.push_back({"5 devices", d}); }
 
@@ -202,7 +198,7 @@ void test_validate_devices_table() {  // RF1
   ok[0].name = std::string(29, 'n');
   TEST_ASSERT_FALSE(validateDevices(ok).has_value());
   auto four = std::vector<DeviceConfig>{dev("a", DeviceKind::Mouse, true, "custom"), dev("b", DeviceKind::Mouse, false, "custom"),
-                                        dev("c", DeviceKind::Keyboard, false, "custom"), dev("d", DeviceKind::Keyboard, false, "custom")};
+                                        dev("c", DeviceKind::Mouse, false, "custom"), dev("d", DeviceKind::Mouse, false, "custom")};
   TEST_ASSERT_FALSE(validateDevices(four).has_value());
 }
 
@@ -211,17 +207,16 @@ void test_json_roundtrip() {
   d[0].name = "Mio Mouse";
   d[0].mac = "02:11:22:33:44:55";
   d[0].vid = 0x1234;
-  d[1].enabled = true;
   std::vector<DeviceConfig> back;
   ParseError err;
   TEST_ASSERT_TRUE(parseDevices(devicesToJson(d), back, err));
-  TEST_ASSERT_EQUAL_UINT32(2, back.size());
+  TEST_ASSERT_EQUAL_UINT32(1, back.size());
   TEST_ASSERT_EQUAL_STRING("Mio Mouse", back[0].name->c_str());
   TEST_ASSERT_EQUAL_STRING("02:11:22:33:44:55", back[0].mac->c_str());
   TEST_ASSERT_EQUAL_HEX16(0x1234, *back[0].vid);
   TEST_ASSERT_FALSE(back[0].pid.has_value());
-  TEST_ASSERT_TRUE(back[1].enabled);
-  TEST_ASSERT_TRUE(back[1].kind == DeviceKind::Keyboard);
+  TEST_ASSERT_TRUE(back[0].enabled);
+  TEST_ASSERT_TRUE(back[0].kind == DeviceKind::Mouse);
 }
 
 void test_parse_devices_bad_input() {  // RF1
@@ -260,19 +255,12 @@ void test_registry_primary_and_flags() {
   TEST_ASSERT_TRUE(r.mac.has_value());
 
   auto d = defaultDevices();
-  d[1].enabled = true;
+  d[0].profileId = "razer-orochi-v2";  // choosing another model changes the identity the computer sees
   TEST_ASSERT_TRUE(reg.replace(d).ok);
   r = reg.resolved(kEfuse);
-  TEST_ASSERT_TRUE(r.mouse && r.keyboard);
-  TEST_ASSERT_EQUAL_STRING("MX Master 3S", r.identity.name.c_str());  // first enabled device is primary
-
-  d[1].profileId = "logitech-mx-keys";
-  std::swap(d[0], d[1]);  // keyboard first: its identity becomes the primary one
-  TEST_ASSERT_TRUE(reg.replace(d).ok);
-  r = reg.resolved(kEfuse);
-  TEST_ASSERT_TRUE(r.mouse && r.keyboard);
-  TEST_ASSERT_EQUAL_STRING("MX Keys", r.identity.name.c_str());
-  TEST_ASSERT_EQUAL_HEX16(0xB35B, r.identity.pid);
+  TEST_ASSERT_TRUE(r.mouse);
+  TEST_ASSERT_FALSE(r.keyboard);
+  TEST_ASSERT_EQUAL_STRING("Razer Orochi V2", r.identity.name.c_str());
 }
 
 void test_registry_replace_persists_and_invalid_changes_nothing() {  // RF1
@@ -331,7 +319,7 @@ void test_registry_corrupt_blob_falls_back_to_defaults() {
   blobs.put("devices", "{not json");
   DeviceRegistry reg(blobs);
   reg.begin();
-  TEST_ASSERT_EQUAL_UINT32(2, reg.list().size());
+  TEST_ASSERT_EQUAL_UINT32(1, reg.list().size());
   TEST_ASSERT_EQUAL_STRING("logitech-mx-master-3s", reg.list()[0].profileId.c_str());
   blobs.put("devices", "{\"devices\":[{\"id\":\"a\",\"kind\":\"mouse\",\"enabled\":false}]}");  // parses but invalid (none enabled)
   DeviceRegistry reg2(blobs);
@@ -344,22 +332,25 @@ void test_api_profiles_devices_routes() {
   HttpResponse p = a.call("GET", "/api/profiles");
   TEST_ASSERT_EQUAL_INT(200, p.status);
   JsonDocument pd = parse(p.body);
-  TEST_ASSERT_TRUE(pd["profiles"].as<JsonArray>().size() >= 5);
+  TEST_ASSERT_TRUE(pd["profiles"].as<JsonArray>().size() >= 3);
   JsonObject first = pd["profiles"][0];
   TEST_ASSERT_TRUE(first["id"].is<const char*>() && first["kind"].is<const char*>() && first["name"].is<const char*>());
   TEST_ASSERT_TRUE(first["vid"].is<int>() && first["pid"].is<int>());
 
   HttpResponse g = a.call("GET", "/api/devices");
   TEST_ASSERT_EQUAL_INT(200, g.status);
-  TEST_ASSERT_EQUAL_UINT32(2, parse(g.body)["devices"].as<JsonArray>().size());
+  TEST_ASSERT_EQUAL_UINT32(1, parse(g.body)["devices"].as<JsonArray>().size());
 
   HttpResponse put = a.call("PUT", "/api/devices",
-      "{\"devices\":[{\"id\":\"mouse\",\"kind\":\"mouse\",\"enabled\":true,\"profileId\":\"razer-orochi-v2\"},"
-      "{\"id\":\"keyboard\",\"kind\":\"keyboard\",\"enabled\":true,\"profileId\":\"custom\",\"name\":\"Tastiera\"}]}");
+      "{\"devices\":[{\"id\":\"mouse\",\"kind\":\"mouse\",\"enabled\":true,\"profileId\":\"razer-orochi-v2\"}]}");
   TEST_ASSERT_EQUAL_INT(200, put.status);
   JsonDocument pd2 = parse(put.body);
   TEST_ASSERT_TRUE(pd2["restartRequired"].as<bool>());
   TEST_ASSERT_EQUAL_STRING("razer-orochi-v2", a.registry.list()[0].profileId.c_str());
+
+  HttpResponse kb = a.call("PUT", "/api/devices", "{\"devices\":[{\"id\":\"mouse\",\"kind\":\"mouse\",\"enabled\":true},{\"id\":\"keyboard\",\"kind\":\"keyboard\",\"enabled\":true}]}");
+  TEST_ASSERT_EQUAL_INT(400, kb.status);
+  TEST_ASSERT_EQUAL_STRING("devices[1].kind", parse(kb.body)["field"].as<const char*>());
 
   HttpResponse bad = a.call("PUT", "/api/devices", "{\"devices\":[{\"id\":\"mouse\",\"kind\":\"mouse\",\"enabled\":true,\"mac\":\"zz\"}]}");
   TEST_ASSERT_EQUAL_INT(400, bad.status);
@@ -382,12 +373,48 @@ void test_api_profiles_devices_routes() {
   TEST_ASSERT_EQUAL_INT(404, a.call("GET", "/api/profiles").status);
 }
 
+void test_keyboards_are_not_supported() {
+  std::vector<DeviceConfig> d = {dev("mouse", DeviceKind::Mouse, true, "logitech-mx-master-3s"),
+                                 dev("keyboard", DeviceKind::Keyboard, false, "custom")};
+  auto err = validateDevices(d);
+  TEST_ASSERT_TRUE(err.has_value());
+  TEST_ASSERT_EQUAL_STRING("devices[1].kind", err->field.c_str());
+  TEST_ASSERT_EQUAL_STRING("keyboards are not supported yet", err->message.c_str());
+  d[1].enabled = true;
+  TEST_ASSERT_TRUE(validateDevices(d).has_value());
+}
+
+void test_only_mouse_profiles_are_offered() {
+  JsonDocument doc;
+  TEST_ASSERT_FALSE(deserializeJson(doc, profilesToJson()));
+  TEST_ASSERT_TRUE(doc["profiles"].size() >= 3);
+  for (JsonVariantConst p : doc["profiles"].as<JsonArrayConst>()) TEST_ASSERT_EQUAL_STRING("mouse", p["kind"].as<const char*>());
+  TEST_ASSERT_TRUE(doc["custom"]["mouse"].is<JsonObject>());
+  TEST_ASSERT_TRUE(doc["custom"]["keyboard"].isNull());
+}
+
+void test_a_stored_list_from_an_older_version_loses_its_keyboard_but_keeps_the_mouse() {
+  MemBlobStore blobs;
+  blobs.put("devices", "{\"devices\":[{\"id\":\"mouse\",\"kind\":\"mouse\",\"enabled\":true,\"profileId\":\"razer-orochi-v2\"},"
+                      "{\"id\":\"keyboard\",\"kind\":\"keyboard\",\"enabled\":true,\"profileId\":\"custom\"}]}");
+  DeviceRegistry r(blobs);
+  r.begin();
+  auto list = r.list();
+  TEST_ASSERT_EQUAL_UINT32(1, list.size());
+  TEST_ASSERT_EQUAL_STRING("razer-orochi-v2", list[0].profileId.c_str());
+  const uint8_t efuse[6] = {1, 2, 3, 4, 5, 6};
+  TEST_ASSERT_FALSE(r.resolved(efuse).keyboard);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_catalog_has_verified_logitech_default);
   RUN_TEST(test_catalog_entries_pin_verified_values);
   RUN_TEST(test_catalog_ids_unique_and_wellformed);
   RUN_TEST(test_default_devices);
+  RUN_TEST(test_keyboards_are_not_supported);
+  RUN_TEST(test_only_mouse_profiles_are_offered);
+  RUN_TEST(test_a_stored_list_from_an_older_version_loses_its_keyboard_but_keeps_the_mouse);
   RUN_TEST(test_resolve_identity_overrides);
   RUN_TEST(test_resolve_identity_custom_defaults);
   RUN_TEST(test_resolve_mac);

@@ -2,16 +2,17 @@
 
 | Document | Contents |
 |---|---|
-| [features.md](../features.md) | Baseline functional spec |
-| [architecture.md](architecture.md) | How the firmware is structured, tasks, gotchas |
-| [api.md](api.md) | REST API reference |
-| [bluetooth.md](bluetooth.md) | Pairing policy, which computer is connected, disconnect, forget |
-| [schedules.md](schedules.md) | Timed runs and weekly schedules |
-| [mcp.md](mcp.md) | MCP server and tools |
-| [scripting.md](scripting.md) | Script format, key names, limits, automations |
-| [devices.md](devices.md) | Devices, profiles, Bluetooth identity and its limits |
-| [network.md](network.md) | WiFi setup, AP mode, authentication, LED |
-| [development.md](development.md) | Building, testing, flashing, debug flags |
-| [superpowers/](superpowers/) | Design specs and implementation plans (Italian) |
+| [Getting started](getting-started.md) | Flash the board, first setup, pairing, troubleshooting |
+| [Dashboard tour](dashboard.md) | Every section of the web page |
+| [Bluetooth](bluetooth.md) | Pairing policy, disconnecting, which computer is which |
+| [Schedules and timed runs](schedules.md) | Run for a while, or on a weekly timetable |
+| [Appearance](appearance.md) | How the device introduces itself to computers |
+| [Network and security](network.md) | WiFi, own network, the token, the LED |
+| [REST API](api.md) | Every route |
+| [MCP server](mcp.md) | Tools for an AI assistant |
+| [Architecture](architecture.md) | How the firmware is structured |
+| [Development](development.md) | Building, testing, flashing, debug flags |
+| [Functional spec](../features.md) | What the product does, as requirements |
+| [superpowers/](superpowers/) | Historic design notes (Italian) |
 
 Back to the [project README](../README.md).

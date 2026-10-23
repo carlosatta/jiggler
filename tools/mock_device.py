@@ -26,11 +26,8 @@ PROFILES = {
          "manufacturer": "Logitech", "vid": 1133, "pid": 45108, "oui": "00:1F:20"},
         {"id": "razer-orochi-v2", "label": "Razer Orochi V2", "kind": "mouse", "name": "Razer Orochi V2",
          "manufacturer": "Razer", "vid": 5426, "pid": 706, "oui": None},
-        {"id": "logitech-k380", "label": "Logitech K380", "kind": "keyboard", "name": "Keyboard K380",
-         "manufacturer": "Logitech", "vid": 1133, "pid": 45091, "oui": "00:1F:20"},
     ],
-    "custom": {"mouse": {"name": "Jiggler Mouse", "manufacturer": "Jiggler", "vid": 4617, "pid": 1},
-               "keyboard": {"name": "Jiggler Keyboard", "manufacturer": "Jiggler", "vid": 4617, "pid": 2}},
+    "custom": {"mouse": {"name": "Bluetooth Mouse", "manufacturer": "Generic", "vid": 4617, "pid": 1}},
 }
 
 
@@ -44,17 +41,13 @@ class Device:
         self.moves = 128
         self.last_move = time.time() - 40
         self.next_move_at = time.time() + 47
-        self.scripts = {"keepalive-key": {"builtin": True,
-                                          "script": {"steps": [{"op": "key", "key": "F15"}, {"op": "wait", "minMs": 500, "maxMs": 1500}]}}}
-        self.autos = [{"id": "keepalive-key", "script": "keepalive-key", "minIntervalSec": 60, "maxIntervalSec": 180, "enabled": False}]
-        self.devices = [{"id": "mouse", "kind": "mouse", "enabled": True, "profileId": "logitech-mx-master-3s"},
-                        {"id": "keyboard", "kind": "keyboard", "enabled": False, "profileId": "custom"}]
-        self.network = {"mode": "auto", "apSsid": "Jiggler", "apPassword": "mockpassw0rd"}
+        self.devices = [{"id": "mouse", "kind": "mouse", "enabled": True, "profileId": "logitech-mx-master-3s"}]
+        self.network = {"mode": "auto", "apSsid": "Jiggler", "apPassword": ""}
         self.stop_at = None
         self.held_until = None
         self.bonded_at_open = None
-        self.tz = "Europe/Rome"
-        self.schedules = [{"id": "weekdays", "enabled": True, "days": ["mon", "tue", "wed", "thu", "fri"], "start": "09:00", "durationMin": 480}]
+        self.tz = "Europe/London"
+        self.schedules = [{"id": "workdays", "enabled": True, "days": ["mon", "tue", "wed", "thu", "fri"], "start": "09:00", "durationMin": 480}]
         self.scenario("connected")
 
     def scenario(self, name):
@@ -69,10 +62,10 @@ class Device:
             self.state = "stopped"
             self.stop_at = None
         elif name in ("connected", "held", "pairing", "idle", "many"):
-            self.peers = [{"address": "a4:83:e7:12:0b:9c", "label": "Computer 1"}]
+            self.peers = [{"address": "02:00:00:00:00:01", "label": "Computer 1"}]
             if name == "many":
-                self.peers += [{"address": "3c:22:fb:00:5a:11", "label": "MacBook Carlos"},
-                               {"address": "d0:03:4b:aa:10:77", "label": "Computer 3"}]
+                self.peers += [{"address": "02:00:00:00:00:02", "label": "Office desktop"},
+                               {"address": "02:00:00:00:00:03", "label": "Computer 3"}]
             if name in ("connected", "pairing", "many"):
                 self.connected_since = now - 12 * 60 - 20
             if name == "held":
@@ -92,7 +85,7 @@ class Device:
         if not self.window_until:
             return False
         n = len(self.peers) + 1
-        self.peers.append({"address": "a4:83:e7:12:0b:%02x" % (0x9c + n), "label": "Computer %d" % n})
+        self.peers.append({"address": "02:00:00:00:00:%02x" % (0x10 + n), "label": "Computer %d" % n})
         self.connected_since = time.time()
         self.window_until = None
         return True
@@ -147,7 +140,7 @@ class Device:
                              "active": False, "enabledCount": sum(1 for s in self.schedules if s["enabled"]), "timezone": self.tz},
                 "moveCount": self.moves, "lastMoveAgoMs": int((now - self.last_move) * 1000), "lastMoveAt": int(self.last_move),
                 "config": self.config, "bluetooth": summary,
-                "device": {"version": "0.3.1", "bleName": "MX Master 3S", "bleAddress": "00:1f:20:fd:3b:76"}}
+                "device": {"version": "0.4.0", "bleName": "MX Master 3S", "bleAddress": "00:1f:20:00:00:01"}}
 
 
 DEV = None
@@ -278,27 +271,6 @@ class Handler(BaseHTTPRequestHandler):
                         return self.err(400, "invalid_schedule", "schedules[%d].days" % i, "pick at least one day")
                 d.schedules = b.get("schedules", d.schedules)
             return self.send(200, {"timezone": d.tz, "schedules": d.schedules, "timezones": zones})
-        if path == "/api/automations":
-            if method == "PUT":
-                d.autos = body["automations"]
-            return self.send(200, {"automations": d.autos})
-        if path == "/api/scripts":
-            return self.send(200, {"scripts": [{"name": n, "builtin": s["builtin"]} for n, s in d.scripts.items()]})
-        if path.startswith("/api/scripts/"):
-            name = path.split("/")[3]
-            if path.endswith("/run"):
-                return self.send(202, {"ok": True}) if d.connected_addr() else self.err(409, "mouse_not_connected")
-            if method == "GET" and name in d.scripts:
-                return self.send(200, {"name": name, "builtin": d.scripts[name]["builtin"], "script": d.scripts[name]["script"]})
-            if method == "PUT":
-                d.scripts[name] = {"builtin": False, "script": body}
-                return self.send(200, {"name": name})
-            if method == "DELETE" and name in d.scripts:
-                if d.scripts[name]["builtin"]:
-                    return self.err(403, "read_only", "", "the built-in script cannot be removed")
-                del d.scripts[name]
-                return self.send(200, {"ok": True})
-            return self.err(404, "not_found")
         if path == "/api/token" and method == "PUT":
             if body.get("current") != d.token:
                 return self.err(403, "wrong_current", "current", "the current token is not correct")

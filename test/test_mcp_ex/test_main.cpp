@@ -172,13 +172,12 @@ void test_devices_tools() {
   Env e;
   McpReply p = e.tool("list_profiles");
   TEST_ASSERT_FALSE(isError(p));
-  TEST_ASSERT_TRUE(toolText(p)["profiles"].as<JsonArray>().size() >= 5);
+  TEST_ASSERT_TRUE(toolText(p)["profiles"].as<JsonArray>().size() >= 3);
   McpReply g = e.tool("get_devices");
-  TEST_ASSERT_EQUAL_UINT32(2, toolText(g)["devices"].as<JsonArray>().size());
+  TEST_ASSERT_EQUAL_UINT32(1, toolText(g)["devices"].as<JsonArray>().size());
 
   McpReply ok = e.tool("set_devices",
-      "{\"devices\":[{\"id\":\"mouse\",\"kind\":\"mouse\",\"enabled\":true,\"profileId\":\"razer-orochi-v2\"},"
-      "{\"id\":\"keyboard\",\"kind\":\"keyboard\",\"enabled\":true,\"profileId\":\"logitech-mx-keys\"}]}");
+      "{\"devices\":[{\"id\":\"mouse\",\"kind\":\"mouse\",\"enabled\":true,\"profileId\":\"razer-orochi-v2\"}]}");
   TEST_ASSERT_FALSE(isError(ok));
   TEST_ASSERT_TRUE(toolText(ok)["restartRequired"].as<bool>());
   TEST_ASSERT_EQUAL_STRING("razer-orochi-v2", e.devices.list()[0].profileId.c_str());

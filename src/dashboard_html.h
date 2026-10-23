@@ -207,6 +207,7 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <a href="#status" data-view="status"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg><span>Status</span></a>
 <a href="#computers" data-view="computers"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="11" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg><span>Computers</span></a>
 <a href="#movement" data-view="movement"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg><span>Movement</span></a>
+<a href="#schedule" data-view="schedule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></svg><span>Schedule</span></a>
 <a href="#system" data-view="system"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="8" cy="17" r="1.6"/></svg><span>System</span></a>
 </nav>
 
@@ -307,17 +308,6 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <h1 id="h-movement">Movement</h1>
 
 <div class="block">
-<h2>Schedules</h2>
-<p class="hint lead">While a schedule’s window is open the jiggler runs by itself; it stops when the window ends. Stopping or starting it by hand is respected until the next window opens or closes.</p>
-<div class="field"><label for="tzSelect">Timezone</label><select id="tzSelect"></select><div class="err" data-err="timezone"></div></div>
-<p class="sub" id="clockNote">&nbsp;</p>
-<div id="schedList"></div>
-<p class="empty" id="schedEmpty" hidden>No schedules. Add one to start and stop the jiggler on certain days and hours.</p>
-<div class="actions"><button id="schedAdd">Add schedule</button><button class="primary" id="schedSave">Save schedules</button></div>
-<p id="schedMsg" class="msg" role="status" aria-live="polite"></p>
-</div>
-
-<div class="block">
 <h2>Configuration</h2>
 <form id="cfg" novalidate>
 <div class="row">
@@ -335,28 +325,21 @@ input[aria-invalid=true]{border-color:var(--bad)}
 </form>
 </div>
 
-<details class="block" id="scriptsBox">
-<summary><h2>Scripts</h2></summary>
-<p class="hint">A script is a list of steps: <b>move</b> (dx, dy), <b>click</b>, <b>scroll</b> (notches), <b>key</b> (e.g. F15, Ctrl+Alt+Delete), <b>type</b> (text, ASCII), <b>wait</b> (ms, or minMs and maxMs) and <b>repeat</b> (times, steps). US keyboard layout.</p>
-<div class="field"><label for="scrSelect">Script</label><select id="scrSelect"></select></div>
-<div class="field"><label for="scrName">Name</label><input id="scrName" autocomplete="off" placeholder="a-z 0-9 _ -"><div class="err" id="e_scrName"></div></div>
-<div class="field"><label for="scrBody">Content (JSON)</label><textarea id="scrBody" spellcheck="false"></textarea><div class="err" id="e_scrBody"></div></div>
-<div class="actions">
-<button class="primary" id="scrSave">Save</button>
-<button id="scrRun">Run now</button>
-<button id="scrNew">New</button>
-<button class="danger" id="scrDelete">Delete</button>
-</div>
-<p id="scrMsg" class="msg" role="status" aria-live="polite"></p>
-</details>
+</section>
 
-<details class="block" id="autoBox">
-<summary><h2>Automations</h2></summary>
-<p class="hint">An automation runs a script at random intervals, only while the jiggler is running (up to 4). Use it for extras such as tapping F15; schedules decide when the jiggler runs at all.</p>
-<div id="autoList"></div>
-<div class="actions"><button id="autoAdd">Add</button><button class="primary" id="autoSave">Save</button></div>
-<p id="autoMsg" class="msg" role="status" aria-live="polite"></p>
-</details>
+<section class="view" id="view-schedule" aria-labelledby="h-schedule" hidden>
+<h1 id="h-schedule">Schedule</h1>
+<div class="block">
+<h2>Weekly schedules</h2>
+<p class="hint lead">While a schedule’s window is open the jiggler runs by itself; it stops when the window ends. Stopping or starting it by hand is respected until the next window opens or closes.</p>
+<div class="field"><label for="tzSelect">Timezone</label><select id="tzSelect"></select><div class="err" data-err="timezone"></div></div>
+<p class="sub" id="clockNote">&nbsp;</p>
+<div id="schedList"></div>
+<p class="empty" id="schedEmpty" hidden>No schedules. Add one to start and stop the jiggler on certain days and hours.</p>
+<div class="actions"><button id="schedAdd">Add schedule</button><button class="primary" id="schedSave">Save schedules</button></div>
+<p id="schedMsg" class="msg" role="status" aria-live="polite"></p>
+</div>
+
 </section>
 
 <section class="view" id="view-system" aria-labelledby="h-system" hidden>
@@ -379,18 +362,21 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <p class="hint"><b>Auto</b>: connects to your home WiFi and, if it cannot, opens the setup network. <b>Own network</b>: creates a protected WiFi network that serves this dashboard (address 192.168.4.1), for places without WiFi. Holding BOOT for 3 seconds switches between the two. Changes apply after a restart. Schedules need the home WiFi with internet access to know the time.</p>
 <div class="field"><label for="netMode">Mode</label><select id="netMode"><option value="auto">Auto (home WiFi)</option><option value="ap">Own network</option></select><div class="err" data-err="mode"></div></div>
 <div class="field"><label for="netSsid">Own network name</label><input id="netSsid" autocomplete="off"><div class="err" data-err="apSsid"></div></div>
-<div class="field"><label for="netPass">Own network password</label><input id="netPass" autocomplete="off" placeholder="empty = generated on first boot"><div class="err" data-err="apPassword"></div></div>
+<div class="field"><label for="netPass">Own network password</label><input id="netPass" autocomplete="off"><div class="err" data-err="apPassword"></div><p class="hint">Optional, 8 to 63 characters. Leave it empty and one is generated the first time the own network starts.</p></div>
 <div class="actions"><button id="netSave">Save</button><button class="primary" id="netSaveRestart">Save and restart</button></div>
 <p id="netMsg" class="msg" role="status" aria-live="polite"></p>
 </div>
 
-<details class="block" id="devBox">
-<summary><h2>Bluetooth identity</h2></summary>
-<p class="hint">The computer sees a single Bluetooth device: its name, vendor, VID/PID and address are those of the first enabled device below; the others only add their function (mouse or keyboard). Leave fields empty to use the profile’s values. After saving, the device restarts, and computers already paired may not recognise it: you will need to pair them again.</p>
-<div id="devList"></div>
-<div class="actions"><button class="primary" id="devSave">Save and restart</button></div>
-<p id="devMsg" class="msg" role="status" aria-live="polite"></p>
-</details>
+<div class="block" id="appearanceBox">
+<h2>Appearance</h2>
+<p class="hint lead">How the device introduces itself to computers over Bluetooth. Pick a mouse model, or give it your own name.</p>
+<div class="field"><label for="apModel">Shown as</label><select id="apModel"></select><div class="err" data-err="devices[0].profileId"></div></div>
+<div class="field" id="apNameBox" hidden><label for="apName">Name</label><input id="apName" maxlength="29" autocomplete="off"><div class="err" data-err="devices[0].name"></div></div>
+<p class="note" id="apNow">&nbsp;</p>
+<p class="hint"><b>Changing this restarts the device.</b> Computers already paired will not recognise it afterwards: on each one, remove the device in its Bluetooth settings, then pair it again from Computers → Open pairing.</p>
+<div class="actions"><button class="primary" id="apApply">Apply and restart</button></div>
+<p id="apMsg" class="msg" role="status" aria-live="polite"></p>
+</div>
 
 <div class="block">
 <h2>Device</h2>
@@ -1064,7 +1050,7 @@ var App = (function () {
   });
 })();
 
-// Movement: weekly schedules, random-movement configuration, scripts and automations.
+// Movement: the random-movement configuration.
 (function () {
   'use strict';
   var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
@@ -1109,153 +1095,17 @@ var App = (function () {
     }).catch(function () {});
   });
 
-  // ---- Script ----
-  var scriptList = [], builtin = false, isNew = false;
-  var TEMPLATE = '{\n  "steps": [\n    { "op": "key", "key": "F15" },\n    { "op": "wait", "minMs": 500, "maxMs": 1500 }\n  ]\n}';
-
-  function setScriptButtons() {
-    $('scrSave').disabled = builtin;
-    $('scrDelete').disabled = builtin || isNew;
-    $('scrRun').disabled = isNew;
-    $('scrName').disabled = !isNew;
-  }
-  function renderScriptSelect(selected) {
-    var sel = $('scrSelect');
-    sel.textContent = '';
-    scriptList.forEach(function (s) { sel.appendChild(el('option', { value: s.name, text: s.name + (s.builtin ? ' (built in)' : '') })); });
-    if (selected) sel.value = selected;
-  }
-  function openScript(name) {
-    App.call('GET', '/api/scripts/' + encodeURIComponent(name)).then(function (res) {
-      if (res.status !== 200) { say('Script not found.', 'bad', 'scrMsg'); return; }
-      isNew = false;
-      builtin = res.data.builtin;
-      $('scrName').value = res.data.name;
-      $('scrBody').value = JSON.stringify(res.data.script, null, 2);
-      clearErrors($('scriptsBox'));
-      setScriptButtons();
-    }).catch(function () {});
-  }
-  function loadScripts(selected) {
-    return App.call('GET', '/api/scripts').then(function (res) {
-      scriptList = res.data.scripts;
-      renderScriptSelect(selected);
-      if (scriptList.length && !isNew) openScript($('scrSelect').value);
-      else setScriptButtons();
-    }).catch(function () {});
-  }
-  function scriptError(res) {
-    var d = res.data;
-    clearErrors($('scriptsBox'));
-    if (d.field === 'name') { $('e_scrName').textContent = tr(d.message); return; }
-    $('e_scrBody').textContent = (d.field ? d.field + ': ' : '') + tr(d.message);
-  }
-  $('scrSelect').addEventListener('change', function () { isNew = false; openScript($('scrSelect').value); });
-  $('scrNew').onclick = function () {
-    isNew = true; builtin = false;
-    $('scrName').value = '';
-    $('scrBody').value = TEMPLATE;
-    clearErrors($('scriptsBox'));
-    say('', '', 'scrMsg');
-    setScriptButtons();
-    $('scrName').focus();
-  };
-  $('scrSave').onclick = function () {
-    var name = $('scrName').value.trim();
-    say('', '', 'scrMsg');
-    clearErrors($('scriptsBox'));
-    if (!name) { $('e_scrName').textContent = 'Enter a name.'; return; }
-    App.call('PUT', '/api/scripts/' + encodeURIComponent(name), $('scrBody').value).then(function (res) {
-      if (res.status === 200) { isNew = false; say('Script saved.', 'good', 'scrMsg'); loadScripts(name); }
-      else scriptError(res);
-    }).catch(function () {});
-  };
-  $('scrRun').onclick = function () {
-    App.call('POST', '/api/scripts/' + encodeURIComponent($('scrName').value.trim()) + '/run').then(function (res) {
-      if (res.status === 202) say('Script started.', 'good', 'scrMsg');
-      else say(res.data.error === 'mouse_not_connected' ? 'No computer connected.' : 'Could not run it.', 'bad', 'scrMsg');
-    }).catch(function () {});
-  };
-  App.confirmInline($('scrDelete'), 'Confirm: delete', function () {
-    App.call('DELETE', '/api/scripts/' + encodeURIComponent($('scrName').value.trim())).then(function (res) {
-      if (res.status === 200) { isNew = false; say('Script deleted.', 'good', 'scrMsg'); loadScripts(); }
-      else say(tr(res.data.message) || 'Could not delete.', 'bad', 'scrMsg');
-    }).catch(function () {});
+  App.view('movement', {
+    load: function () { if (App.status()) populate(App.status()); },
+    onStatus: function (s) { populate(s); }
   });
+})();
 
-  // ---- Automazioni ----
-  var autos = [];
-  function renderAutos() {
-    var box = $('autoList');
-    box.textContent = '';
-    autos.forEach(function (a, i) {
-      var row = el('div', { class: 'dev' });
-      var id = el('input', { autocomplete: 'off' });
-      id.setAttribute('data-k', 'id');
-      id.value = a.id;
-      row.appendChild(labeled('Name', id, 'automations[' + i + '].id'));
-      var sel = el('select');
-      sel.setAttribute('data-k', 'script');
-      scriptList.forEach(function (s) { sel.appendChild(el('option', { value: s.name, text: s.name })); });
-      if (!scriptList.some(function (s) { return s.name === a.script; })) sel.appendChild(el('option', { value: a.script, text: a.script + ' (missing)' }));
-      sel.value = a.script;
-      row.appendChild(labeled('Script', sel, 'automations[' + i + '].script'));
-      var pair = el('div', { class: 'row' });
-      [['minIntervalSec', 'Minimum (s)'], ['maxIntervalSec', 'Maximum (s)']].forEach(function (f) {
-        var inp = el('input', { inputmode: 'numeric', autocomplete: 'off' });
-        inp.setAttribute('data-k', f[0]);
-        inp.value = String(a[f[0]]);
-        pair.appendChild(labeled(f[1], inp, 'automations[' + i + '].' + f[0]));
-      });
-      row.appendChild(pair);
-      var en = el('input', { type: 'checkbox' });
-      en.setAttribute('data-k', 'enabled');
-      en.checked = a.enabled;
-      row.appendChild(el('div', { class: 'field' }, [el('label', { class: 'inline' }, [en, el('span', { text: 'Enabled' })])]));
-      var rm = el('button', { class: 'danger', text: 'Remove' });
-      rm.onclick = function () { collectAutos(); autos.splice(i, 1); renderAutos(); };
-      row.appendChild(rm);
-      box.appendChild(row);
-    });
-    $('autoAdd').disabled = autos.length >= 4;
-  }
-  function collectAutos() {
-    var out = [];
-    $('autoList').querySelectorAll('.dev').forEach(function (row) {
-      var g = function (k) { return row.querySelector('[data-k=' + k + ']'); };
-      out.push({ id: g('id').value.trim(), script: g('script').value, minIntervalSec: Number(g('minIntervalSec').value),
-        maxIntervalSec: Number(g('maxIntervalSec').value), enabled: g('enabled').checked });
-    });
-    autos = out;
-    return out;
-  }
-  function loadAutos() {
-    Promise.all([App.call('GET', '/api/scripts'), App.call('GET', '/api/automations')]).then(function (r) {
-      scriptList = r[0].data.scripts;
-      autos = r[1].data.automations;
-      renderAutos();
-    }).catch(function () {});
-  }
-  $('autoAdd').onclick = function () {
-    collectAutos();
-    var n = 1;
-    while (autos.some(function (a) { return a.id === 'auto-' + n; })) n++;
-    autos.push({ id: 'auto-' + n, script: scriptList.length ? scriptList[0].name : 'keepalive-key', minIntervalSec: 60, maxIntervalSec: 180, enabled: false });
-    renderAutos();
-  };
-  $('autoSave').onclick = function () {
-    var root = $('autoList');
-    clearErrors(root);
-    say('', '', 'autoMsg');
-    App.call('PUT', '/api/automations', { automations: collectAutos() }).then(function (res) {
-      if (res.status === 200) { autos = res.data.automations; renderAutos(); say('Automations saved.', 'good', 'autoMsg'); return; }
-      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Could not save.', 'bad', 'autoMsg');
-      else say('Check the highlighted fields.', 'bad', 'autoMsg');
-    }).catch(function () {});
-  };
-
-  $('scriptsBox').addEventListener('toggle', function () { if ($('scriptsBox').open) loadScripts(); });
-  $('autoBox').addEventListener('toggle', function () { if ($('autoBox').open) loadAutos(); });
+// Schedule: weekly windows that start and stop the jiggler, and the timezone they are read in.
+(function () {
+  'use strict';
+  var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
+  var labeled = App.labeled, clearErrors = App.clearErrors, showError = App.showError;
 
   // ---- Schedules ----
   var sched = { timezone: 'Europe/Rome', schedules: [] };
@@ -1368,7 +1218,7 @@ var App = (function () {
   };
 
   $('schedSave').onclick = function () {
-    var root = $('view-movement');
+    var root = $('view-schedule');
     clearErrors($('schedList'));
     root.querySelector('[data-err="timezone"]').textContent = '';
     say('', '', 'schedMsg');
@@ -1394,22 +1244,20 @@ var App = (function () {
     else note.textContent = 'Device clock: ' + sc.localTime + (sc.active ? ' · a schedule window is open now.' : '.');
   }
 
-  App.view('movement', {
+  App.view('schedule', {
     load: function () {
-      if (App.status()) { populate(App.status()); renderClock(App.status()); }
+      if (App.status()) renderClock(App.status());
       loadSchedules();
-      if ($('scriptsBox').open) loadScripts();
-      if ($('autoBox').open) loadAutos();
     },
-    onStatus: function (s) { populate(s); renderClock(s); }
+    onStatus: function (s) { renderClock(s); }
   });
 })();
 
 // Sistema: token, network, Bluetooth identity, device info, restart.
 (function () {
   'use strict';
-  var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr, hex4 = JigLib.hex4;
-  var labeled = App.labeled, clearErrors = App.clearErrors, showError = App.showError;
+  var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
+  var clearErrors = App.clearErrors, showError = App.showError;
 
   // ---- Token ----
   $('tokenForm').addEventListener('submit', function (ev) {
@@ -1458,90 +1306,56 @@ var App = (function () {
   $('netSave').onclick = function () { saveNetwork(false); };
   $('netSaveRestart').onclick = function () { saveNetwork(true); };
 
-  // ---- Bluetooth identity ----
-  var profiles = null, devices = [];
-  function profileFor(kind, id) {
-    if (id !== 'custom') {
-      var list = profiles.profiles;
-      for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
-    }
-    var c = profiles.custom[kind];
-    return { id: 'custom', name: c.name, manufacturer: c.manufacturer, vid: c.vid, pid: c.pid, oui: null };
+  // ---- Appearance (how the device introduces itself over Bluetooth) ----
+  var profiles = null, device = null, loadedChoice = '', loadedName = '';
+
+  function modelLabel(id) {
+    if (id === 'custom') return 'Custom name';
+    var list = profiles ? profiles.profiles : [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].label;
+    return id;
   }
-  function refreshPlaceholders(card, kind) {
-    var p = profileFor(kind, card.querySelector('[data-k=profileId]').value);
-    card.querySelector('[data-k=name]').placeholder = p.name;
-    card.querySelector('[data-k=manufacturer]').placeholder = p.manufacturer;
-    card.querySelector('[data-k=vid]').placeholder = hex4(p.vid);
-    card.querySelector('[data-k=pid]').placeholder = hex4(p.pid);
-    card.querySelector('[data-k=mac]').placeholder = p.oui ? p.oui + ':xx:xx:xx (the rest comes from the chip)' : 'the chip’s own address (no override)';
+
+  function showNameBox() { $('apNameBox').hidden = $('apModel').value !== 'custom'; }
+
+  function renderAppearance() {
+    var sel = $('apModel');
+    sel.textContent = '';
+    profiles.profiles.forEach(function (p) { sel.appendChild(el('option', { value: p.id, text: p.label })); });
+    sel.appendChild(el('option', { value: 'custom', text: 'Custom name…' }));
+    sel.value = device.profileId;
+    $('apName').value = device.name || '';
+    loadedChoice = sel.value;
+    loadedName = $('apName').value;
+    showNameBox();
+    var shown = device.profileId === 'custom' ? (device.name || profiles.custom.mouse.name) : modelLabel(device.profileId);
+    $('apNow').textContent = 'Currently shown as: ' + shown + '.';
   }
-  function renderDevices() {
-    var box = $('devList');
-    box.textContent = '';
-    devices.forEach(function (d, i) {
-      var card = el('div', { class: 'dev' });
-      card.appendChild(el('h3', { text: d.kind === 'mouse' ? 'Mouse (' + d.id + ')' : 'Keyboard (' + d.id + ')' }));
-      var enabled = el('input', { type: 'checkbox' });
-      enabled.setAttribute('data-k', 'enabled');
-      enabled.checked = d.enabled;
-      card.appendChild(el('div', { class: 'field' }, [el('label', { class: 'inline' }, [enabled, el('span', { text: 'Enabled' })])]));
-      var sel = el('select');
-      sel.setAttribute('data-k', 'profileId');
-      profiles.profiles.filter(function (p) { return p.kind === d.kind; }).forEach(function (p) {
-        sel.appendChild(el('option', { value: p.id, text: p.label }));
-      });
-      sel.appendChild(el('option', { value: 'custom', text: 'Custom' }));
-      sel.value = d.profileId;
-      card.appendChild(labeled('Profile', sel, 'devices[' + i + '].profileId'));
-      [['name', 'Bluetooth name'], ['manufacturer', 'Manufacturer'], ['vid', 'VID'], ['pid', 'PID'], ['mac', 'Bluetooth address (MAC)']].forEach(function (f) {
-        var inp = el('input', { autocomplete: 'off' });
-        inp.setAttribute('data-k', f[0]);
-        var cur = d[f[0]];
-        if (cur !== undefined && cur !== null) inp.value = (f[0] === 'vid' || f[0] === 'pid') ? hex4(cur) : cur;
-        card.appendChild(labeled(f[1], inp, 'devices[' + i + '].' + f[0]));
-      });
-      sel.addEventListener('change', function () { refreshPlaceholders(card, d.kind); });
-      refreshPlaceholders(card, d.kind);
-      box.appendChild(card);
-    });
-  }
-  function loadDevices() {
+
+  function loadAppearance() {
     Promise.all([App.call('GET', '/api/profiles'), App.call('GET', '/api/devices')]).then(function (r) {
       profiles = r[0].data;
-      devices = r[1].data.devices;
-      renderDevices();
+      device = r[1].data.devices[0];
+      renderAppearance();
     }).catch(function () {});
   }
-  App.confirmInline($('devSave'), 'Confirm: save and restart', function () {
-    var root = $('devList');
+  $('apModel').addEventListener('change', showNameBox);
+
+  App.confirmInline($('apApply'), 'Confirm: restart and pair again', function () {
+    var root = $('appearanceBox');
     clearErrors(root);
-    say('', '', 'devMsg');
-    var out = [], bad = false;
-    root.querySelectorAll('.dev').forEach(function (card, i) {
-      var base = devices[i];
-      var d = { id: base.id, kind: base.kind, enabled: card.querySelector('[data-k=enabled]').checked, profileId: card.querySelector('[data-k=profileId]').value };
-      ['name', 'manufacturer', 'mac'].forEach(function (k) {
-        var v = card.querySelector('[data-k=' + k + ']').value.trim();
-        if (v !== '') d[k] = v;
-      });
-      ['vid', 'pid'].forEach(function (k) {
-        var v = card.querySelector('[data-k=' + k + ']').value.trim();
-        if (v === '') return;
-        var n = Number(v);
-        if (!isFinite(n) || Math.floor(n) !== n) { showError(root, 'devices[' + i + '].' + k, 'must be an integer from 0 to 65535'); bad = true; return; }
-        d[k] = n;
-      });
-      out.push(d);
-    });
-    if (bad) return;
-    App.call('PUT', '/api/devices', { devices: out }).then(function (res) {
-      if (res.status === 200) { say('Saved. Restarting…', 'good', 'devMsg'); return App.restartDevice(); }
-      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Could not save.', 'bad', 'devMsg');
-      else say('Check the highlighted fields.', 'bad', 'devMsg');
+    say('', '', 'apMsg');
+    var choice = $('apModel').value, name = $('apName').value.trim();
+    if (choice === loadedChoice && (choice !== 'custom' || name === loadedName)) { say('Nothing to change.', '', 'apMsg'); return; }
+    if (choice === 'custom' && !name) { root.querySelector('[data-err="devices[0].name"]').textContent = 'Enter a name.'; return; }
+    var next = JSON.parse(JSON.stringify(device));
+    next.profileId = choice;
+    if (choice === 'custom') next.name = name; else delete next.name;
+    App.call('PUT', '/api/devices', { devices: [next] }).then(function (res) {
+      if (res.status === 200) { say('Saved. Restarting…', 'good', 'apMsg'); return App.restartDevice(); }
+      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Could not save.', 'bad', 'apMsg');
     }).catch(function () {});
   });
-  $('devBox').addEventListener('toggle', function () { if ($('devBox').open) loadDevices(); });
 
   // ---- Device info and restart ----
   function renderInfo(s) {
@@ -1553,7 +1367,7 @@ var App = (function () {
   App.confirmInline($('restartBtn'), 'Confirm: restart', function () { say('', '', 'sysMsg'); App.restartDevice(); });
 
   App.view('system', {
-    load: function () { loadNetwork(); if ($('devBox').open) loadDevices(); if (App.status()) renderInfo(App.status()); },
+    load: function () { loadNetwork(); loadAppearance(); if (App.status()) renderInfo(App.status()); },
     onStatus: renderInfo
   });
 })();

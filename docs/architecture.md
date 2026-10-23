@@ -8,36 +8,39 @@ All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio
          \              v              /
           +----->  handleApiEx / handleMcpEx  <-----+   (json_codec shared by REST and MCP)
                         |
-        +---------------+----------------+-------------+
-        v               v                v             v
-   Controller     DeviceRegistry    ScriptLibrary  AutomationEngine
-   (run state,    (devices,         (JSON scripts, (random schedule,
-    config, tick)  identity)         NVS)           run now)
-        |                                              |
-        +---------------> Plan / Step <----------------+
-                              |
-                     runPlan -> MouseSink (BleMouse: mouse + keyboard over NimBLE)
+     +---------+--------+---------+-----------+
+     v         v                  v           v
+ Controller  BluetoothManager  ScheduleEngine  DeviceRegistry
+ (run state, (pairing windows, (weekly windows, (how the device
+  timed runs) disconnect hold,  timezone)        appears)
+     |        peers)                |
+     |            |                 +--> Controller (start / stop)
+     v            v (BleLink)
+ Plan / Step   BleMouse (NimBLE)
+     |
+ runPlan -> MouseSink (BleMouse)
 ```
 
 ## Core pieces
 
 - **`Controller`** is the single control surface: status, start/pause/stop, `moveNow`, `updateConfig`, `tick()`. Thread-safe (one mutex). The dashboard, REST and MCP all go through it, so they cannot disagree.
 - **`planActivity`** turns a `Config` into a `Plan`: Bézier strokes with minimum-jerk easing, dwell, optional click and net-zero scroll, then a return stroke. The net `Move` displacement of a plan is exactly (0,0). `runPlan` executes it and aborts if the mouse disconnects.
-- **`compileScript`** compiles user JSON into the same `Plan`/`Step` model (extra step kinds `KeyDown`, `KeyUp`, `Wait`). All limits are enforced at compile time.
-- **`AutomationEngine`** schedules scripts at random intervals (only while the run state is `running`) and runs them on demand. The movement task calls `Controller::tick()` first, then the engine.
-- **`DeviceRegistry`** holds the device list; `buildReportMap` builds the composite HID report map (mouse report ID 1, keyboard report ID 2).
+- **`Controller::startFor(minutes)`** runs for a while and stops by itself (a wrap-safe deadline in `millis`). It refuses to run, and stops, while no computer is paired.
+- **`ScheduleEngine`** holds up to 8 weekly windows and a timezone (mapped to a POSIX TZ string). Once a second it compares the local time with the windows and starts or stops the controller on the edges; the first look after boot is authoritative, saving never starts or stops anything.
+- **`BluetoothManager`** owns the pairing policy: pairing is always closed unless a 3-minute window is open, which closes when a computer pairs; "disconnect" hides the device for 3 minutes; forget, labels. It only talks to the stack through `BleLink`, which `BleMouse` implements.
+- **`DeviceRegistry`** holds the single mouse's appearance (a profile or a custom name); `buildReportMap` builds the HID report map.
 - **Router entry points.** `handleApiEx(ApiContext&)` and `handleMcpEx(ApiContext&)` add the newer routes/tools and fall back to the original `handleApi` and the original six MCP tools. Services in `ApiContext` are optional: a missing one means 404 / tool not listed.
 
 ## Seams
 
 `Platform`, `Rng`, `MouseSink`, `ConfigStore`, `BlobStore` and `NetworkStore` separate core from hardware. Firmware implements them in `arduino_platform.h`, `ble_mouse.*`, `nvs_config_store.*`, `nvs_blob_store.*` and `nvs_network_store.*`. Test fakes live in `test/support/fakes.h`.
 
-`NvsBlobStore` hashes keys to short NVS names and keeps an index blob, so blob keys can be long (`script/<name>`).
+`NvsBlobStore` hashes keys to short NVS names and keeps an index blob, so blob keys can be long.
 
 ## Tasks and startup
 
 - The movement task (`movement_task.cpp`, core 1) calls `Controller::tick()` every 50 ms and runs plans. It is independent of WiFi, and `setup()` starts it **before** `wifi.begin()` because WiFi connection can block for seconds.
-- `WifiSetup` (tzapu WiFiManager, non-blocking) also collects the API token. `HttpServer` starts only once WiFi is connected and the portal is closed, because both want port 80.
+- `WifiSetup` (tzapu WiFiManager, non-blocking) also collects the API token. `HttpServer` starts only once WiFi is connected and the portal is closed, because both want port 80. After the **first** setup the board restarts once, because the portal's web server leaves port 80 busy and the dashboard cannot bind it in the same boot.
 - `WifiSetup` and `HttpServer` hide their library headers behind a pimpl: WiFiManager and ESPAsyncWebServer must not share a translation unit.
 
 ## Gotchas

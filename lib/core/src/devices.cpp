@@ -71,12 +71,7 @@ std::vector<DeviceConfig> defaultDevices() {
   mouse.kind = DeviceKind::Mouse;
   mouse.enabled = true;
   mouse.profileId = "logitech-mx-master-3s";
-  DeviceConfig keyboard;
-  keyboard.id = "keyboard";
-  keyboard.kind = DeviceKind::Keyboard;
-  keyboard.enabled = false;
-  keyboard.profileId = "custom";
-  return {mouse, keyboard};
+  return {mouse};
 }
 
 std::optional<ValidationError> validateDevices(const std::vector<DeviceConfig>& devices) {
@@ -87,6 +82,7 @@ std::optional<ValidationError> validateDevices(const std::vector<DeviceConfig>& 
   bool anyEnabled = false, anyMouse = false;
   for (size_t i = 0; i < devices.size(); i++) {
     const DeviceConfig& d = devices[i];
+    if (d.kind == DeviceKind::Keyboard) return ValidationError{at(i, "kind"), "keyboards are not supported yet"};
     if (!validId(d.id)) return ValidationError{at(i, "id"), "must be 1 to 24 characters of a-z 0-9 _ -"};
     if (!ids.insert(d.id).second) return ValidationError{at(i, "id"), "duplicate id"};
     if (d.profileId != "custom") {
@@ -136,6 +132,7 @@ std::string profilesToJson() {
   JsonDocument doc;
   JsonArray arr = doc["profiles"].to<JsonArray>();
   for (const Profile& p : catalog()) {
+    if (p.kind != DeviceKind::Mouse) continue;  // keyboards are not offered for now
     JsonObject o = arr.add<JsonObject>();
     o["id"] = p.id;
     o["label"] = p.label;
@@ -147,7 +144,7 @@ std::string profilesToJson() {
     if (p.identity.oui) o["oui"] = macToString(*p.identity.oui);
   }
   JsonObject custom = doc["custom"].to<JsonObject>();
-  for (DeviceKind k : {DeviceKind::Mouse, DeviceKind::Keyboard}) {
+  for (DeviceKind k : {DeviceKind::Mouse}) {
     Identity g = genericIdentity(k);
     JsonObject o = custom[kindName(k)].to<JsonObject>();
     o["name"] = g.name;
@@ -248,7 +245,10 @@ void DeviceRegistry::begin() {
   if (raw.empty()) return;
   std::vector<DeviceConfig> stored;
   ParseError err;
-  if (parseDevices(raw, stored, err) && !validateDevices(stored)) devices_ = std::move(stored);
+  if (!parseDevices(raw, stored, err)) return;
+  // Lists saved by older versions may contain a keyboard: drop it, keep the mouse.
+  stored.erase(std::remove_if(stored.begin(), stored.end(), [](const DeviceConfig& d) { return d.kind == DeviceKind::Keyboard; }), stored.end());
+  if (!stored.empty() && !validateDevices(stored)) devices_ = std::move(stored);
 }
 
 std::vector<DeviceConfig> DeviceRegistry::list() const {
