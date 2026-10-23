@@ -1,21 +1,29 @@
 #include <Arduino.h>
 
+#include "arduino_platform.h"
 #include "ble_mouse.h"
+#include "controller.h"
+#include "led.h"
+#include "movement_task.h"
+#include "nvs_config_store.h"
 
-BleMouse mouse;
+BleMouse ble;
+ArduinoPlatform platform(ble);
+EspRng rng;
+NvsConfigStore store;
+jig::Controller controller(platform, rng, store);
+Led led;
 
 void setup() {
   Serial.begin(115200);
-  mouse.begin();
-  Serial.printf("BLE mouse started, address %s\n", NimBLEDevice::getAddress().toString().c_str());
+  led.begin();
+  ble.begin();
+  controller.begin();
+  startMovementTask(controller, ble, platform);
+  Serial.printf("jiggler started, BLE address %s\n", NimBLEDevice::getAddress().toString().c_str());
 }
 
-// Temporary verification loop (Task 6); replaced by the movement task in Task 7.
 void loop() {
-  delay(5000);
-  if (!mouse.connected()) return;
-  Serial.println("test move");
-  mouse.move(20, 0);
-  delay(100);
-  mouse.move(-20, 0);
+  led.update(controller.status(), millis());
+  delay(10);
 }
