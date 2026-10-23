@@ -8,6 +8,8 @@
 #include "led.h"
 #include "long_press.h"
 #include "movement_task.h"
+#include "devices.h"
+#include "nvs_blob_store.h"
 #include "nvs_config_store.h"
 #include "nvs_network_store.h"
 #include "token_store.h"
@@ -29,6 +31,8 @@ ArduinoPlatform platform(ble);
 EspRng rng;
 NvsConfigStore store;
 NvsNetworkStore networkStore;
+NvsBlobStore blobs;
+jig::DeviceRegistry devices(blobs);
 TokenStore tokens;
 jig::Controller controller(platform, rng, store);
 jig::ApiContext api{controller};
@@ -41,10 +45,18 @@ void setup() {
   Serial.begin(115200);
   pinMode(kBootButtonPin, INPUT_PULLUP);
   led.begin();
-  ble.begin();
+  devices.begin();
+  uint8_t efuse[6];
+  esp_efuse_mac_get_default(efuse);
+  jig::ResolvedDevice resolved = devices.resolved(efuse);
+#ifdef JIG_FORCE_KEYBOARD
+  resolved.keyboard = true;  // debug builds only: in memory, never persisted
+#endif
+  ble.begin(resolved);
   controller.begin();
   startMovementTask(controller, ble, platform);  // from here on the mouse works without WiFi
   api.network = &networkStore;
+  api.devices = &devices;
   api.restart = scheduleRestart;
   Serial.printf("jiggler started, BLE address %s\n", NimBLEDevice::getAddress().toString().c_str());
   wifi.begin();

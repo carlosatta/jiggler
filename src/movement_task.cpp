@@ -19,12 +19,12 @@ void movementTask(void*) {
     if (auto plan = ctx.controller->tick()) {
 #ifdef JIG_DEBUG
       const uint32_t started = millis();
-      const size_t done = jig::runPlan(*plan, *ctx.mouse, *ctx.platform, sleepMs);
+      const size_t done = jig::runPlan(*plan, *ctx.mouse, ctx.mouse, *ctx.platform, sleepMs);
       Serial.printf("plan: %u/%u steps in %lu ms, stack high-water %u bytes\n", (unsigned)done,
                     (unsigned)plan->steps.size(), (unsigned long)(millis() - started),
                     (unsigned)uxTaskGetStackHighWaterMark(nullptr));
 #else
-      jig::runPlan(*plan, *ctx.mouse, *ctx.platform, sleepMs);
+      jig::runPlan(*plan, *ctx.mouse, ctx.mouse, *ctx.platform, sleepMs);
 #endif
     }
     vTaskDelay(pdMS_TO_TICKS(50));
