@@ -438,10 +438,6 @@ var JigLib = (function () {
         detail: (left ? 'Hidden from computers for another ' + left + '; after that your computer can reconnect.' : 'Hidden from computers.') +
           ' Press Reconnect to show the device now.', actions: ['reconnect'] };
     }
-    if (pairing.open && !timed) {
-      return { tone: 'open', title: 'Ready to pair',
-        detail: 'On the computer, open the Bluetooth settings and choose “' + name + '”.', actions: [] };
-    }
     if (timed) {
       return { tone: 'open', title: 'Pairing is open',
         detail: 'Closes in ' + fmtDuration(pairing.remainingMs) + '. On the computer, choose “' + name + '”.', actions: ['closePairing'] };
@@ -896,7 +892,6 @@ var App = (function () {
     var timed = p.open && p.remainingMs != null;
     var info;
     if (timed) info = 'Pairing is open: closes in ' + JigLib.fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It also closes as soon as a computer pairs.';
-    else if (p.open) info = 'No computer paired yet: pairing stays open until you connect one.';
     else info = 'Pairing is closed: no new computer can connect.';
     if (bt.held && bt.heldRemainingMs != null) info += ' The device is hidden for another ' + JigLib.fmtDuration(Math.max(0, bt.heldRemainingMs - elapsed)) + ' (disconnected).';
     $('pairInfo').textContent = info;

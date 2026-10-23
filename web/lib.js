@@ -56,10 +56,6 @@ var JigLib = (function () {
         detail: (left ? 'Hidden from computers for another ' + left + '; after that your computer can reconnect.' : 'Hidden from computers.') +
           ' Press Reconnect to show the device now.', actions: ['reconnect'] };
     }
-    if (pairing.open && !timed) {
-      return { tone: 'open', title: 'Ready to pair',
-        detail: 'On the computer, open the Bluetooth settings and choose “' + name + '”.', actions: [] };
-    }
     if (timed) {
       return { tone: 'open', title: 'Pairing is open',
         detail: 'Closes in ' + fmtDuration(pairing.remainingMs) + '. On the computer, choose “' + name + '”.', actions: ['closePairing'] };

@@ -2,7 +2,7 @@
 
 ## 0.3.1
 
-- A board that has been paired once never goes back to "open for anyone" when its bond list empties (a stale bond dropped by the stack made it look brand-new, so a computer could re-pair without a window). "Forget all" keeps pairing closed too.
+- **Pairing is never open by default.** The old "no computer paired yet: pairing stays open" first-run state is gone, so a brand-new board, a board whose bond list emptied (a stale bond dropped by the stack) and a board after "Forget all" all refuse pairing until you open a window (dashboard or BOOT tap). The `firstRun` field is removed from the API.
 - Pressing Disconnect on the computer now hides the device for 3 minutes instead of being undone by an immediate reconnect.
 - Fixes from review: remaining-time counters can no longer underflow, forgetting a computer during an open window, schedule saved before the clock exists, DST-safe "until a time", locale-independent mock.
 - Serial log lines for pairing decisions and disconnect reasons.

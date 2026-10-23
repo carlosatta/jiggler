@@ -101,13 +101,12 @@ struct Api {
 
 }  // namespace
 
-void test_first_run_pairing_is_open_without_timeout() {
+void test_pairing_is_closed_by_default_even_with_no_computer_paired() {
   Env e;
   BluetoothStatus s = e.bt.status();
-  TEST_ASSERT_TRUE(s.pairingOpen);
-  TEST_ASSERT_TRUE(s.firstRun);
+  TEST_ASSERT_FALSE(s.pairingOpen);
   TEST_ASSERT_FALSE(s.pairingRemainingMs.has_value());
-  TEST_ASSERT_TRUE(e.link.pairingOpen);
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
   TEST_ASSERT_TRUE(s.peers.empty());
 }
 
@@ -115,7 +114,6 @@ void test_with_a_bond_pairing_is_closed() {
   Env e({kA});
   BluetoothStatus s = e.bt.status();
   TEST_ASSERT_FALSE(s.pairingOpen);
-  TEST_ASSERT_FALSE(s.firstRun);
   TEST_ASSERT_FALSE(e.link.pairingOpen);
 }
 
@@ -234,7 +232,6 @@ void test_forget_one_and_all() {
   TEST_ASSERT_TRUE(e.bt.forgetAll().ok);
   TEST_ASSERT_TRUE(e.link.bonded.empty());
   BluetoothStatus s = e.bt.status();
-  TEST_ASSERT_FALSE(s.firstRun);         // a board that has been paired is not factory-new: pairing stays closed
   TEST_ASSERT_FALSE(s.pairingOpen);
   TEST_ASSERT_FALSE(e.link.pairingOpen);
   TEST_ASSERT_TRUE(s.peers.empty());
@@ -458,7 +455,6 @@ void test_forget_all_while_connected_drops_the_link_and_keeps_pairing_closed() {
   TEST_ASSERT_TRUE(e.bt.forgetAll().ok);
   BluetoothStatus s = e.bt.status();
   TEST_ASSERT_FALSE(s.connected);
-  TEST_ASSERT_FALSE(s.firstRun);
   TEST_ASSERT_FALSE(s.pairingOpen);
 }
 
@@ -546,58 +542,28 @@ void test_hold_countdown_is_in_the_json() {
   TEST_ASSERT_TRUE(d["heldRemainingMs"].isNull());
 }
 
-void test_losing_every_bond_does_not_make_the_board_factory_new_again() {
-  Env e({kA});
-  e.bt.tick();                 // sees the bond: from now on this board has been paired
-  e.link.bonded.clear();       // the stack dropped it (e.g. the computer forgot the device and re-paired)
-  BluetoothStatus s = e.bt.status();
-  TEST_ASSERT_FALSE(s.firstRun);
-  TEST_ASSERT_FALSE(s.pairingOpen);
-  TEST_ASSERT_FALSE(e.link.pairingOpen);
-}
-
-void test_the_paired_before_memory_survives_a_restart() {
-  Env e({kA});
+void test_the_first_pairing_needs_a_window_like_every_other() {
+  Env e;  // a board with no computer paired at all
   e.bt.tick();
-  e.link.bonded.clear();
-  BluetoothManager again(e.clock, e.link, e.blobs);  // reboot with the same storage and no bonds left
-  again.begin();
-  TEST_ASSERT_FALSE(again.status().pairingOpen);
-  TEST_ASSERT_FALSE(e.link.pairingOpen);
-}
-
-void test_a_board_with_stored_names_counts_as_paired_before() {
-  // boards flashed before the flag existed: their saved computer names prove they were paired
-  Env e({kA});
-  e.bt.status();
-  e.bt.tick();
-  e.blobs.data.erase("paired");
-  e.link.bonded.clear();
-  BluetoothManager again(e.clock, e.link, e.blobs);
-  again.begin();
-  TEST_ASSERT_FALSE(again.status().pairingOpen);
-}
-
-void test_a_factory_new_board_stays_open_until_the_first_pairing() {
-  Env e;
-  e.bt.tick();
-  TEST_ASSERT_TRUE(e.bt.status().pairingOpen);
-  e.link.bonded.push_back(kA);  // the first computer pairs
-  e.bt.tick();
-  e.link.bonded.clear();
   TEST_ASSERT_FALSE(e.bt.status().pairingOpen);
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
+  TEST_ASSERT_TRUE(e.bt.startPairing(kDefaultPairingSec).ok);
+  TEST_ASSERT_TRUE(e.link.pairingOpen);
+  e.link.bonded.push_back(kA);  // the first computer pairs: the window closes by itself
+  e.bt.tick();
+  TEST_ASSERT_FALSE(e.bt.status().pairingOpen);
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
 }
 
-void test_a_failed_save_of_the_paired_flag_is_retried() {
-  Env e;
-  e.flaky()->failPuts = true;
-  e.link.bonded.push_back(kA);
+void test_pairing_stays_closed_when_every_bond_disappears() {
+  Env e({kA});
   e.bt.tick();
-  e.link.bonded.clear();
-  TEST_ASSERT_FALSE(e.bt.status().pairingOpen);       // held in memory even though it could not be stored
-  e.flaky()->failPuts = false;
+  e.link.bonded.clear();  // e.g. the stack dropped a stale bond, or the owner pressed Forget all
   e.bt.tick();
-  TEST_ASSERT_TRUE(e.blobs.data.count("paired") == 1);
+  TEST_ASSERT_FALSE(e.bt.status().pairingOpen);
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
+  TEST_ASSERT_TRUE(e.bt.forgetAll().ok);
+  TEST_ASSERT_FALSE(e.link.pairingOpen);
 }
 
 void test_the_computer_disconnecting_hides_the_device_like_the_dashboard_does() {
@@ -625,7 +591,7 @@ void test_a_disconnect_during_a_pairing_window_is_not_a_request_to_hide() {
   TEST_ASSERT_TRUE(e.link.advertising);
 }
 
-void test_a_disconnect_on_a_factory_new_board_is_not_a_request_to_hide() {
+void test_a_disconnect_with_nothing_paired_is_not_a_request_to_hide() {
   Env e;
   e.link.peerRequestedDisconnect = true;
   e.bt.tick();
@@ -673,7 +639,7 @@ void test_forgetting_a_computer_during_an_open_window_lets_it_close_when_that_co
 
 int main() {
   UNITY_BEGIN();
-  RUN_TEST(test_first_run_pairing_is_open_without_timeout);
+  RUN_TEST(test_pairing_is_closed_by_default_even_with_no_computer_paired);
   RUN_TEST(test_with_a_bond_pairing_is_closed);
   RUN_TEST(test_pairing_window_counts_down_and_closes);
   RUN_TEST(test_pairing_window_survives_clock_wraparound);
@@ -706,14 +672,11 @@ int main() {
   RUN_TEST(test_stopping_the_window_by_hand_still_works);
   RUN_TEST(test_disconnect_hold_lasts_three_minutes_then_the_computer_can_reconnect);
   RUN_TEST(test_hold_countdown_is_in_the_json);
-  RUN_TEST(test_losing_every_bond_does_not_make_the_board_factory_new_again);
-  RUN_TEST(test_the_paired_before_memory_survives_a_restart);
-  RUN_TEST(test_a_board_with_stored_names_counts_as_paired_before);
-  RUN_TEST(test_a_factory_new_board_stays_open_until_the_first_pairing);
-  RUN_TEST(test_a_failed_save_of_the_paired_flag_is_retried);
+  RUN_TEST(test_the_first_pairing_needs_a_window_like_every_other);
+  RUN_TEST(test_pairing_stays_closed_when_every_bond_disappears);
   RUN_TEST(test_the_computer_disconnecting_hides_the_device_like_the_dashboard_does);
   RUN_TEST(test_a_disconnect_during_a_pairing_window_is_not_a_request_to_hide);
-  RUN_TEST(test_a_disconnect_on_a_factory_new_board_is_not_a_request_to_hide);
+  RUN_TEST(test_a_disconnect_with_nothing_paired_is_not_a_request_to_hide);
   RUN_TEST(test_remaining_time_never_underflows_when_the_deadline_passes_between_two_clock_reads);
   RUN_TEST(test_forgetting_a_computer_during_an_open_window_lets_it_close_when_that_computer_pairs_again);
   return UNITY_END();

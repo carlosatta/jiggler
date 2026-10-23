@@ -16,7 +16,6 @@ uint32_t msUntil(uint32_t until, uint32_t now) {
 }
 
 constexpr const char* kLabelsKey = "peers";
-constexpr const char* kPairedKey = "paired";
 
 std::string lower(std::string s) {
   for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -65,9 +64,6 @@ void BluetoothManager::begin() {
       for (JsonPair kv : doc.as<JsonObject>())
         if (kv.value().is<const char*>()) labels_[kv.key().c_str()] = kv.value().as<std::string>();
   }
-  // Boards flashed before the flag existed: saved computer names prove they were paired.
-  everPaired_ = blobs_.get(kPairedKey) == "1" || !labels_.empty();
-  everPairedDirty_ = false;
   applyLocked();
 }
 
@@ -75,9 +71,7 @@ void BluetoothManager::tick() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (labelsDirty_ && saveLabelsLocked()) labelsDirty_ = false;
   expireLocked();
-  noteBondsLocked(link_.bondedAddresses());
-  if (everPairedDirty_ && blobs_.put(kPairedKey, "1")) everPairedDirty_ = false;
-  if (link_.takePeerDisconnectRequest() && !held_ && !windowOpen_ && everPaired_) {
+  if (link_.takePeerDisconnectRequest() && !held_ && !windowOpen_ && !link_.bondedAddresses().empty()) {
     // The computer ended the connection on purpose. Left visible it would reconnect at once.
     held_ = true;
     heldUntilMs_ = platform_.nowMs() + kDisconnectHoldSec * 1000;
@@ -105,18 +99,7 @@ void BluetoothManager::expireLocked() {
   if (changed) applyLocked();
 }
 
-void BluetoothManager::noteBondsLocked(const std::vector<std::string>& bonded) {
-  if (!bonded.empty() && !everPaired_) {
-    everPaired_ = true;
-    everPairedDirty_ = true;
-  }
-}
-
-bool BluetoothManager::pairingOpenLocked() {
-  const std::vector<std::string> bonded = link_.bondedAddresses();
-  noteBondsLocked(bonded);
-  return (bonded.empty() && !everPaired_) || windowOpen_;
-}
+bool BluetoothManager::pairingOpenLocked() { return windowOpen_; }
 
 void BluetoothManager::applyLocked() {
   link_.setAdvertising(!held_);
@@ -158,9 +141,7 @@ BluetoothStatus BluetoothManager::status() {
   const std::vector<std::string> connected = link_.connectedAddresses();
   s.held = held_;
   if (held_) s.heldRemainingMs = msUntil(heldUntilMs_, now);
-  noteBondsLocked(bonded);
-  s.firstRun = bonded.empty() && !everPaired_;
-  s.pairingOpen = s.firstRun || windowOpen_;
+  s.pairingOpen = windowOpen_;
   if (windowOpen_) s.pairingRemainingMs = msUntil(windowUntilMs_, now);
 
   // forget connections that ended without a callback, learn ones that began without one
@@ -293,7 +274,6 @@ std::string bluetoothToJson(const BluetoothStatus& s) {
   if (s.heldRemainingMs) doc["heldRemainingMs"] = *s.heldRemainingMs;
   else doc["heldRemainingMs"] = nullptr;
   fillPairing(doc["pairing"].to<JsonObject>(), s);
-  doc["pairing"]["firstRun"] = s.firstRun;
   if (s.connected) fillComputer(doc["computer"].to<JsonObject>(), s);
   else doc["computer"] = nullptr;
   JsonArray peers = doc["peers"].to<JsonArray>();

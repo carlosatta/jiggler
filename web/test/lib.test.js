@@ -65,14 +65,6 @@ test('connection view: held shows the countdown and offers reconnect', () => {
   assert.deepEqual(v.actions, ['reconnect']);
 });
 
-test('connection view: first run tells the owner what to pick on the computer', () => {
-  const v = JigLib.connectionView(bt({ peerCount: 0, pairing: { open: true, remainingMs: null } }), device);
-  assert.equal(v.tone, 'open');
-  assert.equal(v.title, 'Ready to pair');
-  assert.match(v.detail, /“MX Master 3S”/);
-  assert.deepEqual(v.actions, []);
-});
-
 test('connection view: a timed window shows the countdown and can be stopped', () => {
   const v = JigLib.connectionView(bt({ pairing: { open: true, remainingMs: 92000 } }), device);
   assert.equal(v.title, 'Pairing is open');

@@ -17,7 +17,6 @@
     var timed = p.open && p.remainingMs != null;
     var info;
     if (timed) info = 'Pairing is open: closes in ' + JigLib.fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It also closes as soon as a computer pairs.';
-    else if (p.open) info = 'No computer paired yet: pairing stays open until you connect one.';
     else info = 'Pairing is closed: no new computer can connect.';
     if (bt.held && bt.heldRemainingMs != null) info += ' The device is hidden for another ' + JigLib.fmtDuration(Math.max(0, bt.heldRemainingMs - elapsed)) + ' (disconnected).';
     $('pairInfo').textContent = info;

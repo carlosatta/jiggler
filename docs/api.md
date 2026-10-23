@@ -77,7 +77,7 @@ See [bluetooth.md](bluetooth.md) for the pairing policy. `GET /api/status` also 
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/bluetooth` | Full state: connection, pairing window (`firstRun` when no computer is paired), `computer`, and `peers[]` (`id`, `address`, `label`, `connected`) |
+| GET | `/api/bluetooth` | Full state: connection, pairing window, `computer`, and `peers[]` (`id`, `address`, `label`, `connected`) |
 | POST | `/api/bluetooth/pairing` | Open a pairing window. Optional body `{"seconds":180}` (30–600; default 180). It closes by itself when a computer pairs |
 | DELETE | `/api/bluetooth/pairing` | Close the window |
 | POST | `/api/bluetooth/disconnect` | Drop the link and hide the device for 3 minutes (or until reconnect) |

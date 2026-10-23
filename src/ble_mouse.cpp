@@ -46,6 +46,12 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     ble_.linkIdentified(desc->conn_handle, addressOf(desc->peer_id_addr), desc->sec_state.bonded);
   }
   void onDisconnect(NimBLEServer*, ble_gap_conn_desc* desc) override { ble_.linkDown(desc->conn_handle); }
+  // Reached only when pairing is closed (see setPairingOpen): the board then claims it can confirm a code, and
+  // always says no, so even a known computer that lost its key cannot re-pair without the owner's window.
+  bool onConfirmPIN(uint32_t) override {
+    Serial.println("BLE pairing attempt refused before bonding (window closed)");
+    return false;
+  }
 
  private:
   BleMouse& ble_;
@@ -67,7 +73,7 @@ void BleMouse::begin(const jig::ResolvedDevice& device) {
   NimBLEDevice::init(device.identity.name);
   NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_PUBLIC);
   NimBLEDevice::setSecurityAuth(true, false, true);
-  NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
+  NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_YESNO);  // closed by default; setPairingOpen switches it
 
   NimBLEServer* server = NimBLEDevice::createServer();
   server_ = server;
@@ -190,7 +196,12 @@ void BleMouse::setAdvertising(bool on) {
   }
 }
 
-void BleMouse::setPairingOpen(bool open) { pairingOpen_ = open; }
+void BleMouse::setPairingOpen(bool open) {
+  pairingOpen_ = open;
+  // Open: "Just Works" (no code). Closed: advertise a display+yes/no capability so a pairing attempt reaches
+  // onConfirmPIN, where it is refused before any key is stored. Does not affect already-bonded reconnections.
+  NimBLEDevice::setSecurityIOCap(open ? BLE_HS_IO_NO_INPUT_OUTPUT : BLE_HS_IO_DISPLAY_YESNO);
+}
 
 void BleMouse::sendMouse(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel) {
   if (!connected_ || !mouseInput_) return;

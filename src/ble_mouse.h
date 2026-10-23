@@ -55,7 +55,7 @@ class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::Bl
 
   std::atomic<bool> connected_{false};
   std::atomic<bool> advertise_{true};
-  std::atomic<bool> pairingOpen_{true};
+  std::atomic<bool> pairingOpen_{false};
   std::atomic<bool> peerDisconnect_{false};
   std::mutex linksMutex_;
   std::vector<Link> links_;

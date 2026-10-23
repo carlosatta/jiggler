@@ -6,14 +6,12 @@ The board is a Bluetooth peripheral with **one** identity (see [devices.md](devi
 
 | Situation | Pairing |
 |---|---|
-| A brand-new board that has never been paired | Open: the first computer that asks can pair. |
-| Every bond lost later (the stack dropped a stale one, or you pressed "Forget all") | **Closed.** The board remembers it has been paired; only you can open a window. |
-| At least one computer paired | **Closed.** A new computer that tries to pair is refused and its bond is removed. |
+| Default, **always**: a brand-new board, a board with computers paired, after "Forget all" | **Closed.** A computer that tries to pair is refused and its bond, if it made one, is removed. |
 | Window opened by the owner | Open for **3 minutes** (the API also accepts 30–600 s), then closes by itself. It closes earlier if the owner stops it, or **as soon as a new computer pairs**. |
 
-Open a window from the dashboard (**Computers → Pairing**), with `POST /api/bluetooth/pairing`, the `start_pairing` MCP tool, or a **short press** of the BOOT button (the LED blinks fast while it is open). The dashboard shows a countdown. Stop it early with `DELETE /api/bluetooth/pairing`.
+Open a window from the dashboard (**Computers → Pairing**), with `POST /api/bluetooth/pairing`, the `start_pairing` MCP tool, or a **short press** of the BOOT button (the LED blinks fast while it is open). To pair the very first computer on a new board, use one of these: the BOOT tap needs the board in your hand, and the dashboard needs the token you set during WiFi setup, so nobody else can do it. The dashboard shows a countdown. Stop it early with `DELETE /api/bluetooth/pairing`.
 
-Any new bond closes the window, so whoever pairs first in range uses it up: do it yourself, quickly, and check Computers afterwards. The refusal is enforced after the pairing handshake: as soon as the board learns the newcomer's identity its link is dropped and its bond, if it made one, is deleted. This also applies to a computer that pairs without asking to bond. Already-paired computers are never affected.
+Any new bond closes the window, so whoever pairs first in range uses it up: do it yourself, quickly, and check Computers afterwards. While the window is closed the board also refuses at the start of pairing (it claims it can confirm a code and always declines), which stops a computer that merely forgot the device from re-pairing; hosts that cannot show a code are caught by the check below. The refusal is enforced after the pairing handshake: as soon as the board learns the newcomer's identity its link is dropped and its bond, if it made one, is deleted. This also applies to a computer that pairs without asking to bond. Already-paired computers are never affected.
 
 **At most 3 computers** can be paired. A fourth is refused even while a window is open: forget one first. (The stack keeps 5 bond slots and evicts the oldest when full; the spare slots keep a refused newcomer from ever pushing a real bond out.)
 

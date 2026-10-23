@@ -317,7 +317,6 @@ void test_bluetooth_tools() {
   TEST_ASSERT_TRUE(isError(e.tool("forget_computer", "{\"id\":\"000000000000\"}")));
   McpReply f = e.tool("forget_computer", "{\"id\":\"aabbccddee01\"}");
   TEST_ASSERT_FALSE(isError(f));
-  TEST_ASSERT_FALSE(toolText(f)["pairing"]["firstRun"].as<bool>());  // forgetting does not make the board factory-new
   TEST_ASSERT_FALSE(toolText(f)["pairing"]["open"].as<bool>());
 }
 

@@ -18,7 +18,7 @@ jargon on the first screen.
 ## Principles
 - **Say what is true.** Bluetooth does not tell the board the computer's name, so computers are "Computer 1",
   "Computer 2" until the owner renames them. The UI never pretends to know more than the device does.
-- **Every state has a next action.** Disconnected, hidden, pairing open, first run: each says what is happening
+- **Every state has a next action.** Disconnected, hidden, pairing open, nothing paired: each says what is happening
   and offers the one thing to do about it.
 - **Destructive actions are reversible in the moment.** Forgetting a computer or restarting asks for an inline
   confirmation, never a modal.

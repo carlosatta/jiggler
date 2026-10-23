@@ -25,7 +25,7 @@ constexpr size_t kStackBondSlots = 5;
 
 // Decide, once a link has finished pairing and its identity is known, whether it must be dropped.
 //  known:       the computer was already bonded before this link came up
-//  pairingOpen: the owner's window (or first run) is open
+//  pairingOpen: the owner's window is open
 //  knownBonds:  how many computers were bonded before this link came up
 // A closed window refuses every unknown computer, whether or not it asked to bond.
 inline bool refuseNewPeer(bool known, bool pairingOpen, size_t knownBonds) {
@@ -60,7 +60,6 @@ struct BluetoothStatus {
   bool connected = false;
   bool held = false;                                // disconnected on request, advertising off
   bool pairingOpen = false;
-  bool firstRun = false;                            // no computer paired yet: pairing stays open
   std::optional<uint32_t> pairingRemainingMs;       // only while a timed window is open
   std::optional<uint32_t> heldRemainingMs;          // only while held: when the device becomes visible again
   std::optional<std::string> connectedLabel;
@@ -69,9 +68,8 @@ struct BluetoothStatus {
 };
 
 // Pairing policy and bookkeeping for the computers that use the device.
-//  - A board that was never paired: pairing is open (it must be usable out of the box) until the first computer pairs.
-//    After that an empty bond list does NOT reopen it (e.g. the stack dropped a stale bond): only the owner can.
-//  - With a bond: pairing is closed unless a timed window is opened by the owner.
+//  - Pairing is ALWAYS closed, even on a board that has never been paired and after "forget all". The only way to
+//    open it is an explicit act by the owner: the dashboard/API/MCP, or the BOOT button on the board.
 //  - A window closes by itself when its time is up, when someone pairs, or when the owner stops it.
 //  - "Disconnect" drops the link and hides the device for kDisconnectHoldSec, or until "reconnect" (or a window).
 // Thread-safe. The firmware enforces `setPairingOpen`/`setAdvertising` on the real stack.
@@ -96,7 +94,6 @@ class BluetoothManager {
   void applyLocked();
   void expireLocked();  // closes a finished/used pairing window, ends an expired hold
   bool pairingOpenLocked();
-  void noteBondsLocked(const std::vector<std::string>& bonded);
   std::string labelForLocked(const std::string& id);
   bool saveLabelsLocked();
 
@@ -106,8 +103,6 @@ class BluetoothManager {
   std::mutex mutex_;
   std::map<std::string, std::string> labels_;      // id -> label
   std::map<std::string, uint32_t> connectedSince_;  // address -> millis of first sight (status() is polled)
-  bool everPaired_ = false;       // some computer has paired at least once: an empty bond list no longer reopens pairing
-  bool everPairedDirty_ = false;  // not stored yet; tick() retries
   bool labelsDirty_ = false;  // default names handed out since the last save; tick() persists them
   bool held_ = false;
   bool windowOpen_ = false;

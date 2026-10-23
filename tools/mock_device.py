@@ -6,7 +6,7 @@
 Serves the dashboard built from web/ plus an in-memory imitation of the API (status, Bluetooth pairing and
 peers, config, scripts, automations, devices, network, token). Not a test oracle: the firmware's host tests are.
 Scenarios can be forced for screenshots:  curl -X POST localhost:8080/__scenario/<name>
-  firstrun | connected | idle | held | pairing | many
+  firstrun (no computer paired) | connected | idle | held | pairing | many
 """
 import argparse
 import json
@@ -103,12 +103,11 @@ class Device:
     def bluetooth(self):
         now = time.time()
         self.expire()
-        first = not self.peers
-        open_ = first or bool(self.window_until)
+        open_ = bool(self.window_until)
         connected = self.connected_addr() is not None
         out = {"connected": connected, "held": self.held,
                "heldRemainingMs": int((self.held_until - now) * 1000) if self.held and self.held_until else None,
-               "pairing": {"open": open_, "remainingMs": int((self.window_until - now) * 1000) if self.window_until else None, "firstRun": first},
+               "pairing": {"open": open_, "remainingMs": int((self.window_until - now) * 1000) if self.window_until else None, },
                "computer": None, "peers": []}
         if connected:
             out["computer"] = {"label": self.peers[0]["label"], "connectedForMs": int((now - self.connected_since) * 1000)}
