@@ -12,33 +12,46 @@ inline constexpr char kDashboardHtml[] = R"HTML(<!doctype html>
 @media (prefers-color-scheme:dark){:root{--bg:#0e1014;--card:#171a21;--text:#e8eaee;--muted:#98a2b3;--line:#272c36;--accent:#6b9bff;--on-accent:#0e1014;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-main{max-width:560px;margin:0 auto;padding:16px}
-h1{font-size:1.25rem;margin:8px 0 16px}
+main{max-width:600px;margin:0 auto;padding:16px}
+h1{font-size:1.25rem;margin:8px 0 12px}
 h2{font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:.9rem}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}
 .chip.on .dot{background:var(--ok)}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px}
+.tabs button{flex:0 0 auto;min-height:40px;padding:6px 14px;border-radius:999px}
+.tabs button[aria-selected=true]{background:var(--accent);color:var(--on-accent);border-color:transparent}
+.tab{display:none}.tab.on{display:block}
 .state{font-size:1.6rem;font-weight:650}
 .sub{color:var(--muted);margin-top:2px}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
 .stats b{display:block;font-size:1.1rem;font-weight:600}
 .stats span{color:var(--muted);font-size:.85rem}
 .btns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-button{font:inherit;min-height:44px;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+button,select,textarea{font:inherit}
+button{min-height:44px;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
 button:disabled{opacity:.45;cursor:not-allowed}
 button.primary{background:var(--accent);color:var(--on-accent);border-color:transparent}
-button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.danger{color:var(--bad)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .btns .wide{grid-column:1/-1}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .field{margin-bottom:12px}
 label{display:block;font-size:.9rem;margin-bottom:4px}
-input{width:100%;font:inherit;min-height:44px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+label.inline{display:flex;align-items:center;gap:8px;font-size:1rem}
+input[type=checkbox]{width:20px;height:20px}
+input,select,textarea{width:100%;min-height:44px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+input[type=checkbox]{width:20px;min-height:20px}
+textarea{min-height:220px;font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
 .err{color:var(--bad);font-size:.85rem;min-height:1.1em;margin-top:2px}
 .hint{color:var(--muted);font-size:.8rem}
-#msg,#cfgMsg{min-height:1.4em;margin:4px 0 0}
-#msg.bad,#cfgMsg.bad{color:var(--bad)}#msg.good,#cfgMsg.good{color:var(--ok)}
+.msg{min-height:1.4em;margin:6px 0 0}
+.msg.bad{color:var(--bad)}.msg.good{color:var(--ok)}
+.dev{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+.dev h3{margin:0 0 8px;font-size:1rem}
 #banner{display:none;background:var(--bad);color:#fff;padding:8px 12px;border-radius:10px;margin-bottom:12px}
 #login{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:16px}
 #login .card{width:100%;max-width:360px;margin:0}
@@ -52,7 +65,15 @@ input{width:100%;font:inherit;min-height:44px;padding:8px 10px;border-radius:10p
 <span class="chip" id="chipMouse"><span class="dot"></span><span id="txtMouse">Mouse</span></span>
 <span class="chip" id="chipWifi"><span class="dot"></span><span id="txtWifi">WiFi</span></span>
 </div>
+<nav class="tabs" role="tablist" id="tabs">
+<button role="tab" data-tab="stato" aria-selected="true">Stato</button>
+<button role="tab" data-tab="dispositivi" aria-selected="false">Dispositivi</button>
+<button role="tab" data-tab="script" aria-selected="false">Script</button>
+<button role="tab" data-tab="automazioni" aria-selected="false">Automazioni</button>
+<button role="tab" data-tab="rete" aria-selected="false">Rete</button>
+</nav>
 
+<div class="tab on" id="tab-stato">
 <section class="card">
 <h2>Stato</h2>
 <div class="state" id="state">&mdash;</div>
@@ -71,7 +92,7 @@ input{width:100%;font:inherit;min-height:44px;padding:8px 10px;border-radius:10p
 <button id="bStop">Ferma</button>
 <button id="bMove" class="wide">Muovi ora</button>
 </div>
-<p id="msg" role="status" aria-live="polite"></p>
+<p id="msg" class="msg" role="status" aria-live="polite"></p>
 </section>
 
 <section class="card">
@@ -88,9 +109,59 @@ input{width:100%;font:inherit;min-height:44px;padding:8px 10px;border-radius:10p
 </div>
 <p class="hint">Intervalli 5&ndash;3600 s, ampiezza 5&ndash;600 px. Un click casuale pu&ograve; attivare ci&ograve; che si trova sotto il cursore: lascia 0% se non serve.</p>
 <button class="primary" type="submit">Salva</button>
-<p id="cfgMsg" role="status" aria-live="polite"></p>
+<p id="cfgMsg" class="msg" role="status" aria-live="polite"></p>
 </form>
 </section>
+</div>
+
+<div class="tab" id="tab-dispositivi">
+<section class="card">
+<h2>Dispositivi</h2>
+<p class="hint">Il computer vede un solo dispositivo Bluetooth: nome, produttore, VID/PID e indirizzo sono quelli del primo dispositivo abilitato; gli altri aggiungono solo la loro funzione (mouse o tastiera). Lascia vuoti i campi per usare i valori del profilo. Dopo il salvataggio il dispositivo si riavvia e va abbinato di nuovo al computer.</p>
+<div id="devList"></div>
+<div class="actions"><button class="primary" id="devSave">Salva e riavvia</button></div>
+<p id="devMsg" class="msg" role="status" aria-live="polite"></p>
+</section>
+</div>
+
+<div class="tab" id="tab-script">
+<section class="card">
+<h2>Script</h2>
+<p class="hint">Uno script &egrave; un elenco di passi: <b>move</b> (dx, dy), <b>click</b>, <b>scroll</b> (notches), <b>key</b> (es. F15, Ctrl+Alt+Delete), <b>type</b> (text, ASCII), <b>wait</b> (ms, oppure minMs e maxMs) e <b>repeat</b> (times, steps). Tastiera layout US.</p>
+<div class="field"><label for="scrSelect">Script</label><select id="scrSelect"></select></div>
+<div class="field"><label for="scrName">Nome</label><input id="scrName" autocomplete="off" placeholder="a-z 0-9 _ -"><div class="err" id="e_scrName"></div></div>
+<div class="field"><label for="scrBody">Contenuto (JSON)</label><textarea id="scrBody" spellcheck="false"></textarea><div class="err" id="e_scrBody"></div></div>
+<div class="actions">
+<button class="primary" id="scrSave">Salva</button>
+<button id="scrRun">Esegui ora</button>
+<button id="scrNew">Nuovo</button>
+<button class="danger" id="scrDelete">Elimina</button>
+</div>
+<p id="scrMsg" class="msg" role="status" aria-live="polite"></p>
+</section>
+</div>
+
+<div class="tab" id="tab-automazioni">
+<section class="card">
+<h2>Automazioni</h2>
+<p class="hint">Un&rsquo;automazione esegue uno script a intervalli casuali, solo mentre il jiggler &egrave; avviato (massimo 4).</p>
+<div id="autoList"></div>
+<div class="actions"><button id="autoAdd">Aggiungi</button><button class="primary" id="autoSave">Salva</button></div>
+<p id="autoMsg" class="msg" role="status" aria-live="polite"></p>
+</section>
+</div>
+
+<div class="tab" id="tab-rete">
+<section class="card">
+<h2>Rete</h2>
+<p class="hint"><b>Auto</b>: si collega al WiFi di casa e, se non ci riesce, apre la rete di configurazione. <b>Rete propria</b>: crea una rete WiFi protetta con questa dashboard (indirizzo 192.168.4.1), utile dove non c&rsquo;&egrave; WiFi. Tenendo premuto BOOT per 3 secondi si passa da una modalit&agrave; all&rsquo;altra. Le modifiche valgono dopo il riavvio.</p>
+<div class="field"><label for="netMode">Modalit&agrave;</label><select id="netMode"><option value="auto">Auto (WiFi di casa)</option><option value="ap">Rete propria</option></select><div class="err" data-err="mode"></div></div>
+<div class="field"><label for="netSsid">Nome della rete propria</label><input id="netSsid" autocomplete="off"><div class="err" data-err="apSsid"></div></div>
+<div class="field"><label for="netPass">Password della rete propria</label><input id="netPass" autocomplete="off" placeholder="vuota = generata al primo avvio"><div class="err" data-err="apPassword"></div></div>
+<div class="actions"><button id="netSave">Salva</button><button class="primary" id="netSaveRestart">Salva e riavvia</button></div>
+<p id="netMsg" class="msg" role="status" aria-live="polite"></p>
+</section>
+</div>
 </main>
 
 <div id="login" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
@@ -116,13 +187,33 @@ input{width:100%;font:inherit;min-height:44px;padding:8px 10px;border-radius:10p
     'must be between 5 and 600': 'Deve essere tra 5 e 600.',
     'must be between 0 and 1': 'Deve essere tra 0 e 100.',
     'maxIntervalSec must be >= minIntervalSec': 'Il massimo non può essere minore del minimo.',
+    'must be >= minIntervalSec': 'Il massimo non può essere minore del minimo.',
     'must be an integer': 'Inserisci un numero intero.',
-    'must be a number': 'Inserisci un numero.'
+    'must be a number': 'Inserisci un numero.',
+    'must look like AA:BB:CC:DD:EE:FF': 'Formato AA:BB:CC:DD:EE:FF.',
+    'must be a unicast address (first byte even)': 'Indirizzo unicast: il primo byte deve essere pari.',
+    'must be 1 to 29 characters': 'Da 1 a 29 caratteri.',
+    'must be 1 to 32 characters': 'Da 1 a 32 caratteri.',
+    'unknown profile': 'Profilo sconosciuto.',
+    'profile is for a different device kind': 'Profilo di un altro tipo di dispositivo.',
+    'at least one device must be enabled': 'Abilita almeno un dispositivo.',
+    'duplicate id': 'Id duplicato.',
+    'must be an integer from 0 to 65535': 'Intero da 0 a 65535.',
+    'unknown script': 'Script inesistente.',
+    'must be between 5 and 86400': 'Tra 5 e 86400 secondi.',
+    'must be empty or 8 to 63 printable ASCII characters': 'Vuota (generata) oppure 8-63 caratteri ASCII.',
+    'the built-in script cannot be changed': 'Lo script predefinito non si può modificare.',
+    'the built-in script cannot be removed': 'Lo script predefinito non si può eliminare.',
+    'at most 8 user scripts': 'Massimo 8 script utente.',
+    'at most 4 automations': 'Massimo 4 automazioni.',
+    'must be 1 to 24 characters of a-z 0-9 _ -': 'Da 1 a 24 caratteri: a-z 0-9 _ -',
+    'must be auto or ap': 'Scegli Auto o Rete propria.'
   };
   var $ = function (id) { return document.getElementById(id); };
+  var tr = function (m) { return MESSAGES[m] || m || 'Valore non valido.'; };
 
   function banner(text) { var b = $('banner'); b.textContent = text; b.style.display = text ? 'block' : 'none'; }
-  function say(text, kind, id) { var m = $(id || 'msg'); m.textContent = text; m.className = kind || ''; }
+  function say(text, kind, id) { var m = $(id || 'msg'); m.textContent = text; m.className = 'msg ' + (kind || ''); }
   function setToken(t) { token = t; if (t) localStorage.setItem(KEY, t); else localStorage.removeItem(KEY); }
   function showLogin(error) {
     $('loginErr').textContent = error || '';
@@ -131,9 +222,13 @@ input{width:100%;font:inherit;min-height:44px;padding:8px 10px;border-radius:10p
     $('tokenInput').focus();
   }
 
+  // body: object (sent as JSON) or string (sent as is)
   function call(method, path, body) {
     var opts = { method: method, headers: { 'Authorization': 'Bearer ' + token } };
-    if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+    if (body !== undefined) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = typeof body === 'string' ? body : JSON.stringify(body);
+    }
     return fetch(path, opts).then(function (r) {
       if (r.status === 401) { setToken(''); showLogin('Token non valido.'); throw new Error('unauthorized'); }
       return r.json().catch(function () { return {}; }).then(function (data) {
@@ -141,6 +236,38 @@ input{width:100%;font:inherit;min-height:44px;padding:8px 10px;border-radius:10p
         return { status: r.status, data: data };
       });
     }, function (e) { banner('Dispositivo non raggiungibile.'); throw e; });
+  }
+
+  function el(tag, attrs, kids) {
+    var e = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === 'class') e.className = attrs[k];
+      else if (k === 'text') e.textContent = attrs[k];
+      else e.setAttribute(k, attrs[k]);
+    });
+    (kids || []).forEach(function (c) { e.appendChild(c); });
+    return e;
+  }
+  var uid = 0;
+  function labeled(text, input, errKey) {
+    var id = 'f' + (++uid);
+    input.id = id;
+    var box = el('div', { class: 'field' }, [el('label', { 'for': id, text: text }), input]);
+    var err = el('div', { class: 'err' });
+    err.setAttribute('data-err', errKey);
+    box.appendChild(err);
+    return box;
+  }
+  function clearErrors(root) { root.querySelectorAll('[data-err]').forEach(function (e) { e.textContent = ''; }); }
+  function showError(root, field, message) {
+    var e = root.querySelector('[data-err="' + field + '"]');
+    if (e) { e.textContent = tr(message); return true; }
+    return false;
+  }
+  function restartDevice(msgId) {
+    return call('POST', '/api/restart').then(function () {
+      say('Riavvio in corso. La pagina torna raggiungibile tra pochi secondi.', 'good', msgId);
+    }).catch(function () {});
   }
 
   function fmtDuration(ms) {
@@ -159,6 +286,7 @@ input{width:100%;font:inherit;min-height:44px;padding:8px 10px;border-radius:10p
     $(textId).textContent = label + (on ? ': connesso' : ': non connesso');
   }
 
+  // ---- Stato -------------------------------------------------------------------------------
   function populateForm() {
     if (!status) return;
     FIELDS.forEach(function (f) {
@@ -248,9 +376,296 @@ input{width:100%;font:inherit;min-height:44px;padding:8px 10px;border-radius:10p
     call('PUT', '/api/config', body).then(function (res) {
       if (res.status === 200) { dirty = {}; say('Configurazione salvata.', 'good', 'cfgMsg'); poll(); return; }
       var d = res.data;
-      if (d.field && $('e_' + d.field)) fieldError(d.field, MESSAGES[d.message] || d.message || 'Valore non valido.');
+      if (d.field && $('e_' + d.field)) fieldError(d.field, tr(d.message));
       else say('Salvataggio non riuscito.', 'bad', 'cfgMsg');
     }).catch(function () {});
+  });
+
+  // ---- Dispositivi -------------------------------------------------------------------------
+  var profiles = null, devices = [];
+
+  function hex4(n) { return '0x' + ('0000' + n.toString(16).toUpperCase()).slice(-4); }
+
+  function profileFor(kind, id) {
+    if (id !== 'custom') {
+      var list = profiles.profiles;
+      for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    }
+    var c = profiles.custom[kind];
+    return { id: 'custom', name: c.name, manufacturer: c.manufacturer, vid: c.vid, pid: c.pid, oui: null };
+  }
+
+  function refreshPlaceholders(card, kind) {
+    var p = profileFor(kind, card.querySelector('[data-k=profileId]').value);
+    card.querySelector('[data-k=name]').placeholder = p.name;
+    card.querySelector('[data-k=manufacturer]').placeholder = p.manufacturer;
+    card.querySelector('[data-k=vid]').placeholder = hex4(p.vid);
+    card.querySelector('[data-k=pid]').placeholder = hex4(p.pid);
+    card.querySelector('[data-k=mac]').placeholder = p.oui ? p.oui + ':xx:xx:xx (il resto dal chip)' : 'indirizzo del chip (nessuna sostituzione)';
+  }
+
+  function renderDevices() {
+    var box = $('devList');
+    box.textContent = '';
+    devices.forEach(function (d, i) {
+      var card = el('div', { class: 'dev' });
+      card.setAttribute('data-index', String(i));
+      card.appendChild(el('h3', { text: d.kind === 'mouse' ? 'Mouse (' + d.id + ')' : 'Tastiera (' + d.id + ')' }));
+
+      var enabled = el('input', { type: 'checkbox' });
+      enabled.setAttribute('data-k', 'enabled');
+      enabled.checked = d.enabled;
+      var enabledLabel = el('label', { class: 'inline' }, [enabled, el('span', { text: 'Abilitato' })]);
+      card.appendChild(el('div', { class: 'field' }, [enabledLabel]));
+
+      var sel = el('select');
+      sel.setAttribute('data-k', 'profileId');
+      profiles.profiles.filter(function (p) { return p.kind === d.kind; }).forEach(function (p) {
+        sel.appendChild(el('option', { value: p.id, text: p.label }));
+      });
+      sel.appendChild(el('option', { value: 'custom', text: 'Personalizzato' }));
+      sel.value = d.profileId;
+      card.appendChild(labeled('Profilo', sel, 'devices[' + i + '].profileId'));
+
+      [['name', 'Nome Bluetooth'], ['manufacturer', 'Produttore'], ['vid', 'VID'], ['pid', 'PID'], ['mac', 'Indirizzo Bluetooth (MAC)']].forEach(function (f) {
+        var inp = el('input', { autocomplete: 'off' });
+        inp.setAttribute('data-k', f[0]);
+        var cur = d[f[0]];
+        if (cur !== undefined && cur !== null) inp.value = (f[0] === 'vid' || f[0] === 'pid') ? hex4(cur) : cur;
+        card.appendChild(labeled(f[1], inp, 'devices[' + i + '].' + f[0]));
+      });
+      sel.addEventListener('change', function () { refreshPlaceholders(card, d.kind); });
+      refreshPlaceholders(card, d.kind);
+      box.appendChild(card);
+    });
+  }
+
+  function loadDevices() {
+    Promise.all([call('GET', '/api/profiles'), call('GET', '/api/devices')]).then(function (r) {
+      profiles = r[0].data;
+      devices = r[1].data.devices;
+      renderDevices();
+    }).catch(function () {});
+  }
+
+  $('devSave').onclick = function () {
+    var root = $('devList');
+    clearErrors(root);
+    say('', '', 'devMsg');
+    var out = [], bad = false;
+    root.querySelectorAll('.dev').forEach(function (card, i) {
+      var base = devices[i];
+      var d = { id: base.id, kind: base.kind, enabled: card.querySelector('[data-k=enabled]').checked, profileId: card.querySelector('[data-k=profileId]').value };
+      ['name', 'manufacturer', 'mac'].forEach(function (k) {
+        var v = card.querySelector('[data-k=' + k + ']').value.trim();
+        if (v !== '') d[k] = v;
+      });
+      ['vid', 'pid'].forEach(function (k) {
+        var v = card.querySelector('[data-k=' + k + ']').value.trim();
+        if (v === '') return;
+        var n = Number(v);
+        if (!isFinite(n) || Math.floor(n) !== n) { showError(root, 'devices[' + i + '].' + k, 'must be an integer from 0 to 65535'); bad = true; return; }
+        d[k] = n;
+      });
+      out.push(d);
+    });
+    if (bad) return;
+    call('PUT', '/api/devices', { devices: out }).then(function (res) {
+      if (res.status === 200) { say('Salvato. Riavvio…', 'good', 'devMsg'); return restartDevice('devMsg'); }
+      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Salvataggio non riuscito.', 'bad', 'devMsg');
+      else say('Controlla i campi evidenziati.', 'bad', 'devMsg');
+    }).catch(function () {});
+  };
+
+  // ---- Script ------------------------------------------------------------------------------
+  var scriptList = [], builtin = false, isNew = false;
+  var TEMPLATE = '{\n  "steps": [\n    { "op": "key", "key": "F15" },\n    { "op": "wait", "minMs": 500, "maxMs": 1500 }\n  ]\n}';
+
+  function setScriptButtons() {
+    $('scrSave').disabled = builtin;
+    $('scrDelete').disabled = builtin || isNew;
+    $('scrRun').disabled = isNew;
+    $('scrName').disabled = !isNew;
+  }
+
+  function renderScriptSelect(selected) {
+    var sel = $('scrSelect');
+    sel.textContent = '';
+    scriptList.forEach(function (s) { sel.appendChild(el('option', { value: s.name, text: s.name + (s.builtin ? ' (predefinito)' : '') })); });
+    if (selected) sel.value = selected;
+  }
+
+  function openScript(name) {
+    call('GET', '/api/scripts/' + encodeURIComponent(name)).then(function (res) {
+      if (res.status !== 200) { say('Script non trovato.', 'bad', 'scrMsg'); return; }
+      isNew = false;
+      builtin = res.data.builtin;
+      $('scrName').value = res.data.name;
+      $('scrBody').value = JSON.stringify(res.data.script, null, 2);
+      clearErrors($('tab-script'));
+      setScriptButtons();
+    }).catch(function () {});
+  }
+
+  function loadScripts(selected) {
+    call('GET', '/api/scripts').then(function (res) {
+      scriptList = res.data.scripts;
+      renderScriptSelect(selected);
+      if (scriptList.length && !isNew) openScript($('scrSelect').value);
+      else setScriptButtons();
+    }).catch(function () {});
+  }
+
+  function scriptError(res) {
+    var d = res.data, root = $('tab-script');
+    clearErrors(root);
+    if (d.field === 'name') { $('e_scrName').textContent = tr(d.message); return; }
+    $('e_scrBody').textContent = (d.field ? d.field + ': ' : '') + tr(d.message);
+  }
+
+  $('scrSelect').addEventListener('change', function () { isNew = false; openScript($('scrSelect').value); });
+  $('scrNew').onclick = function () {
+    isNew = true; builtin = false;
+    $('scrName').value = '';
+    $('scrBody').value = TEMPLATE;
+    clearErrors($('tab-script'));
+    say('', '', 'scrMsg');
+    setScriptButtons();
+    $('scrName').focus();
+  };
+  $('scrSave').onclick = function () {
+    var name = $('scrName').value.trim();
+    say('', '', 'scrMsg');
+    clearErrors($('tab-script'));
+    if (!name) { $('e_scrName').textContent = 'Inserisci un nome.'; return; }
+    call('PUT', '/api/scripts/' + encodeURIComponent(name), $('scrBody').value).then(function (res) {
+      if (res.status === 200) { isNew = false; say('Script salvato.', 'good', 'scrMsg'); loadScripts(name); }
+      else scriptError(res);
+    }).catch(function () {});
+  };
+  $('scrRun').onclick = function () {
+    call('POST', '/api/scripts/' + encodeURIComponent($('scrName').value.trim()) + '/run').then(function (res) {
+      if (res.status === 202) say('Script avviato.', 'good', 'scrMsg');
+      else say(res.data.error === 'mouse_not_connected' ? 'Il dispositivo non è collegato al computer.' : 'Esecuzione non riuscita.', 'bad', 'scrMsg');
+    }).catch(function () {});
+  };
+  $('scrDelete').onclick = function () {
+    var name = $('scrName').value.trim();
+    call('DELETE', '/api/scripts/' + encodeURIComponent(name)).then(function (res) {
+      if (res.status === 200) { isNew = false; say('Script eliminato.', 'good', 'scrMsg'); loadScripts(); }
+      else say(tr(res.data.message) || 'Eliminazione non riuscita.', 'bad', 'scrMsg');
+    }).catch(function () {});
+  };
+
+  // ---- Automazioni -------------------------------------------------------------------------
+  var autos = [];
+
+  function renderAutos() {
+    var box = $('autoList');
+    box.textContent = '';
+    autos.forEach(function (a, i) {
+      var row = el('div', { class: 'dev' });
+      row.setAttribute('data-index', String(i));
+      var id = el('input', { autocomplete: 'off' });
+      id.setAttribute('data-k', 'id');
+      id.value = a.id;
+      row.appendChild(labeled('Nome', id, 'automations[' + i + '].id'));
+      var sel = el('select');
+      sel.setAttribute('data-k', 'script');
+      scriptList.forEach(function (s) { sel.appendChild(el('option', { value: s.name, text: s.name })); });
+      if (!scriptList.some(function (s) { return s.name === a.script; })) sel.appendChild(el('option', { value: a.script, text: a.script + ' (mancante)' }));
+      sel.value = a.script;
+      row.appendChild(labeled('Script', sel, 'automations[' + i + '].script'));
+      var pair = el('div', { class: 'row' });
+      [['minIntervalSec', 'Minimo (s)'], ['maxIntervalSec', 'Massimo (s)']].forEach(function (f) {
+        var inp = el('input', { inputmode: 'numeric', autocomplete: 'off' });
+        inp.setAttribute('data-k', f[0]);
+        inp.value = String(a[f[0]]);
+        pair.appendChild(labeled(f[1], inp, 'automations[' + i + '].' + f[0]));
+      });
+      row.appendChild(pair);
+      var en = el('input', { type: 'checkbox' });
+      en.setAttribute('data-k', 'enabled');
+      en.checked = a.enabled;
+      row.appendChild(el('div', { class: 'field' }, [el('label', { class: 'inline' }, [en, el('span', { text: 'Attiva' })])]));
+      var rm = el('button', { class: 'danger', text: 'Rimuovi' });
+      rm.onclick = function () { collectAutos(); autos.splice(i, 1); renderAutos(); };
+      row.appendChild(rm);
+      box.appendChild(row);
+    });
+    $('autoAdd').disabled = autos.length >= 4;
+  }
+
+  function collectAutos() {
+    var out = [];
+    $('autoList').querySelectorAll('.dev').forEach(function (row) {
+      var g = function (k) { return row.querySelector('[data-k=' + k + ']'); };
+      out.push({ id: g('id').value.trim(), script: g('script').value, minIntervalSec: Number(g('minIntervalSec').value), maxIntervalSec: Number(g('maxIntervalSec').value), enabled: g('enabled').checked });
+    });
+    autos = out;
+    return out;
+  }
+
+  function loadAutos() {
+    Promise.all([call('GET', '/api/scripts'), call('GET', '/api/automations')]).then(function (r) {
+      scriptList = r[0].data.scripts;
+      autos = r[1].data.automations;
+      renderAutos();
+    }).catch(function () {});
+  }
+
+  $('autoAdd').onclick = function () {
+    collectAutos();
+    var n = 1;
+    while (autos.some(function (a) { return a.id === 'auto-' + n; })) n++;
+    autos.push({ id: 'auto-' + n, script: scriptList.length ? scriptList[0].name : 'keepalive-key', minIntervalSec: 60, maxIntervalSec: 180, enabled: false });
+    renderAutos();
+  };
+  $('autoSave').onclick = function () {
+    var root = $('autoList');
+    clearErrors(root);
+    say('', '', 'autoMsg');
+    call('PUT', '/api/automations', { automations: collectAutos() }).then(function (res) {
+      if (res.status === 200) { autos = res.data.automations; renderAutos(); say('Automazioni salvate.', 'good', 'autoMsg'); return; }
+      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Salvataggio non riuscito.', 'bad', 'autoMsg');
+      else say('Controlla i campi evidenziati.', 'bad', 'autoMsg');
+    }).catch(function () {});
+  };
+
+  // ---- Rete --------------------------------------------------------------------------------
+  function loadNetwork() {
+    call('GET', '/api/network').then(function (res) {
+      $('netMode').value = res.data.mode;
+      $('netSsid').value = res.data.apSsid;
+      $('netPass').value = res.data.apPassword;
+    }).catch(function () {});
+  }
+  function saveNetwork(restart) {
+    clearErrors($('tab-rete'));
+    say('', '', 'netMsg');
+    var body = { mode: $('netMode').value, apSsid: $('netSsid').value, apPassword: $('netPass').value };
+    call('PUT', '/api/network', body).then(function (res) {
+      if (res.status === 200) {
+        say('Salvato.', 'good', 'netMsg');
+        if (restart) return restartDevice('netMsg');
+        return;
+      }
+      var d = res.data;
+      if (!d.field || !showError($('tab-rete'), d.field, d.message)) say(tr(d.message) || 'Salvataggio non riuscito.', 'bad', 'netMsg');
+    }).catch(function () {});
+  }
+  $('netSave').onclick = function () { saveNetwork(false); };
+  $('netSaveRestart').onclick = function () { saveNetwork(true); };
+
+  // ---- Tabs and login ----------------------------------------------------------------------
+  var LOADERS = { dispositivi: loadDevices, script: function () { loadScripts(); }, automazioni: loadAutos, rete: loadNetwork };
+  function showTab(name) {
+    document.querySelectorAll('#tabs button').forEach(function (b) { b.setAttribute('aria-selected', b.getAttribute('data-tab') === name ? 'true' : 'false'); });
+    document.querySelectorAll('.tab').forEach(function (t) { t.className = 'tab' + (t.id === 'tab-' + name ? ' on' : ''); });
+    if (LOADERS[name] && token) LOADERS[name]();
+  }
+  document.querySelectorAll('#tabs button').forEach(function (b) {
+    b.addEventListener('click', function () { showTab(b.getAttribute('data-tab')); });
   });
 
   $('loginForm').addEventListener('submit', function (ev) {

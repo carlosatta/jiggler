@@ -11,11 +11,11 @@ An ESP32 (classic `esp32dev`) that keeps a computer awake by acting as a BLE mou
 PlatformIO (`pipx install platformio`; `pio` lives in `~/.local/bin`).
 
 - Host unit tests (no board needed): `pio test -e native`
-- One suite: `pio test -e native -f test_controller` (suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`)
+- One suite: `pio test -e native -f test_controller` (suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_longpress`, `test_devices`, `test_keyboard`, `test_script`, `test_automation`, `test_mcp_ex`)
 - Build firmware: `pio run -e esp32`
 - Flash: `pio run -e esp32 -t upload --upload-port /dev/cu.usbserial-0001`
 - Serial monitor: `pio device monitor` (115200 baud)
-- Debug build without a paired host: `PLATFORMIO_BUILD_FLAGS="-DJIG_FAKE_CONNECTED -DJIG_DEBUG" pio run -e esp32 -t upload`. This fakes "mouse connected" and logs each plan with its stack high-water mark. Reflash a normal build afterwards.
+- Debug builds (pass via `PLATFORMIO_BUILD_FLAGS="..."`, never commit them; reflash a normal build afterwards): `-DJIG_FAKE_CONNECTED` fakes "mouse connected"; `-DJIG_DEBUG` logs each plan with the task's stack high-water mark; `-DJIG_FORCE_KEYBOARD` adds the keyboard collection in memory; `-DJIG_DEBUG_AUTOMATION` enables the keep-alive automation at 5 s; `-DJIG_FORCE_AP` boots in AP mode without saving it.
 
 ## Architecture
 
@@ -29,13 +29,21 @@ All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio
 - Auth: every `/api/*` and `/mcp` request needs `Authorization: Bearer <token>`. `GET /` (the dashboard, `src/dashboard_html.h`, one self-contained page) is public.
 - `WifiSetup` and `HttpServer` hide their library headers behind a pimpl, because WiFiManager and ESPAsyncWebServer must not share a translation unit.
 
+### Devices, scripts, automations, network
+
+- **One BLE identity.** `DeviceRegistry` (`devices.*`, blob key `devices`) holds a list of devices (mouse/keyboard) chosen from `catalog()` (`profiles.*`, only verified VID/PID/OUI) or `custom`, with optional name/manufacturer/VID/PID/MAC overrides. The identity (name, vendor, PnP ID, Bluetooth address) is the *first enabled device's*; every enabled device adds an HID collection (`buildReportMap`: mouse report ID 1, keyboard report ID 2) to the same BLE device (`BleMouse`, which is mouse + keyboard sink). The classic ESP32 has one Bluetooth address, so truly separate simultaneous identities are not possible here (see the spike notes in `docs/superpowers/specs/`). Identity changes apply after a restart and need re-pairing.
+- **Scripts.** JSON `{"steps":[...]}` (ops `move`, `click`, `scroll`, `key`, `type`, `wait`, `repeat`) compiled by `compileScript` into the same `Plan`/`Step` model the mouse uses (extra step kinds `KeyDown`, `KeyUp`, `Wait`). All limits (steps, worst-case wait, nesting, coordinates, text) are enforced at compile time. `ScriptLibrary` stores up to 8 user scripts plus the read-only `keepalive-key` (F15 tap). `AutomationEngine` runs scripts on a random schedule (only while the global run state is Running) and on demand (`runNow`, `runInline`); the movement task runs `Controller::tick()` first, then the engine.
+- **Router entry points.** `handleApiEx(ApiContext&)` / `handleMcpEx(ApiContext&)` add routes/tools (`/api/profiles|devices|scripts|automations|network|restart`, MCP tools for the same) and fall back to the original `handleApi` / the original six tools; services in `ApiContext` are optional (missing = 404 / tool not listed). Body caps: `kMaxBodyBytes` 4096 transport (scripts, MCP), `kMaxSmallBodyBytes` 1024 (config, network), `kMaxMediumBodyBytes` 2048 (devices, automations).
+- **Network modes.** `auto` = home WiFi with the `Jiggler-Setup` portal fallback; `ap` = own WPA2 network (default SSID `Jiggler`, generated password printed on serial) with a DNS captive portal redirecting to the dashboard. In AP mode the token defaults to the AP password. Hold BOOT (GPIO0) 3 s to toggle the mode and restart (`LongPress`).
+- `NvsBlobStore` hashes keys to short NVS names and keeps an index blob, so blob keys can be long (`script/<name>`).
+
 ## Gotchas
 
 - Do not read NVS (`Preferences`) from global constructors: NVS is not initialized during static init. Read it in `setup()` or later.
 - Time comparisons use `(int32_t)(now - due)` because `millis()` wraps at ~49.7 days. Keep that pattern.
 - Partition table is `huge_app.csv` (3 MB app, no OTA). The default 1.25 MB partition was 95% full.
-- A mouse identity change touches `identity.h` (`kBleName`, `kVid`, `kPid`, OUI `00:1F:20`). The base MAC is set with `esp_base_mac_addr_set` before BLE init, which also changes the WiFi MAC.
-- The dashboard test checks that the page only calls routes `handleApi` serves. Update `kPageRoutes` in `test/test_dashboard` when the page adds a call.
+- Identities live in `profiles.cpp` (catalog) and `devices.cpp` (overrides). Add a profile only with VID/PID/OUI verified against public sources (`test_devices` pins the current ones). The base MAC is set with `esp_base_mac_addr_set` before BLE init, which also changes the WiFi MAC. `identity.h` is only the legacy Logitech constants used by `test_identity`.
+- The dashboard test checks that the page only calls routes `handleApiEx` serves. Update `kPageRoutes` in `test/test_dashboard` (stateful order: a script is created before it is read/run/deleted) when the page adds a call.
 - REST and MCP bodies must be sent with `Content-Type: application/json`. `curl -d` alone sends form-encoded, which the HTTP library parses as params, so the device answers 415 `unsupported_media_type`. Use `curl -H 'Content-Type: application/json' -d ...`.
 - HTTP body bytes from ESPAsyncWebServer can exceed the declared Content-Length; always copy through `copyBodyChunk`, never `memcpy` directly.
 - Exact return-to-start is guaranteed in HID counts only. OS pointer acceleration can leave visible drift; this is unmeasured on a real host.
