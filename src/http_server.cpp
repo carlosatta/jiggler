@@ -7,6 +7,7 @@
 #include <string>
 
 #include "api_router.h"
+#include "dashboard_html.h"
 #include "json_codec.h"
 #include "mcp_server.h"
 
@@ -66,6 +67,11 @@ HttpServer::~HttpServer() = default;
 
 void HttpServer::begin() {
   Impl* s = impl_.get();
+  s->server.on("/", HTTP_GET, [](AsyncWebServerRequest* req) {
+    AsyncWebServerResponse* res = req->beginResponse(200, "text/html", kDashboardHtml);
+    res->addHeader("Cache-Control", "no-store");
+    req->send(res);
+  });
   s->server.onRequestBody(Impl::onBody);
   s->server.onNotFound([s](AsyncWebServerRequest* req) { s->handle(req); });
   s->server.begin();

@@ -2,28 +2,38 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Repository state
-
-Pre-implementation. The only file is [funzionalita.md](funzionalita.md), the functional spec (in Italian). There is no source code, build system, firmware framework choice, or git repository yet, so there are no build/lint/test commands to document. When scaffolding, pick the toolchain (e.g. ESP-IDF vs. Arduino/PlatformIO) deliberately and add its commands here. The spec does not prescribe one.
-
-Treat `funzionalita.md` as the source of truth for requirements. Keep documentation and UI strings in Italian unless told otherwise.
-
 ## What the project is
 
-An ESP32 device that keeps a computer awake by acting as a real Bluetooth mouse, with control and status exposed over WiFi (web dashboard, REST API, MCP server).
+An ESP32 (classic `esp32dev`) that keeps a computer awake by acting as a BLE mouse presenting as a Logitech MX Master 3S, with control and status over WiFi: web dashboard, REST API and MCP server. [funzionalita.md](funzionalita.md) is the functional spec (Italian) and the source of truth for requirements; the implementation plan is in `docs/superpowers/plans/`. Keep documentation and UI strings in Italian.
 
-## Architecture constraints from the spec
+## Commands
 
-These span multiple subsystems, so they matter when designing any one of them:
+PlatformIO (`pipx install platformio`; `pio` lives in `~/.local/bin`).
 
-- **Bluetooth HID and WiFi are independent.** The mouse must keep jiggling if WiFi drops. WiFi/network code must never block or gate the movement loop.
-- **Three control surfaces, one state.** Dashboard, REST API and MCP server expose the same capabilities: read full status, start/stop/pause, trigger an immediate movement, read/modify config (min/max interval, movement amplitude, behavior). Implement the control logic once and have all three call into it.
-- **Movement engine** (not a fixed-cadence jiggle):
-  - random intervals between configurable min and max
-  - curved, human-like trajectories with gradual acceleration/deceleration and micro-oscillation (no constant-speed straight lines)
-  - cursor returns near its starting point so it does not drift over hours
-  - occasional random clicks/scrolls
-- **Device identity.** Presents as a Logitech MX Master (name, manufacturer, device IDs, Logitech BT address prefix). This is cosmetic only: HID++ is not implemented, so Logi Options+ will not recognize it as a real MX Master. Standard BT HID mouse only, with no host-side software or drivers.
-- **WiFi provisioning.** On connection failure, start a temporary access point to enter credentials (never hardcoded in source); persist credentials across reboots.
-- **Dashboard** shows live state (mouse connected, WiFi connected, time to next movement, movement count, last movement time) and offers start/pause, interval/amplitude editing, and a "test movement" button.
-- **Hardware:** status LED (BT connection state, blinks on each movement); USB powered.
+- Host unit tests (no board needed): `pio test -e native`
+- One suite: `pio test -e native -f test_controller` (suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`)
+- Build firmware: `pio run -e esp32`
+- Flash: `pio run -e esp32 -t upload --upload-port /dev/cu.usbserial-0001`
+- Serial monitor: `pio device monitor` (115200 baud)
+- Debug build without a paired host: `PLATFORMIO_BUILD_FLAGS="-DJIG_FAKE_CONNECTED -DJIG_DEBUG" pio run -e esp32 -t upload`. This fakes "mouse connected" and logs each plan with its stack high-water mark. Reflash a normal build afterwards.
+
+## Architecture
+
+All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio test -e native`. `src/` holds thin hardware adapters verified on the board. Fakes for tests are in `test/support/fakes.h`.
+
+- `Controller` is the single control surface (status, start/pause/stop, moveNow, updateConfig, `tick()`). The dashboard, REST (`handleApi`) and MCP (`handleMcp`) all call it, and REST and MCP share `json_codec`, so they cannot disagree. It is thread-safe (one mutex).
+- `planActivity` turns a `Config` into a `Plan` (Bézier strokes with minimum-jerk easing, dwell, optional click and net-zero scroll, return stroke). The net Move displacement of a plan is exactly (0,0). `runPlan` executes it and aborts if the mouse disconnects.
+- `Platform`, `Rng`, `MouseSink` and `ConfigStore` are the seams between core and hardware. Firmware implements them in `arduino_platform.h`, `ble_mouse.*` and `nvs_config_store.*`.
+- The movement task (`movement_task.cpp`, core 1) calls `Controller::tick()` every 50 ms and runs plans, and is independent of WiFi. `setup()` starts it before `wifi.begin()` on purpose, because WiFi connection can block for seconds.
+- WiFi: `WifiSetup` (tzapu WiFiManager, non-blocking, AP `Jiggler-Setup`) also collects the API token. With no token stored, the portal is forced even if WiFi credentials exist. `HttpServer` starts only once WiFi is connected and the portal is closed (both want port 80).
+- Auth: every `/api/*` and `/mcp` request needs `Authorization: Bearer <token>`. `GET /` (the dashboard, `src/dashboard_html.h`, one self-contained page) is public.
+- `WifiSetup` and `HttpServer` hide their library headers behind a pimpl, because WiFiManager and ESPAsyncWebServer must not share a translation unit.
+
+## Gotchas
+
+- Do not read NVS (`Preferences`) from global constructors: NVS is not initialized during static init. Read it in `setup()` or later.
+- Time comparisons use `(int32_t)(now - due)` because `millis()` wraps at ~49.7 days. Keep that pattern.
+- Partition table is `huge_app.csv` (3 MB app, no OTA). The default 1.25 MB partition was 95% full.
+- A mouse identity change touches `identity.h` (`kBleName`, `kVid`, `kPid`, OUI `00:1F:20`). The base MAC is set with `esp_base_mac_addr_set` before BLE init, which also changes the WiFi MAC.
+- The dashboard test checks that the page only calls routes `handleApi` serves. Update `kPageRoutes` in `test/test_dashboard` when the page adds a call.
+- Exact return-to-start is guaranteed in HID counts only. OS pointer acceleration can leave visible drift; this is unmeasured on a real host.
