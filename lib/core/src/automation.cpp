@@ -168,7 +168,22 @@ CmdResult AutomationEngine::runNow(const std::string& script) {
   if (!platform_.mouseConnected()) return fail("mouse_not_connected", "", "the mouse is not connected to the computer");
   std::lock_guard<std::mutex> lock(mutex_);
   if (pending_.size() >= kMaxPendingRuns) return fail("busy", "", "too many runs already queued");
-  pending_.push_back(script);
+  pending_.push_back({script, std::nullopt});
+  CmdResult r;
+  r.ok = true;
+  return r;
+}
+
+CmdResult AutomationEngine::runInline(const std::string& scriptJson) {
+  Plan plan;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (auto err = compileScript(scriptJson, rng_, plan)) return fail("invalid_script", err->path, err->message);
+  }
+  if (!platform_.mouseConnected()) return fail("mouse_not_connected", "", "the mouse is not connected to the computer");
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (pending_.size() >= kMaxPendingRuns) return fail("busy", "", "too many runs already queued");
+  pending_.push_back({"", std::move(plan)});
   CmdResult r;
   r.ok = true;
   return r;
@@ -177,10 +192,11 @@ CmdResult AutomationEngine::runNow(const std::string& script) {
 std::optional<Plan> AutomationEngine::tick(bool running) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (!pending_.empty()) {
-    const std::string script = pending_.front();
+    Pending next = std::move(pending_.front());
     pending_.pop_front();
     if (!platform_.mouseConnected()) return std::nullopt;  // an on-demand run must not fire later on reconnect
-    return compileLocked(script);
+    if (next.plan) return std::move(next.plan);
+    return compileLocked(next.script);
   }
   if (!running || !platform_.mouseConnected()) return std::nullopt;
 

@@ -45,6 +45,7 @@ class AutomationEngine {
   std::vector<Automation> list() const;
   CmdResult replace(const std::vector<Automation>& automations);  // error: invalid_automation
   CmdResult runNow(const std::string& script);                     // errors: not_found, mouse_not_connected, busy
+  CmdResult runInline(const std::string& scriptJson);              // compiles ad-hoc JSON; errors: invalid_script, mouse_not_connected, busy
   std::optional<Plan> tick(bool running);
 
  private:
@@ -59,7 +60,11 @@ class AutomationEngine {
   mutable std::mutex mutex_;
   std::vector<Automation> automations_;
   std::vector<uint32_t> dueMs_;
-  std::deque<std::string> pending_;
+  struct Pending {
+    std::string script;     // library script name, or empty when `plan` is set
+    std::optional<Plan> plan;
+  };
+  std::deque<Pending> pending_;
 };
 
 }  // namespace jig

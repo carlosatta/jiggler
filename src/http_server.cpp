@@ -54,7 +54,7 @@ struct HttpServer::Impl {
 
     if (isMcp) {
       if (method != "POST") return json(req, 405, jig::errorJson("method_not_allowed"));
-      jig::McpReply r = jig::handleMcp(api.controller, body);
+      jig::McpReply r = jig::handleMcpEx(api, body);
       if (r.httpStatus == 202) return req->send(202);
       return json(req, r.httpStatus, r.body);
     }
