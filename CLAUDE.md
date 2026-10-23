@@ -26,7 +26,7 @@ All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio
 - `Platform`, `Rng`, `MouseSink` and `ConfigStore` are the seams between core and hardware. Firmware implements them in `arduino_platform.h`, `ble_mouse.*` and `nvs_config_store.*`.
 - The movement task (`movement_task.cpp`, core 1) calls `Controller::tick()` every 50 ms and runs plans, and is independent of WiFi. `setup()` starts it before `wifi.begin()` on purpose, because WiFi connection can block for seconds.
 - WiFi: `WifiSetup` (tzapu WiFiManager, non-blocking, AP `Jiggler-Setup`) also collects the API token. With no token stored, the portal is forced even if WiFi credentials exist. `HttpServer` starts only once WiFi is connected and the portal is closed (both want port 80).
-- Auth: every `/api/*` and `/mcp` request needs `Authorization: Bearer <token>`. `GET /` (the dashboard, `src/dashboard_html.h`, one self-contained page) is public.
+- Auth: every `/api/*` and `/mcp` request needs `Authorization: Bearer <token>`. `GET /` (the dashboard, one self-contained page generated into `src/dashboard_html.h` from the sources in `web/`) is public.
 - `WifiSetup` and `HttpServer` hide their library headers behind a pimpl, because WiFiManager and ESPAsyncWebServer must not share a translation unit.
 
 ### Devices, scripts, automations, network
@@ -47,3 +47,7 @@ All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio
 - REST and MCP bodies must be sent with `Content-Type: application/json`. `curl -d` alone sends form-encoded, which the HTTP library parses as params, so the device answers 415 `unsupported_media_type`. Use `curl -H 'Content-Type: application/json' -d ...`.
 - HTTP body bytes from ESPAsyncWebServer can exceed the declared Content-Length; always copy through `copyBodyChunk`, never `memcpy` directly.
 - Exact return-to-start is guaranteed in HID counts only. OS pointer acceleration can leave visible drift; this is unmeasured on a real host.
+
+## Dashboard sources
+
+Edit `web/` and run `python3 tools/build_web.py` (PlatformIO does it automatically before builds/tests); never edit `src/dashboard_html.h` by hand. Pure JS helpers live in `web/lib.js` with node tests: `node --test web/test/*.test.js`.

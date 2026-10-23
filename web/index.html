@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jiggler</title>
+<link rel="icon" href="data:,">
+<style>
+/*__CSS__*/</style>
+</head>
+<body>
+<main>
+<h1>Jiggler</h1>
+<div id="banner" role="alert"></div>
+<div class="chips">
+<span class="chip" id="chipMouse"><span class="dot"></span><span id="txtMouse">Mouse</span></span>
+<span class="chip" id="chipWifi"><span class="dot"></span><span id="txtWifi">WiFi</span></span>
+</div>
+<nav class="tabs" role="tablist" id="tabs">
+<button role="tab" data-tab="stato" aria-selected="true">Stato</button>
+<button role="tab" data-tab="dispositivi" aria-selected="false">Dispositivi</button>
+<button role="tab" data-tab="script" aria-selected="false">Script</button>
+<button role="tab" data-tab="automazioni" aria-selected="false">Automazioni</button>
+<button role="tab" data-tab="rete" aria-selected="false">Rete</button>
+</nav>
+
+<div class="tab on" id="tab-stato">
+<section class="card">
+<h2>Stato</h2>
+<div class="state" id="state">&mdash;</div>
+<div class="sub" id="next">&nbsp;</div>
+<div class="stats">
+<div><b id="count">0</b><span>Movimenti eseguiti</span></div>
+<div><b id="last">&mdash;</b><span>Ultimo movimento</span></div>
+</div>
+</section>
+
+<section class="card">
+<h2>Controlli</h2>
+<div class="btns">
+<button id="bStart" class="primary">Avvia</button>
+<button id="bPause">Pausa</button>
+<button id="bStop">Ferma</button>
+<button id="bMove" class="wide">Muovi ora</button>
+</div>
+<p id="msg" class="msg" role="status" aria-live="polite"></p>
+</section>
+
+<section class="card">
+<h2>Configurazione</h2>
+<form id="cfg" novalidate>
+<div class="row">
+<div class="field"><label for="minIntervalSec">Intervallo minimo (s)</label><input id="minIntervalSec" inputmode="numeric" autocomplete="off"><div class="err" id="e_minIntervalSec"></div></div>
+<div class="field"><label for="maxIntervalSec">Intervallo massimo (s)</label><input id="maxIntervalSec" inputmode="numeric" autocomplete="off"><div class="err" id="e_maxIntervalSec"></div></div>
+</div>
+<div class="field"><label for="amplitudePx">Ampiezza movimento (px)</label><input id="amplitudePx" inputmode="numeric" autocomplete="off"><div class="err" id="e_amplitudePx"></div></div>
+<div class="row">
+<div class="field"><label for="clickProbability">Click casuali (%)</label><input id="clickProbability" inputmode="decimal" autocomplete="off"><div class="err" id="e_clickProbability"></div></div>
+<div class="field"><label for="scrollProbability">Scroll casuali (%)</label><input id="scrollProbability" inputmode="decimal" autocomplete="off"><div class="err" id="e_scrollProbability"></div></div>
+</div>
+<p class="hint">Intervalli 5&ndash;3600 s, ampiezza 5&ndash;600 px. Un click casuale pu&ograve; attivare ci&ograve; che si trova sotto il cursore: lascia 0% se non serve.</p>
+<button class="primary" type="submit">Salva</button>
+<p id="cfgMsg" class="msg" role="status" aria-live="polite"></p>
+</form>
+</section>
+</div>
+
+<div class="tab" id="tab-dispositivi">
+<section class="card">
+<h2>Dispositivi</h2>
+<p class="hint">Il computer vede un solo dispositivo Bluetooth: nome, produttore, VID/PID e indirizzo sono quelli del primo dispositivo abilitato; gli altri aggiungono solo la loro funzione (mouse o tastiera). Lascia vuoti i campi per usare i valori del profilo. Dopo il salvataggio il dispositivo si riavvia e va abbinato di nuovo al computer.</p>
+<div id="devList"></div>
+<div class="actions"><button class="primary" id="devSave">Salva e riavvia</button></div>
+<p id="devMsg" class="msg" role="status" aria-live="polite"></p>
+</section>
+</div>
+
+<div class="tab" id="tab-script">
+<section class="card">
+<h2>Script</h2>
+<p class="hint">Uno script &egrave; un elenco di passi: <b>move</b> (dx, dy), <b>click</b>, <b>scroll</b> (notches), <b>key</b> (es. F15, Ctrl+Alt+Delete), <b>type</b> (text, ASCII), <b>wait</b> (ms, oppure minMs e maxMs) e <b>repeat</b> (times, steps). Tastiera layout US.</p>
+<div class="field"><label for="scrSelect">Script</label><select id="scrSelect"></select></div>
+<div class="field"><label for="scrName">Nome</label><input id="scrName" autocomplete="off" placeholder="a-z 0-9 _ -"><div class="err" id="e_scrName"></div></div>
+<div class="field"><label for="scrBody">Contenuto (JSON)</label><textarea id="scrBody" spellcheck="false"></textarea><div class="err" id="e_scrBody"></div></div>
+<div class="actions">
+<button class="primary" id="scrSave">Salva</button>
+<button id="scrRun">Esegui ora</button>
+<button id="scrNew">Nuovo</button>
+<button class="danger" id="scrDelete">Elimina</button>
+</div>
+<p id="scrMsg" class="msg" role="status" aria-live="polite"></p>
+</section>
+</div>
+
+<div class="tab" id="tab-automazioni">
+<section class="card">
+<h2>Automazioni</h2>
+<p class="hint">Un&rsquo;automazione esegue uno script a intervalli casuali, solo mentre il jiggler &egrave; avviato (massimo 4).</p>
+<div id="autoList"></div>
+<div class="actions"><button id="autoAdd">Aggiungi</button><button class="primary" id="autoSave">Salva</button></div>
+<p id="autoMsg" class="msg" role="status" aria-live="polite"></p>
+</section>
+</div>
+
+<div class="tab" id="tab-rete">
+<section class="card">
+<h2>Rete</h2>
+<p class="hint"><b>Auto</b>: si collega al WiFi di casa e, se non ci riesce, apre la rete di configurazione. <b>Rete propria</b>: crea una rete WiFi protetta con questa dashboard (indirizzo 192.168.4.1), utile dove non c&rsquo;&egrave; WiFi. Tenendo premuto BOOT per 3 secondi si passa da una modalit&agrave; all&rsquo;altra. Le modifiche valgono dopo il riavvio.</p>
+<div class="field"><label for="netMode">Modalit&agrave;</label><select id="netMode"><option value="auto">Auto (WiFi di casa)</option><option value="ap">Rete propria</option></select><div class="err" data-err="mode"></div></div>
+<div class="field"><label for="netSsid">Nome della rete propria</label><input id="netSsid" autocomplete="off"><div class="err" data-err="apSsid"></div></div>
+<div class="field"><label for="netPass">Password della rete propria</label><input id="netPass" autocomplete="off" placeholder="vuota = generata al primo avvio"><div class="err" data-err="apPassword"></div></div>
+<div class="actions"><button id="netSave">Salva</button><button class="primary" id="netSaveRestart">Salva e riavvia</button></div>
+<p id="netMsg" class="msg" role="status" aria-live="polite"></p>
+</section>
+</div>
+</main>
+
+<div id="login" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+<form class="card" id="loginForm">
+<h2 id="loginTitle">Accesso</h2>
+<div class="field"><label for="tokenInput">Token API</label><input id="tokenInput" type="password" autocomplete="off"><div class="err" id="loginErr"></div></div>
+<button class="primary" type="submit">Entra</button>
+</form>
+</div>
+
+<script>
+/*__JS__*/</script>
+</body>
+</html>

@@ -47,6 +47,6 @@ docs/           documentation; docs/superpowers has design history (Italian)
 ## Conventions
 
 - New logic goes in `lib/core/src` with a test first; keep Arduino headers out of it.
-- The dashboard is one self-contained page (`src/dashboard_html.h`). `test_dashboard` checks that the page only calls routes `handleApiEx` serves; when the page adds a call, update `kPageRoutes` in `test/test_dashboard` (stateful order: a script is created before it is read, run or deleted).
+- The dashboard sources are in `web/` (`index.html`, `app.css`, `lib.js` for pure helpers, `app.js`). `tools/build_web.py` inlines them into the generated `src/dashboard_html.h`; PlatformIO runs it before every build and test (`tools/pio_web.py`), so never edit the header by hand. JS helpers have node tests: `node --test web/test/*.test.js`. `test_dashboard` checks that the page only calls routes `handleApiEx` serves; when the page adds a call, update `kPageRoutes` in `test/test_dashboard` (stateful order: a script is created before it is read, run or deleted).
 - Route bodies are limited and validated at the boundary; see [api.md](api.md).
 - Add a device profile only with VID/PID/OUI verified against public sources.
