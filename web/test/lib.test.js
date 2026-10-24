@@ -169,3 +169,31 @@ test('every server message the page may show reads as a sentence', () => {
     assert.ok(/^[A-Z]/.test(s) && s.endsWith('.'), s);
   }
 });
+
+test('endFromDuration and durationFromEnd convert between a length and an end time', () => {
+  assert.equal(JigLib.endFromDuration('09:00', 480), '17:00');
+  assert.equal(JigLib.endFromDuration('22:00', 480), '06:00');
+  assert.equal(JigLib.endFromDuration('09:00', 1440), '09:00');
+  assert.equal(JigLib.durationFromEnd('09:00', '17:00'), 480);
+  assert.equal(JigLib.durationFromEnd('22:00', '06:00'), 480);   // ends the next day
+  assert.equal(JigLib.durationFromEnd('09:00', '09:00'), 1440);  // the same time means a full day
+  assert.equal(JigLib.durationFromEnd('09:00', '09:01'), 1);
+  assert.equal(JigLib.durationFromEnd('', '09:00'), null);
+  assert.equal(JigLib.durationFromEnd('09:00', 'x'), null);
+});
+
+test('describeRepeat says how many runs a schedule has left', () => {
+  assert.equal(JigLib.describeRepeat({ enabled: true, times: null, remaining: null }), 'Repeats every week');
+  assert.equal(JigLib.describeRepeat({ enabled: true, times: 3, remaining: 3 }), '3 runs');
+  assert.equal(JigLib.describeRepeat({ enabled: true, times: 3, remaining: 1 }), '1 of 3 runs left');
+  assert.equal(JigLib.describeRepeat({ enabled: true, times: 1, remaining: 1 }), '1 run');
+  assert.equal(JigLib.describeRepeat({ enabled: false, times: 3, remaining: 0 }), 'Finished (3 runs done)');
+  assert.equal(JigLib.describeRepeat({ enabled: false, times: 3, remaining: 2 }), '2 of 3 runs left');
+});
+
+test('scheduleSummary includes the repeat information', () => {
+  assert.equal(JigLib.scheduleSummary({ days: ['mon'], start: '09:00', durationMin: 60, enabled: true, times: 2, remaining: 1 }),
+    'Mon, 09:00 to 10:00 · 1 of 2 runs left');
+  assert.equal(JigLib.scheduleSummary({ days: ['mon'], start: '09:00', durationMin: 60, enabled: true, times: null }),
+    'Mon, 09:00 to 10:00');
+});

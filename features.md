@@ -27,7 +27,7 @@ An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, contro
 ## 4. Running it
 
 - Start/stop, a test movement, and **timed runs**: 5, 10 or 30 minutes, an hour, until a time of day, or a custom number of minutes.
-- **Weekly schedules** (up to 8): days, start time, duration (may cross midnight), in a chosen timezone; they start and stop the jiggler by the clock. Needs a synced clock.
+- **Weekly schedules** (up to 8): days, start and end time (may cross midnight), forever or a set number of runs, in a chosen timezone; they start and stop the jiggler by the clock. Needs a synced clock.
 
 ## 5. Network
 

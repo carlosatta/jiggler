@@ -92,7 +92,7 @@ See [schedules.md](schedules.md). `GET /api/status` also carries `"schedule": {t
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/schedules` | `{"timezone", "schedules":[...], "timezones":[...]}` (the last is the list of accepted zones) |
-| PUT | `/api/schedules` | Replace the schedules (max 8) and/or set the timezone; keys you omit keep their value. `400 invalid_schedule` with the offending `field` |
+| PUT | `/api/schedules` | Replace the schedules (max 8; each may have `times` 1–999 and `remaining` for a limited number of runs) and/or set the timezone; keys you omit keep their value. `400 invalid_schedule` with the offending `field` |
 
 ```json
 { "timezone": "Europe/Rome",

@@ -47,7 +47,7 @@ How a movement looks and how often it happens: the minimum and maximum interval 
   <img src="images/schedule.png" alt="Weekly schedules" width="260">
 </p>
 
-Weekly windows that start and stop the jiggler for you, in the **timezone** you pick: choose the days, a start time and how long it lasts (a window may run past midnight). Details in [Schedules](schedules.md).
+Weekly windows that start and stop the jiggler for you, in the **timezone** you pick: choose the days, a start and an end time (an end earlier than the start means the next day), and whether it repeats **forever** or a **limited** number of times. Details in [Schedules](schedules.md).
 
 ## System
 

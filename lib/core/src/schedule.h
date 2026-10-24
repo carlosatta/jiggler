@@ -15,6 +15,7 @@
 namespace jig {
 
 constexpr size_t kMaxSchedules = 8;
+constexpr uint16_t kMaxRepeat = 999;
 
 // One weekly window: on the selected days, from `startMinute` for `durationMin` minutes (it may run past
 // midnight into the next day). While a window is open the jiggler runs.
@@ -24,6 +25,8 @@ struct Schedule {
   uint8_t days = 0;           // bit 0 = Monday ... bit 6 = Sunday
   uint16_t startMinute = 0;   // minutes after local midnight, 0..1439
   uint16_t durationMin = 60;  // 1..1440
+  uint16_t times = 0;         // how many windows it runs before turning itself off; 0 = forever (999 at most)
+  uint16_t remaining = 0;     // windows left while `times` is set; saved so a restart does not reset it
 };
 
 struct ScheduleSettings {
@@ -67,6 +70,7 @@ class ScheduleEngine {
  private:
   bool anyWindowOpenLocked(const LocalTime& now) const;
   size_t enabledCountLocked() const;
+  void saveLocked();
 
   Platform& platform_;
   Controller& controller_;
@@ -75,6 +79,8 @@ class ScheduleEngine {
   ScheduleSettings settings_;
   bool first_ = true;     // no evaluation yet since boot / since the clock arrived
   bool wasOpen_ = false;  // a window was open at the previous evaluation
+  std::vector<bool> open_;  // per schedule: its window was open at the previous evaluation (to spot openings and closings)
+  bool unsaved_ = false;    // a countdown changed and could not be stored yet; tick() retries
   bool startPending_ = false;  // a window opened but the jiggler could not start (no computer paired yet): retry while it is open
 };
 

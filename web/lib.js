@@ -137,13 +137,42 @@ var JigLib = (function () {
     return pad2(Math.floor(t / 60)) + ':' + pad2(t % 60) + (day ? ' next day' : '');
   }
 
+  function toMinutes(hhmm) {
+    var m = /^(\d{2}):(\d{2})$/.exec(hhmm || '');
+    if (!m || +m[1] > 23 || +m[2] > 59) return null;
+    return (+m[1]) * 60 + (+m[2]);
+  }
+
+  // "09:00" for 480 minutes -> "17:00" (wraps past midnight).
+  function endFromDuration(start, durationMin) {
+    var t = (toMinutes(start) + durationMin) % 1440;
+    return pad2(Math.floor(t / 60)) + ':' + pad2(t % 60);
+  }
+
+  // The length between two times of day, 1..1440; an end at or before the start means "the next day", and the
+  // same time means a full 24 hours. null when either time is not valid.
+  function durationFromEnd(start, end) {
+    var a = toMinutes(start), b = toMinutes(end);
+    if (a === null || b === null) return null;
+    return ((b - a + 1440) % 1440) || 1440;
+  }
+
+  function describeRepeat(s) {
+    if (!s.times) return 'Repeats every week';
+    var runs = function (n) { return n + (n === 1 ? ' run' : ' runs'); };
+    if (!s.enabled && s.remaining === 0) return 'Finished (' + runs(s.times) + ' done)';
+    return s.remaining === s.times ? runs(s.times) : s.remaining + ' of ' + runs(s.times) + ' left';
+  }
+
   function scheduleSummary(s) {
-    return describeDays(s.days) + ', ' + s.start + ' to ' + scheduleEnd(s.start, s.durationMin);
+    var line = describeDays(s.days) + ', ' + s.start + ' to ' + scheduleEnd(s.start, s.durationMin);
+    return s.times ? line + ' · ' + describeRepeat(s) : line;
   }
 
   return { DAYS: DAYS, DAY_LABELS: DAY_LABELS, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, fmtSince: fmtSince, hex4: hex4,
     connectionView: connectionView, checkNewToken: checkNewToken, minutesUntil: minutesUntil, runForMinutes: runForMinutes,
-    stopsAt: stopsAt, describeDays: describeDays, scheduleEnd: scheduleEnd, scheduleSummary: scheduleSummary };
+    stopsAt: stopsAt, describeDays: describeDays, scheduleEnd: scheduleEnd, scheduleSummary: scheduleSummary,
+    endFromDuration: endFromDuration, durationFromEnd: durationFromEnd, describeRepeat: describeRepeat };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = JigLib;

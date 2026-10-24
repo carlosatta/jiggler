@@ -110,6 +110,8 @@ std::optional<ValidationError> validateSchedules(const ScheduleSettings& setting
     if (s.days == 0 || (s.days & 0x80)) return ValidationError{at(i, "days"), "pick at least one day"};
     if (s.startMinute >= 1440) return ValidationError{at(i, "start"), "must be a time between 00:00 and 23:59"};
     if (s.durationMin < 1 || s.durationMin > 1440) return ValidationError{at(i, "durationMin"), "must be between 1 and 1440 minutes"};
+    if (s.times > kMaxRepeat) return ValidationError{at(i, "times"), "must be between 1 and 999, or empty for no limit"};
+    if (s.times > 0 && s.remaining > s.times) return ValidationError{at(i, "remaining"), "cannot be more than times"};
   }
   return std::nullopt;
 }
@@ -127,6 +129,13 @@ std::string schedulesToJson(const ScheduleSettings& settings) {
       if (s.days & (1 << d)) days.add(kDayNames[d]);
     o["start"] = hhmm(s.startMinute);
     o["durationMin"] = s.durationMin;
+    if (s.times) {
+      o["times"] = s.times;
+      o["remaining"] = s.remaining;
+    } else {
+      o["times"] = nullptr;
+      o["remaining"] = nullptr;
+    }
   }
   JsonArray zones = doc["timezones"].to<JsonArray>();
   for (const std::string& z : timezoneNames()) zones.add(z);
@@ -159,7 +168,7 @@ bool parseSchedules(const std::string& body, ScheduleSettings& out, ParseError& 
       for (JsonVariantConst item : v.as<JsonArrayConst>()) {
         if (!item.is<JsonObjectConst>()) return parseFail(err, "schedules[" + std::to_string(i) + "]", "must be an object");
         Schedule s;
-        bool hasId = false, hasDays = false, hasStart = false, hasDur = false;
+        bool hasId = false, hasDays = false, hasStart = false, hasDur = false, hasRemaining = false;
         for (JsonPairConst f : item.as<JsonObjectConst>()) {
           const std::string name = f.key().c_str();
           JsonVariantConst fv = f.value();
@@ -198,10 +207,17 @@ bool parseSchedules(const std::string& body, ScheduleSettings& out, ParseError& 
               return parseFail(err, field, "must be an integer between 1 and 1440");
             s.durationMin = static_cast<uint16_t>(fv.as<int64_t>());
             hasDur = true;
+          } else if (name == "times" || name == "remaining") {
+            if (fv.isNull()) continue;
+            const bool ok = fv.is<int64_t>() && fv.as<int64_t>() >= (name == "times" ? 1 : 0) && fv.as<int64_t>() <= kMaxRepeat;
+            if (!ok) return parseFail(err, field, name == "times" ? "must be a whole number from 1 to 999, or empty for no limit" : "must be a whole number from 0 to 999");
+            (name == "times" ? s.times : s.remaining) = static_cast<uint16_t>(fv.as<int64_t>());
+            if (name == "remaining") hasRemaining = true;
           } else {
             return parseFail(err, field, "unknown field");
           }
         }
+        if (s.times > 0 && !hasRemaining) s.remaining = s.times;
         if (!hasId) return parseFail(err, at(i, "id"), "is required");
         if (!hasDays) return parseFail(err, at(i, "days"), "is required");
         if (!hasStart) return parseFail(err, at(i, "start"), "is required");
@@ -250,6 +266,8 @@ void ScheduleEngine::begin() {
   first_ = true;
   wasOpen_ = false;
   startPending_ = false;
+  unsaved_ = false;
+  open_.assign(settings_.schedules.size(), false);
 }
 
 ScheduleSettings ScheduleEngine::settings() const {
@@ -257,21 +275,32 @@ ScheduleSettings ScheduleEngine::settings() const {
   return settings_;
 }
 
-CmdResult ScheduleEngine::replace(const ScheduleSettings& next) {
-  if (auto bad = validateSchedules(next)) return fail("invalid_schedule", bad->field, bad->message);
+CmdResult ScheduleEngine::replace(const ScheduleSettings& requested) {
+  if (auto bad = validateSchedules(requested)) return fail("invalid_schedule", bad->field, bad->message);
+  ScheduleSettings next = requested;
+  for (Schedule& s : next.schedules) {
+    if (s.times == 0) s.remaining = 0;                       // a count that is not set has nothing to count down
+    else if (s.enabled && s.remaining == 0) s.remaining = s.times;  // switched back on after finishing: a fresh run
+  }
   std::lock_guard<std::mutex> lock(mutex_);
-  std::string stored = schedulesToJson(next);
-  if (!blobs_.put(kBlobKey, stored)) return fail("storage_error", "", "could not save the schedules (storage full?)");
+  if (!blobs_.put(kBlobKey, schedulesToJson(next))) return fail("storage_error", "", "could not save the schedules (storage full?)");
   settings_ = next;
-  // Saving must not start or stop anything: remember what the clock says now so only later changes count.
-  // (Even with no clock yet: when it arrives, only a window opening or closing acts, not the level.)
+  unsaved_ = false;
+  // Saving must not start or stop anything, or use up a repeat: remember what the clock says now so only later
+  // changes count. (Even with no clock yet: when it arrives, only a window opening or closing acts.)
   const auto now = platform_.localTime(posixTimezone(settings_.timezone).value_or("UTC0"));
   first_ = false;
+  open_.assign(settings_.schedules.size(), false);
+  if (now)
+    for (size_t i = 0; i < settings_.schedules.size(); ++i)
+      open_[i] = settings_.schedules[i].enabled && scheduleWindowContains(settings_.schedules[i], *now);
   wasOpen_ = now ? anyWindowOpenLocked(*now) : false;
   CmdResult r;
   r.ok = true;
   return r;
 }
+
+void ScheduleEngine::saveLocked() { unsaved_ = !blobs_.put(kBlobKey, schedulesToJson(settings_)); }
 
 bool ScheduleEngine::anyWindowOpenLocked(const LocalTime& now) const {
   for (const Schedule& s : settings_.schedules)
@@ -285,14 +314,47 @@ size_t ScheduleEngine::enabledCountLocked() const {
 
 void ScheduleEngine::tick() {
   std::lock_guard<std::mutex> lock(mutex_);
+  open_.resize(settings_.schedules.size(), false);
+  if (unsaved_) saveLocked();
   if (enabledCountLocked() == 0) {
     first_ = true;  // the next schedule that gets enabled starts from a clean look at the clock
     wasOpen_ = false;
+    open_.assign(open_.size(), false);
     return;
   }
   const auto now = platform_.localTime(posixTimezone(settings_.timezone).value_or("UTC0"));
   if (!now) return;
-  const bool open = anyWindowOpenLocked(*now);
+
+  bool open = false, changed = false;
+  for (size_t i = 0; i < settings_.schedules.size(); ++i) {
+    Schedule& s = settings_.schedules[i];
+    if (!s.enabled) {
+      open_[i] = false;
+      continue;
+    }
+    const bool in = scheduleWindowContains(s, *now);
+    if (s.times > 0) {
+      bool spent = false;
+      if (first_) {
+        spent = !in && s.remaining == 0;                      // used up while the board was off
+      } else if (in && !open_[i]) {
+        if (s.remaining == 0) spent = true;                   // switched on with nothing left
+        else { s.remaining--; changed = true; }               // a new window opens: that is one run
+      } else if (!in && open_[i] && s.remaining == 0) {
+        spent = true;                                         // the last run just ended
+      }
+      if (spent) {
+        s.enabled = false;
+        changed = true;
+        open_[i] = false;
+        continue;
+      }
+    }
+    open_[i] = in;
+    open = open || in;
+  }
+  if (changed) saveLocked();
+
   if (first_ || open != wasOpen_) {
     if (open) startPending_ = !controller_.start().ok;
     else {

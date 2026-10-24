@@ -2,6 +2,7 @@
 
 ## 0.5.0
 
+- **Schedules are easier to use.** Set a start and an **end time** instead of a number of minutes, and choose how often it runs: **forever** or a **limited number of times** (it turns itself off after the last run; a run is counted when its window opens, and the count survives a restart). API: `times` and `remaining` on each schedule.
 - **Firmware updates over WiFi (OTA).** System → Firmware update takes a `.bin` built with `pio run -e esp32`; `POST /api/update` (multipart, Bearer token) does the same from a script. **The first time needs a USB flash**, because the partition table changes to two application slots (`partitions.csv`); the token, WiFi, pairings and schedules are kept. After that no cable is needed.
 - **One device, configured as a single "Appearance"**, not a list. The default is **Custom**: a neutral "Bluetooth Mouse" with the chip's own address, not a Logitech. Pick a mouse model or your own name. API: `GET/PUT /api/appearance` replaces `/api/devices` and `/api/profiles`; MCP: `get_appearance` / `set_appearance`. **Upgrading a board that used the old default changes its Bluetooth name and address, so computers must pair again.**
 - **Bluetooth stays visible.** A watchdog restarts advertising if it ever stops while nothing is connected (the board could stay online but invisible to the computer after a series of drops).

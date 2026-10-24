@@ -27,6 +27,12 @@ Schedule entry(const char* id, uint8_t days, int start, int dur, bool enabled = 
   return s;
 }
 
+Schedule limited(Schedule s, int times, int remaining = -1) {
+  s.times = static_cast<uint16_t>(times);
+  s.remaining = static_cast<uint16_t>(remaining < 0 ? times : remaining);
+  return s;
+}
+
 LocalTime at(int weekday, int hour, int minute) { return LocalTime{static_cast<uint8_t>(weekday), static_cast<uint16_t>(hour * 60 + minute)}; }
 
 struct Env {
@@ -413,8 +419,123 @@ void test_a_window_that_opens_before_any_computer_is_paired_starts_once_one_is()
   TEST_ASSERT_FALSE(e.running());
 }
 
+void test_repeat_count_is_validated() {
+  ScheduleSettings s;
+  s.schedules = {limited(entry("a", kMon, 540, 60), 3)};
+  TEST_ASSERT_FALSE(validateSchedules(s).has_value());
+  s.schedules = {limited(entry("a", kMon, 540, 60), 1000)};
+  TEST_ASSERT_EQUAL_STRING("schedules[0].times", validateSchedules(s)->field.c_str());
+  s.schedules = {limited(entry("a", kMon, 540, 60), 3, 4)};
+  TEST_ASSERT_EQUAL_STRING("schedules[0].remaining", validateSchedules(s)->field.c_str());
+}
+
+void test_repeat_count_in_json() {
+  const std::string body =
+      "{\"schedules\":[{\"id\":\"a\",\"days\":[\"mon\"],\"start\":\"09:00\",\"durationMin\":60,\"times\":3,\"remaining\":2},"
+      "{\"id\":\"b\",\"days\":[\"tue\"],\"start\":\"09:00\",\"durationMin\":60,\"times\":null}]}";
+  ScheduleSettings s;
+  ParseError err;
+  TEST_ASSERT_TRUE_MESSAGE(parseSchedules(body, s, err), err.message.c_str());
+  TEST_ASSERT_EQUAL_UINT16(3, s.schedules[0].times);
+  TEST_ASSERT_EQUAL_UINT16(2, s.schedules[0].remaining);
+  TEST_ASSERT_EQUAL_UINT16(0, s.schedules[1].times);                 // null = forever
+  JsonDocument d = parse(schedulesToJson(s));
+  TEST_ASSERT_EQUAL_UINT32(3, d["schedules"][0]["times"].as<uint32_t>());
+  TEST_ASSERT_EQUAL_UINT32(2, d["schedules"][0]["remaining"].as<uint32_t>());
+  TEST_ASSERT_TRUE(d["schedules"][1]["times"].isNull());
+  TEST_ASSERT_TRUE(d["schedules"][1]["remaining"].isNull());
+  ScheduleSettings bad;
+  TEST_ASSERT_FALSE(parseSchedules("{\"schedules\":[{\"id\":\"a\",\"days\":[\"mon\"],\"start\":\"09:00\",\"durationMin\":60,\"times\":\"x\"}]}", bad, err));
+  TEST_ASSERT_EQUAL_STRING("schedules[0].times", err.field.c_str());
+  TEST_ASSERT_FALSE(parseSchedules("{\"schedules\":[{\"id\":\"a\",\"days\":[\"mon\"],\"start\":\"09:00\",\"durationMin\":60,\"times\":0}]}", bad, err));
+}
+
+void test_a_schedule_with_a_count_runs_that_many_times_then_turns_itself_off() {
+  Env e;
+  e.setSchedules({limited(entry("work", kWeekdays, 9 * 60, 60), 2)});
+  e.controller.stop();
+  e.tickAt(0, 8, 0);
+  e.tickAt(0, 9, 0);                                   // 1st window opens
+  TEST_ASSERT_TRUE(e.running());
+  TEST_ASSERT_EQUAL_UINT16(1, e.engine.settings().schedules[0].remaining);
+  e.tickAt(0, 10, 0);
+  TEST_ASSERT_FALSE(e.running());
+  e.tickAt(1, 9, 0);                                   // 2nd window opens: the last one
+  TEST_ASSERT_TRUE(e.running());
+  TEST_ASSERT_EQUAL_UINT16(0, e.engine.settings().schedules[0].remaining);
+  TEST_ASSERT_TRUE(e.engine.settings().schedules[0].enabled);   // still on until that window ends
+  e.tickAt(1, 9, 30);
+  TEST_ASSERT_TRUE(e.running());
+  e.tickAt(1, 10, 0);
+  TEST_ASSERT_FALSE(e.running());
+  TEST_ASSERT_FALSE(e.engine.settings().schedules[0].enabled);  // finished
+  e.tickAt(2, 9, 0);                                   // a third window never starts
+  TEST_ASSERT_FALSE(e.running());
+}
+
+void test_a_forever_schedule_never_runs_out() {
+  Env e;
+  e.setSchedules({entry("work", kWeekdays, 9 * 60, 60)});
+  e.controller.stop();
+  for (int d = 0; d < 5; ++d) { e.tickAt(d, 9, 0); TEST_ASSERT_TRUE(e.running()); e.tickAt(d, 10, 0); }
+  TEST_ASSERT_TRUE(e.engine.settings().schedules[0].enabled);
+  TEST_ASSERT_EQUAL_UINT16(0, e.engine.settings().schedules[0].times);
+}
+
+void test_the_count_survives_a_restart_and_a_window_in_progress_is_not_counted_twice() {
+  Env e;
+  e.setSchedules({limited(entry("work", kWeekdays, 9 * 60, 120), 3)});
+  e.controller.stop();
+  e.tickAt(0, 9, 0);
+  TEST_ASSERT_EQUAL_UINT16(2, e.engine.settings().schedules[0].remaining);
+  ScheduleEngine rebooted(e.clock, e.controller, e.blobs);        // power cut in the middle of the window
+  rebooted.begin();
+  TEST_ASSERT_EQUAL_UINT16(2, rebooted.settings().schedules[0].remaining);
+  e.clock.local = at(0, 9, 30);
+  rebooted.tick();                                                // resumes the window it was in
+  TEST_ASSERT_EQUAL_UINT16(2, rebooted.settings().schedules[0].remaining);
+  TEST_ASSERT_TRUE(e.running());
+}
+
+void test_overlapping_counted_schedules_count_independently() {
+  Env e;
+  e.setSchedules({limited(entry("a", kWeekdays, 9 * 60, 60), 1), entry("b", kWeekdays, 9 * 60 + 30, 90)});
+  e.controller.stop();
+  e.tickAt(0, 9, 0);
+  e.tickAt(0, 10, 0);                                  // "a" closes and is spent, "b" is still open
+  TEST_ASSERT_TRUE(e.running());
+  TEST_ASSERT_FALSE(e.engine.settings().schedules[0].enabled);
+  TEST_ASSERT_TRUE(e.engine.settings().schedules[1].enabled);
+  e.tickAt(0, 11, 0);
+  TEST_ASSERT_FALSE(e.running());
+}
+
+void test_saving_keeps_the_progress_and_turning_a_finished_schedule_back_on_rearms_it() {
+  Env e;
+  e.setSchedules({limited(entry("work", kWeekdays, 9 * 60, 60), 3, 1)});
+  TEST_ASSERT_EQUAL_UINT16(1, e.engine.settings().schedules[0].remaining);   // sent as it was
+  Schedule finished = limited(entry("work", kWeekdays, 9 * 60, 60), 3, 0);
+  finished.enabled = false;
+  e.setSchedules({finished});
+  TEST_ASSERT_FALSE(e.engine.settings().schedules[0].enabled);
+  finished.enabled = true;                                                    // the owner switches it back on
+  e.setSchedules({finished});
+  TEST_ASSERT_EQUAL_UINT16(3, e.engine.settings().schedules[0].remaining);   // a fresh run of 3
+  Schedule forever = entry("f", kMon, 0, 60);
+  forever.remaining = 5;                                                      // meaningless without a count
+  e.setSchedules({forever});
+  TEST_ASSERT_EQUAL_UINT16(0, e.engine.settings().schedules[0].remaining);
+}
+
 int main() {
   UNITY_BEGIN();
+  RUN_TEST(test_repeat_count_is_validated);
+  RUN_TEST(test_repeat_count_in_json);
+  RUN_TEST(test_a_schedule_with_a_count_runs_that_many_times_then_turns_itself_off);
+  RUN_TEST(test_a_forever_schedule_never_runs_out);
+  RUN_TEST(test_the_count_survives_a_restart_and_a_window_in_progress_is_not_counted_twice);
+  RUN_TEST(test_overlapping_counted_schedules_count_independently);
+  RUN_TEST(test_saving_keeps_the_progress_and_turning_a_finished_schedule_back_on_rearms_it);
   RUN_TEST(test_window_covers_the_start_minute_but_not_the_end_minute);
   RUN_TEST(test_window_that_crosses_midnight_belongs_to_the_day_it_started);
   RUN_TEST(test_window_wraps_from_sunday_to_monday);

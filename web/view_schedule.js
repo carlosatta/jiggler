@@ -8,31 +8,39 @@
   var sched = { timezone: 'Europe/Rome', schedules: [] };
   var MAX_SCHEDULES = 8;
 
+  function readCard(card) {
+    var days = [];
+    card.querySelectorAll('.days button').forEach(function (b) { if (b.getAttribute('aria-pressed') === 'true') days.push(b.getAttribute('data-day')); });
+    var start = card.querySelector('[data-k=start]').value;
+    var end = card.querySelector('[data-k=end]').value;
+    var mode = card.querySelector('[data-k=repeat]').value;
+    var times = mode === 'times' ? Number(card.querySelector('[data-k=times]').value) : null;
+    var remaining = card.querySelector('[data-k=times]').getAttribute('data-remaining');
+    return {
+      id: card.querySelector('[data-k=id]').value.trim(),
+      enabled: card.querySelector('[data-k=enabled]').checked,
+      days: days,
+      start: start,
+      durationMin: JigLib.durationFromEnd(start, end),
+      times: times,
+      // progress is kept while the count is unchanged; a new count starts a fresh run
+      remaining: times && remaining !== null && Number(remaining) <= times && Number(card.querySelector('[data-k=times]').getAttribute('data-times')) === times ? Number(remaining) : times
+    };
+  }
+
   function readSchedules() {
     var out = [];
-    $('schedList').querySelectorAll('.sched').forEach(function (card) {
-      var days = [];
-      card.querySelectorAll('.days button').forEach(function (b) { if (b.getAttribute('aria-pressed') === 'true') days.push(b.getAttribute('data-day')); });
-      out.push({
-        id: card.querySelector('[data-k=id]').value.trim(),
-        enabled: card.querySelector('[data-k=enabled]').checked,
-        days: days,
-        start: card.querySelector('[data-k=start]').value,
-        durationMin: Number(card.querySelector('[data-k=durationMin]').value)
-      });
-    });
+    $('schedList').querySelectorAll('.sched').forEach(function (card) { out.push(readCard(card)); });
     return out;
   }
 
   function refreshSummary(card) {
-    var start = card.querySelector('[data-k=start]').value;
-    var dur = Number(card.querySelector('[data-k=durationMin]').value);
-    var days = [];
-    card.querySelectorAll('.days button').forEach(function (b) { if (b.getAttribute('aria-pressed') === 'true') days.push(b.getAttribute('data-day')); });
+    var s = readCard(card);
     var sum = card.querySelector('.sched-sum');
-    var ok = /^\d{2}:\d{2}$/.test(start) && dur >= 1 && dur <= 1440 && Number.isInteger(dur);
-    sum.textContent = ok ? JigLib.scheduleSummary({ days: days, start: start, durationMin: dur }) : JigLib.describeDays(days) + ', set a start time and a duration';
-    sum.className = 'sched-sum' + (card.querySelector('[data-k=enabled]').checked ? '' : ' off');
+    var ok = s.durationMin !== null && /^\d{2}:\d{2}$/.test(s.start);
+    sum.textContent = ok ? JigLib.scheduleSummary(s) : JigLib.describeDays(s.days) + ', set a start and an end time';
+    sum.className = 'sched-sum' + (s.enabled ? '' : ' off');
+    card.querySelector('[data-k=times]').closest('.field').hidden = card.querySelector('[data-k=repeat]').value !== 'times';
   }
 
   function renderSchedules() {
@@ -72,11 +80,25 @@
       start.setAttribute('data-k', 'start');
       start.value = sc.start;
       start.addEventListener('input', function () { refreshSummary(card); });
-      var dur = el('input', { inputmode: 'numeric', autocomplete: 'off' });
-      dur.setAttribute('data-k', 'durationMin');
-      dur.value = String(sc.durationMin);
-      dur.addEventListener('input', function () { refreshSummary(card); });
-      card.appendChild(el('div', { class: 'row3' }, [labeled('Starts at', start, 'schedules[' + i + '].start'), labeled('Lasts (minutes)', dur, 'schedules[' + i + '].durationMin')]));
+      var end = el('input', { type: 'time' });
+      end.setAttribute('data-k', 'end');
+      end.value = JigLib.endFromDuration(sc.start, sc.durationMin);
+      end.addEventListener('input', function () { refreshSummary(card); });
+      card.appendChild(el('div', { class: 'row3' }, [labeled('Starts at', start, 'schedules[' + i + '].start'), labeled('Ends at', end, 'schedules[' + i + '].durationMin')]));
+      card.appendChild(el('p', { class: 'hint' , text: 'An end time earlier than the start means the next day. The same time means 24 hours.' }));
+
+      var repeat = el('select');
+      repeat.setAttribute('data-k', 'repeat');
+      repeat.appendChild(el('option', { value: 'forever', text: 'Forever' }));
+      repeat.appendChild(el('option', { value: 'times', text: 'Limited' }));
+      repeat.value = sc.times ? 'times' : 'forever';
+      repeat.addEventListener('change', function () { refreshSummary(card); });
+      var times = el('input', { inputmode: 'numeric', autocomplete: 'off' });
+      times.setAttribute('data-k', 'times');
+      times.value = sc.times ? String(sc.times) : '1';
+      if (sc.times) { times.setAttribute('data-remaining', String(sc.remaining)); times.setAttribute('data-times', String(sc.times)); }
+      times.addEventListener('input', function () { refreshSummary(card); });
+      card.appendChild(el('div', { class: 'row3' }, [labeled('Repeat every week', repeat, 'schedules[' + i + '].repeat'), labeled('Number of runs', times, 'schedules[' + i + '].times')]));
 
       var rm = el('button', { class: 'danger', type: 'button', text: 'Remove' });
       rm.onclick = function () { sched.schedules = readSchedules(); sched.schedules.splice(i, 1); renderSchedules(); };
@@ -110,7 +132,7 @@
     sched.timezone = $('tzSelect').value;
     var n = 1;
     while (sched.schedules.some(function (x) { return x.id === 'schedule-' + n; })) n++;
-    sched.schedules.push({ id: 'schedule-' + n, enabled: true, days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '09:00', durationMin: 480 });
+    sched.schedules.push({ id: 'schedule-' + n, enabled: true, days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '09:00', durationMin: 480, times: null, remaining: null });
     renderSchedules();
   };
 

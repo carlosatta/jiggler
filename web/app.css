@@ -128,6 +128,7 @@ code{font:.875em ui-monospace,SFMono-Regular,Menlo,monospace}
 .days button{min-height:40px;min-width:44px;padding:0 var(--s2);border-radius:8px;font-size:.875rem;font-weight:600}
 .days button[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:transparent}
 .sched .row3{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.sched>.hint{margin:0 0 var(--s3)}
 
 /* Controls */
 button,select,textarea,input{font:inherit}

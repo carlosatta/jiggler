@@ -194,6 +194,8 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
       days["description"] = "Days it applies to: mon, tue, wed, thu, fri, sat, sun.";
       addProp(p, "start", "string", "Start time HH:MM in the schedule timezone, e.g. 09:00.");
       addNumberProp(p, "durationMin", "integer", 1, 1440, "How long the window lasts, in minutes. It may run past midnight.");
+      addNumberProp(p, "times", "integer", 1, 999, "Run this many windows and then turn the schedule off. Omit or null for no limit (every week).");
+      addNumberProp(p, "remaining", "integer", 0, 999, "Windows left when times is set (read it from get_schedules; omit to start a fresh run).");
       schema["required"].add("schedules");
     } else if (name == "press_key") {
       addTool(tools, t.name, "Press a key (or combination such as Ctrl+C) on the keyboard now.", &schema);
