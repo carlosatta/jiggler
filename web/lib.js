@@ -53,8 +53,8 @@ var JigLib = (function () {
     if (bt.held) {
       var left = bt.heldRemainingMs !== null && bt.heldRemainingMs !== undefined ? fmtDuration(bt.heldRemainingMs) : '';
       return { tone: 'warn', title: 'Disconnected',
-        detail: (left ? 'Hidden from computers for another ' + left + '; after that your computer can reconnect.' : 'Hidden from computers.') +
-          ' Press Reconnect to show the device now.', actions: ['reconnect'] };
+        detail: left ? 'Hidden from computers for another ' + left + '; after that your computer can reconnect. Press Reconnect to show the device now.'
+          : 'Hidden from computers until you press Reconnect.', actions: ['reconnect'] };
     }
     if (timed) {
       return { tone: 'open', title: 'Pairing is open',

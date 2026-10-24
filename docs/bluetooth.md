@@ -4,7 +4,7 @@ The board is a Bluetooth peripheral with **one** identity (see [Appearance](appe
 
 <p align="center">
   <img src="images/computers.png" alt="Pairing and paired computers" width="260">
-  <img src="images/status-disconnected.png" alt="After Disconnect: the device is hidden for a while" width="260">
+  <img src="images/status-disconnected.png" alt="After Disconnect: the device is hidden until Reconnect" width="260">
 </p>
 
 ## Pairing is always closed, until you open it
@@ -28,13 +28,13 @@ Bluetooth does not give a peripheral the computer's name, only its address, so t
 
 ## Disconnect (without powering off)
 
-**Disconnect** (`POST /api/bluetooth/disconnect`) drops the link, closes any open pairing window and **hides the device for 3 minutes**: advertising stops, so the computer cannot simply reconnect. A paired computer reconnects within seconds on its own, so hiding is what makes the disconnect stick. After the 3 minutes the device is visible again and the computer can reconnect, by itself or from its Bluetooth menu. **Reconnect** (`POST /api/bluetooth/reconnect`) or opening a pairing window ends the hold early. The hold is not persisted: a restart brings the device back. The API reports the countdown as `heldRemainingMs`.
+**Disconnect** (`POST /api/bluetooth/disconnect`) drops the link, closes any open pairing window and **hides the device until you reconnect it**: advertising stops, so no computer can reconnect. A paired computer reconnects within seconds on its own, so hiding is what makes the disconnect stick. **Reconnect** (`POST /api/bluetooth/reconnect`) or opening a pairing window makes the device visible again. The hold is not persisted: a restart brings the device back. The status reports `held: true` with `heldRemainingMs: null` (no countdown).
 
-A peripheral cannot tell a deliberate "connect" click on the computer from its automatic reconnection, so during those 3 minutes nothing can connect.
+A peripheral cannot tell a deliberate "connect" click on the computer from its automatic reconnection, so while the device is hidden nothing can connect.
 
 ### When the computer disconnects
 
-If you press *Disconnect* in the computer's own Bluetooth menu, the board sees the computer end the connection and treats it the same way: it hides for 3 minutes so the computer does not reconnect at once (without this, macOS reconnects immediately because the device keeps advertising). A connection lost for other reasons (out of range, computer asleep or off) is not affected, and neither is a drop during pairing.
+If you press *Disconnect* in the computer's own Bluetooth menu, the board sees the computer end the connection and hides the device, but only for 3 minutes (`heldRemainingMs` counts down), so the computer can come back by itself afterwards, which a dashboard Disconnect does not allow (without this, macOS reconnects immediately because the device keeps advertising). A connection lost for other reasons (out of range, computer asleep or off) is not affected, and neither is a drop during pairing.
 
 ## Forgetting
 

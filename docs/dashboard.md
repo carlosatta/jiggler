@@ -16,7 +16,7 @@ The first thing you see: **which computer is connected and since when**, and wha
   <img src="images/status-disconnected.png" alt="Status while the device is hidden after Disconnect" width="260">
 </p>
 
-- **Connection.** *Connected to Computer 1, for 12 minutes.* **Disconnect** drops the link and hides the device for 3 minutes, so the computer does not reconnect at once (it does not power the device off). While hidden, the card counts down and offers **Reconnect**.
+- **Connection.** *Connected to Computer 1, for 12 minutes.* **Disconnect** drops the link and hides the device until you press **Reconnect** (it does not power the device off). While hidden, the card offers **Reconnect**.
 - **Movement.** *Running*, *Paused* or *Stopped*, the time to the next movement, and, for a timed run, when it will stop.
 - **Run for** (shown while stopped): *until I stop it*, 5, 10 or 30 minutes, 1 hour, *until a time of day*, or a custom number of minutes (1 to 1440). **Start** applies it; **Move now** makes one movement immediately.
 - **Pause** (shown while running): *15 minutes, 30 minutes, 1 hour, 2 hours*, or *until I resume*. While paused the cursor does not move and the card says when it resumes by itself; **Resume** ends it at once and **Stop** stops everything. A time limit set with **Run for** keeps counting during a pause, and a schedule keeps its own timetable: a pause lasts until it ends or until the next window opens or closes. Use it when you sit down to work, or step away, without losing your schedule.

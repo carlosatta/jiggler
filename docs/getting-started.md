@@ -89,6 +89,6 @@ Switch the board to **own network** mode: it creates a protected WiFi network th
 
 **Pairing fails, or the device is not in the list.** Open pairing first (it is closed by default, on purpose), then choose the device on the computer within 3 minutes. If the computer paired before and has since forgotten the device, forget the computer under **Computers** too and pair again. Only up to 3 computers can be paired.
 
-**It connected, then disconnected after I pressed Disconnect.** That is intended: the device hides for 3 minutes so the computer does not reconnect at once. Press **Reconnect** to end it early.
+**It connected, then disconnected after I pressed Disconnect.** That is intended: the device stays hidden so the computer does not reconnect. Press **Reconnect** to make it visible again.
 
 **Back to a clean slate.** `pio run -e esp32 -t erase`, then flash again. This removes WiFi, token, pairings and schedules.

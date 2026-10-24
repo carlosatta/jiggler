@@ -330,7 +330,7 @@ class Handler(BaseHTTPRequestHandler):
             d.window_until = time.time() + seconds; d.held = False; d.bonded_at_open = len(d.peers)
             return self.send(200, d.bluetooth())
         if path == "/api/bluetooth/disconnect":
-            d.held = True; d.held_until = time.time() + 180; d.window_until = None
+            d.held = True; d.held_until = None; d.window_until = None
             return self.send(200, d.bluetooth())
         if path == "/api/bluetooth/reconnect":
             d.held = False

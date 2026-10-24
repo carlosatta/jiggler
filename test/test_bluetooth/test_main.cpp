@@ -508,35 +508,39 @@ void test_stopping_the_window_by_hand_still_works() {
   TEST_ASSERT_FALSE(e.bt.status().pairingOpen);
 }
 
-void test_disconnect_hold_lasts_three_minutes_then_the_computer_can_reconnect() {
-  TEST_ASSERT_EQUAL_UINT32(180, kDisconnectHoldSec);
+void test_disconnect_from_the_dashboard_stays_until_reconnect() {
   Env e({kA});
   e.link.connected = {kA};
   e.bt.disconnect();
   BluetoothStatus s = e.bt.status();
   TEST_ASSERT_TRUE(s.held);
-  TEST_ASSERT_EQUAL_UINT32(180000, *s.heldRemainingMs);
+  TEST_ASSERT_FALSE(s.heldRemainingMs.has_value());  // no countdown: it does not expire
   TEST_ASSERT_FALSE(e.link.advertising);
-  e.clock.now = 179999;
+  e.clock.now = 48u * 3600u * 1000u;
   e.bt.tick();
   TEST_ASSERT_TRUE(e.bt.status().held);
-  e.clock.now = 180000;
-  e.bt.tick();
-  s = e.bt.status();
-  TEST_ASSERT_FALSE(s.held);
-  TEST_ASSERT_FALSE(s.heldRemainingMs.has_value());
-  TEST_ASSERT_TRUE(e.link.advertising);  // visible again: the computer can be reconnected from its side
+  TEST_ASSERT_FALSE(e.link.advertising);
+  e.bt.reconnect();
+  TEST_ASSERT_FALSE(e.bt.status().held);
+  TEST_ASSERT_TRUE(e.link.advertising);
 }
 
 void test_hold_countdown_is_in_the_json() {
   Env e({kA});
-  e.bt.disconnect();
+  e.link.connected = {kA};
+  e.link.peerRequestedDisconnect = true;  // the computer ended it: a timed hold
+  e.link.connected.clear();
+  e.bt.tick();
   JsonDocument d;
   deserializeJson(d, bluetoothToJson(e.bt.status()));
   TEST_ASSERT_EQUAL_UINT32(180000, d["heldRemainingMs"].as<uint32_t>());
   JsonDocument s;
   deserializeJson(s, bluetoothSummaryJson(e.bt.status()));
   TEST_ASSERT_EQUAL_UINT32(180000, s["heldRemainingMs"].as<uint32_t>());
+  e.bt.disconnect();  // from the dashboard: held with no countdown
+  deserializeJson(d, bluetoothToJson(e.bt.status()));
+  TEST_ASSERT_TRUE(d["held"].as<bool>());
+  TEST_ASSERT_TRUE(d["heldRemainingMs"].isNull());
   e.bt.reconnect();
   deserializeJson(d, bluetoothToJson(e.bt.status()));
   TEST_ASSERT_TRUE(d["heldRemainingMs"].isNull());
@@ -616,7 +620,10 @@ void test_remaining_time_never_underflows_when_the_deadline_passes_between_two_c
   BluetoothManager bt(clock, link, blobs);
   bt.begin();
   clock.t = 0;
-  bt.disconnect();                 // hold until 180000
+  link.connected = {kA};
+  link.peerRequestedDisconnect = true;
+  link.connected.clear();
+  bt.tick();                       // the computer hung up: hold until 180000
   clock.t = 179999;              // status(): first read 179999 (still held), second read 180001
   BluetoothStatus s = bt.status();
   TEST_ASSERT_TRUE(s.heldRemainingMs.has_value());
@@ -670,7 +677,7 @@ int main() {
   RUN_TEST(test_status_alone_also_notices_the_new_pairing);
   RUN_TEST(test_window_stays_open_when_a_known_computer_reconnects);
   RUN_TEST(test_stopping_the_window_by_hand_still_works);
-  RUN_TEST(test_disconnect_hold_lasts_three_minutes_then_the_computer_can_reconnect);
+  RUN_TEST(test_disconnect_from_the_dashboard_stays_until_reconnect);
   RUN_TEST(test_hold_countdown_is_in_the_json);
   RUN_TEST(test_the_first_pairing_needs_a_window_like_every_other);
   RUN_TEST(test_pairing_stays_closed_when_every_bond_disappears);

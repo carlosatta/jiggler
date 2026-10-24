@@ -492,8 +492,8 @@ var JigLib = (function () {
     if (bt.held) {
       var left = bt.heldRemainingMs !== null && bt.heldRemainingMs !== undefined ? fmtDuration(bt.heldRemainingMs) : '';
       return { tone: 'warn', title: 'Disconnected',
-        detail: (left ? 'Hidden from computers for another ' + left + '; after that your computer can reconnect.' : 'Hidden from computers.') +
-          ' Press Reconnect to show the device now.', actions: ['reconnect'] };
+        detail: left ? 'Hidden from computers for another ' + left + '; after that your computer can reconnect. Press Reconnect to show the device now.'
+          : 'Hidden from computers until you press Reconnect.', actions: ['reconnect'] };
     }
     if (timed) {
       return { tone: 'open', title: 'Pairing is open',
@@ -814,7 +814,7 @@ var App = (function () {
   var ACTIONS = {
     disconnect: { label: 'Disconnect', primary: false, run: function () {
       return App.call('POST', '/api/bluetooth/disconnect').then(function (r) {
-        return r.status === 200 ? ['Disconnected. The device stays hidden for 3 minutes, or until you press Reconnect.', 'good'] : fail(r);
+        return r.status === 200 ? ['Disconnected. The device stays hidden until you press Reconnect.', 'good'] : fail(r);
       }); } },
     reconnect: { label: 'Reconnect', primary: true, run: function () {
       return App.call('POST', '/api/bluetooth/reconnect').then(function (r) {
@@ -861,7 +861,7 @@ var App = (function () {
       box.appendChild(b);
     });
     $('heroNote').textContent = key.indexOf('disconnect') >= 0
-      ? 'Disconnect does not power the device off: it drops the link and hides the device for 3 minutes. To disconnect for good, use the computer’s own Bluetooth menu.' : '';
+      ? 'Disconnect does not power the device off: it drops the link and hides the device from every computer until you press Reconnect (a restart also brings it back).' : '';
   }
 
   function renderMotion(s, elapsed) {

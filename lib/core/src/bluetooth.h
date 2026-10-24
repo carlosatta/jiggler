@@ -71,7 +71,8 @@ struct BluetoothStatus {
 //  - Pairing is ALWAYS closed, even on a board that has never been paired and after "forget all". The only way to
 //    open it is an explicit act by the owner: the dashboard/API/MCP, or the BOOT button on the board.
 //  - A window closes by itself when its time is up, when someone pairs, or when the owner stops it.
-//  - "Disconnect" drops the link and hides the device for kDisconnectHoldSec, or until "reconnect" (or a window).
+//  - "Disconnect" drops the link and hides the device until "reconnect" (or a pairing window). The computer ending the
+//    link itself hides it for kDisconnectHoldSec only, so that computer can come back.
 // Thread-safe. The firmware enforces `setPairingOpen`/`setAdvertising` on the real stack.
 class BluetoothManager {
  public:
@@ -108,6 +109,7 @@ class BluetoothManager {
   bool windowOpen_ = false;
   uint32_t windowUntilMs_ = 0;
   uint32_t heldUntilMs_ = 0;
+  bool heldUntilReconnect_ = false;  // a dashboard Disconnect has no expiry
   std::vector<std::string> bondedAtOpen_;  // bonds when the window opened: a new one means someone paired
 };
 

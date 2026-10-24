@@ -65,6 +65,14 @@ test('connection view: held shows the countdown and offers reconnect', () => {
   assert.deepEqual(v.actions, ['reconnect']);
 });
 
+test('connection view: a dashboard disconnect has no countdown and stays until reconnect', () => {
+  const v = JigLib.connectionView(bt({ held: true, heldRemainingMs: null }), device);
+  assert.equal(v.title, 'Disconnected');
+  assert.match(v.detail, /until you press Reconnect/);
+  assert.doesNotMatch(v.detail, /another/);
+  assert.deepEqual(v.actions, ['reconnect']);
+});
+
 test('connection view: a timed window shows the countdown and can be stopped', () => {
   const v = JigLib.connectionView(bt({ pairing: { open: true, remainingMs: 92000 } }), device);
   assert.equal(v.title, 'Pairing is open');
