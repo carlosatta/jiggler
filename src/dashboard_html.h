@@ -1499,13 +1499,15 @@ var App = (function () {
   $('netSaveRestart').onclick = function () { saveNetwork(true); };
 
   // ---- Firmware update (OTA) ----
-  function uploadFirmware(file) {
+  var FW_TRIES = 3;
+  function uploadFirmware(file, attempt) {
+    attempt = attempt || 1;
     var xhr = new XMLHttpRequest();
     var bar = $('fwProgress');
     bar.hidden = false;
     bar.value = 0;
     $('fwUpload').disabled = true;
-    say('Uploading ' + Math.round(file.size / 1024) + ' KB…', '', 'fwMsg');
+    say('Uploading ' + Math.round(file.size / 1024) + ' KB' + (attempt > 1 ? ' (attempt ' + attempt + ' of ' + FW_TRIES + ')' : '') + '…', '', 'fwMsg');
     xhr.upload.onprogress = function (e) { if (e.lengthComputable) bar.value = Math.round((e.loaded / e.total) * 100); };
     xhr.onload = function () {
       var data = {};
@@ -1521,7 +1523,13 @@ var App = (function () {
       if (xhr.status === 401) say('The token was refused.', 'bad', 'fwMsg');
       else say(tr(data.message) || 'The update failed.', 'bad', 'fwMsg');
     };
-    xhr.onerror = function () { bar.hidden = true; $('fwUpload').disabled = false; say('Could not reach the device.', 'bad', 'fwMsg'); };
+    xhr.onerror = function () {
+      // The radio can drop the connection mid-upload; nothing is installed until the whole file arrived, so try again.
+      if (attempt < FW_TRIES) { say('The connection dropped. Trying again…', '', 'fwMsg'); setTimeout(function () { uploadFirmware(file, attempt + 1); }, 2500); return; }
+      bar.hidden = true;
+      $('fwUpload').disabled = false;
+      say('Could not finish the upload after ' + FW_TRIES + ' attempts. Move closer to the router or try again.', 'bad', 'fwMsg');
+    };
     var form = new FormData();
     form.append('firmware', file, file.name);
     xhr.open('POST', '/api/update');

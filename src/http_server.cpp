@@ -19,6 +19,8 @@ struct UpdateState {
   bool authorized;
   bool started;
   bool done;
+  uint32_t received;
+  uint32_t lastChunkMs;
   char error[96];
 };
 
@@ -62,29 +64,57 @@ struct HttpServer::Impl {
       }
       if (!st) return;
       st->authorized = isAuthorized(req);
+      Serial.printf("OTA: upload starts, authorized=%d, free heap %u\n", st->authorized ? 1 : 0, static_cast<unsigned>(ESP.getFreeHeap()));
       if (!st->authorized) return;
+      if (Update.isRunning()) {
+        Serial.println("OTA: dropping an unfinished earlier update");
+        Update.abort();
+      }
       if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
         setError(st, Update.errorString());
+        Serial.printf("OTA: begin failed: %s\n", st->error);
         return;
       }
       st->started = true;
+      if (api.updateActive) api.updateActive(true);
+      st->lastChunkMs = millis();
+      req->client()->onError([](void*, AsyncClient* c, int8_t err) { Serial.printf("OTA: TCP error %d (%s)\n", err, c->errorToString(err)); }, nullptr);
+      req->client()->onTimeout([](void*, AsyncClient*, uint32_t t) { Serial.printf("OTA: TCP timeout %u ms\n", static_cast<unsigned>(t)); }, nullptr);
+      req->onDisconnect([this, st]() {
+        Serial.printf("OTA: connection closed after %u bytes (done=%d)\n", static_cast<unsigned>(st->received), st->done ? 1 : 0);
+        if (st->started && !st->done) {  // cut off mid-way: do not leave the updater half-open
+          Update.abort();
+          st->started = false;
+          if (api.updateActive) api.updateActive(false);
+        }
+      });
     }
     if (!st || !st->started) return;
+    const uint32_t now = millis();
+    if (now - st->lastChunkMs > 1500) Serial.printf("OTA: %u ms without data before byte %u\n", static_cast<unsigned>(now - st->lastChunkMs), static_cast<unsigned>(index));
+    st->lastChunkMs = now;
+    st->received = static_cast<uint32_t>(index + len);
+    if ((index / 131072) != ((index + len) / 131072)) Serial.printf("OTA: %u KB at %lu ms, heap %u\n", static_cast<unsigned>((index + len) / 1024), static_cast<unsigned long>(now), static_cast<unsigned>(ESP.getFreeHeap()));
     if (len > 0 && Update.write(data, len) != len) {
       setError(st, Update.errorString());
+      Serial.printf("OTA: write failed at %u: %s\n", static_cast<unsigned>(index), st->error);
       Update.abort();
       st->started = false;
+      if (api.updateActive) api.updateActive(false);
       return;
     }
     if (final) {
       st->started = false;
       if (Update.end(true)) st->done = true;
       else setError(st, Update.errorString());
+      Serial.printf("OTA: upload finished, %s\n", st->done ? "ok" : st->error);
+      if (!st->done && api.updateActive) api.updateActive(false);
     }
   }
 
   void finishUpdate(AsyncWebServerRequest* req) {
     UpdateState* st = static_cast<UpdateState*>(req->_tempObject);
+    Serial.printf("OTA: request complete, state %s\n", !st ? "none" : st->done ? "done" : st->error[0] ? st->error : "incomplete");
     if (!st ? !isAuthorized(req) : !st->authorized) {
       AsyncWebServerResponse* res = req->beginResponse(401, "application/json", jig::errorJson("unauthorized").c_str());
       res->addHeader("Connection", "close");

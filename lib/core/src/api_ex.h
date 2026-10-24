@@ -32,6 +32,7 @@ struct ApiContext {
   TokenVault* tokens = nullptr;
   DeviceInfo info;  // shown in /api/status when its version is set
   std::function<void()> restart;
+  std::function<void(bool)> updateActive;  // a firmware upload started (true) or ended without installing (false)
 };
 
 // Extended router: new routes first, everything else falls through to handleApi().

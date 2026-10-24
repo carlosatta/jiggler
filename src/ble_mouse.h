@@ -30,6 +30,9 @@ class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::Bl
   void forgetAllBonds() override;
   void setAdvertising(bool on) override;
   void setPairingOpen(bool open) override;
+  // While a firmware upload runs the Bluetooth radio stays quiet (no advertising, no link): it shares the antenna
+  // with WiFi, and its packets made the upload connection drop.
+  void setQuiet(bool quiet);
   bool takePeerDisconnectRequest() override { return peerDisconnect_.exchange(false); }
   void notePeerDisconnect(int reason);  // from the NimBLE gap listener
 
@@ -58,6 +61,7 @@ class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::Bl
   std::atomic<bool> advertise_{true};
   std::atomic<bool> pairingOpen_{false};
   std::atomic<bool> peerDisconnect_{false};
+  std::atomic<bool> quiet_{false};
   std::mutex linksMutex_;
   std::vector<Link> links_;
   std::string name_;

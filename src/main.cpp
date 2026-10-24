@@ -70,6 +70,7 @@ void setup() {
   api.tokens = &tokens;
   api.info = {JIG_VERSION, ble.name(), ble.address()};
   api.restart = scheduleRestart;
+  api.updateActive = [](bool active) { ble.setQuiet(active); };
   Serial.printf("jiggler %s started, BLE address %s\n", JIG_VERSION, NimBLEDevice::getAddress().toString().c_str());
   wifi.begin();
 }

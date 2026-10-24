@@ -187,7 +187,16 @@ bool BleMouse::forgetBond(const std::string& address) {
 
 void BleMouse::forgetAllBonds() { NimBLEDevice::deleteAllBonds(); }
 
+void BleMouse::setQuiet(bool quiet) {
+  quiet_ = quiet;
+  if (quiet) {
+    NimBLEDevice::stopAdvertising();
+    disconnectAll();
+  }  // coming back: the 200 ms advertising watchdog (setAdvertising) restarts advertising
+}
+
 void BleMouse::setAdvertising(bool on) {
+  if (quiet_) return;
   const bool changed = advertise_.exchange(on) != on;
   if (!on) {
     if (changed) NimBLEDevice::stopAdvertising();

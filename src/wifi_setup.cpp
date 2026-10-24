@@ -10,6 +10,7 @@
 namespace {
 constexpr const char* kApName = "Jiggler-Setup";
 constexpr uint32_t kReconnectIntervalMs = 30000;
+constexpr uint32_t kPortalRetryMs = 30000;
 constexpr uint16_t kDnsPort = 53;
 
 std::string randomHex(size_t digits) {
@@ -71,6 +72,7 @@ struct WifiSetup::Impl {
   bool portalSeen = false;     // the setup portal ran in this boot
   bool restartNeeded = false;  // see WifiSetup::needsRestart
   uint32_t lastReconnectMs = 0;
+  uint32_t lastRetryMs = 0;
 };
 
 WifiSetup::WifiSetup(TokenStore& tokens, jig::NetworkStore& network) : impl_(new Impl(tokens, network)) {}
@@ -80,7 +82,15 @@ bool WifiSetup::apMode() const { return impl_->ap; }
 
 bool WifiSetup::needsRestart() const { return impl_->restartNeeded; }
 
+namespace {
+void logWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
+  if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) Serial.printf("WiFi: lost the connection, reason %d\n", info.wifi_sta_disconnected.reason);
+  else if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) Serial.printf("WiFi: got IP %s\n", WiFi.localIP().toString().c_str());
+}
+}  // namespace
+
 void WifiSetup::begin() {
+  WiFi.onEvent(logWifiEvent);
   bool wantAp = impl_->network.load().mode == jig::NetworkMode::Ap;
 #ifdef JIG_FORCE_AP
   wantAp = true;
@@ -126,6 +136,20 @@ bool WifiSetup::loop() {
 
   const bool connected = WiFi.status() == WL_CONNECTED;
   const uint32_t now = millis();
+
+  // The setup portal opens when the saved network could not be joined at boot (router still starting after a power
+  // cut, a refused handshake...). It must not be a dead end: keep retrying the saved network, and once it works
+  // close the portal; the restart below then brings the dashboard up on a clean boot.
+  if (s.wm.getConfigPortalActive() && s.wm.getWiFiIsSaved()) {
+    if (connected) {
+      Serial.println("WiFi: the saved network is back, closing the setup portal");
+      s.wm.stopConfigPortal();
+    } else if (now - s.lastRetryMs > kPortalRetryMs) {
+      s.lastRetryMs = now;
+      Serial.println("WiFi: retrying the saved network");
+      WiFi.begin();
+    }
+  }
 
   if (connected && !s.wm.getConfigPortalActive() && !s.announced) {
     s.announced = true;
