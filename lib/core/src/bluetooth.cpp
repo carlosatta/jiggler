@@ -74,8 +74,6 @@ void BluetoothManager::tick() {
   if (link_.takePeerDisconnectRequest() && !held_ && !windowOpen_ && !link_.bondedAddresses().empty()) {
     // The computer ended the connection on purpose. Left visible it would reconnect at once.
     held_ = true;
-    heldUntilReconnect_ = false;
-    heldUntilMs_ = platform_.nowMs() + kDisconnectHoldSec * 1000;
     connectedSince_.clear();
   }
   applyLocked();
@@ -93,17 +91,13 @@ void BluetoothManager::expireLocked() {
       changed = true;
     }
   }
-  if (held_ && !heldUntilReconnect_ && static_cast<int32_t>(now - heldUntilMs_) >= 0) {
-    held_ = false;
-    changed = true;
-  }
   if (changed) applyLocked();
 }
 
 bool BluetoothManager::pairingOpenLocked() { return windowOpen_; }
 
 void BluetoothManager::applyLocked() {
-  link_.setAdvertising(!held_);
+  link_.setConnectable(!held_);
   link_.setPairingOpen(pairingOpenLocked());
 }
 
@@ -141,7 +135,6 @@ BluetoothStatus BluetoothManager::status() {
   const std::vector<std::string> bonded = link_.bondedAddresses();
   const std::vector<std::string> connected = link_.connectedAddresses();
   s.held = held_;
-  if (held_ && !heldUntilReconnect_) s.heldRemainingMs = msUntil(heldUntilMs_, now);
   s.pairingOpen = windowOpen_;
   if (windowOpen_) s.pairingRemainingMs = msUntil(windowUntilMs_, now);
 
@@ -192,7 +185,6 @@ CmdResult BluetoothManager::stopPairing() {
 CmdResult BluetoothManager::disconnect() {
   std::lock_guard<std::mutex> lock(mutex_);
   held_ = true;
-  heldUntilReconnect_ = true;
   windowOpen_ = false;  // a hidden device cannot be paired with, so an open window would only lie
   link_.disconnectAll();
   connectedSince_.clear();
@@ -272,8 +264,6 @@ std::string bluetoothToJson(const BluetoothStatus& s) {
   JsonDocument doc;
   doc["connected"] = s.connected;
   doc["held"] = s.held;
-  if (s.heldRemainingMs) doc["heldRemainingMs"] = *s.heldRemainingMs;
-  else doc["heldRemainingMs"] = nullptr;
   fillPairing(doc["pairing"].to<JsonObject>(), s);
   if (s.connected) fillComputer(doc["computer"].to<JsonObject>(), s);
   else doc["computer"] = nullptr;
@@ -294,8 +284,6 @@ std::string bluetoothSummaryJson(const BluetoothStatus& s) {
   JsonDocument doc;
   doc["connected"] = s.connected;
   doc["held"] = s.held;
-  if (s.heldRemainingMs) doc["heldRemainingMs"] = *s.heldRemainingMs;
-  else doc["heldRemainingMs"] = nullptr;
   fillPairing(doc["pairing"].to<JsonObject>(), s);
   if (s.connected) fillComputer(doc["computer"].to<JsonObject>(), s);
   else doc["computer"] = nullptr;

@@ -43,7 +43,7 @@ test('tr turns a server message into a sentence', () => {
 });
 
 const bt = (over) => Object.assign({
-  connected: false, held: false, heldRemainingMs: null, peerCount: 1, computer: null,
+  connected: false, held: false, peerCount: 1, computer: null,
   pairing: { open: false, remainingMs: null }
 }, over);
 const device = { bleName: 'MX Master 3S' };
@@ -56,20 +56,11 @@ test('connection view: connected names the computer and offers disconnect', () =
   assert.deepEqual(v.actions, ['disconnect']);
 });
 
-test('connection view: held shows the countdown and offers reconnect', () => {
-  const v = JigLib.connectionView(bt({ held: true, heldRemainingMs: 92000 }), device);
-  assert.equal(v.tone, 'warn');
-  assert.equal(v.title, 'Disconnected');
-  assert.match(v.detail, /1:32/);
-  assert.match(v.detail, /hidden/i);
-  assert.deepEqual(v.actions, ['reconnect']);
-});
-
-test('connection view: a dashboard disconnect has no countdown and stays until reconnect', () => {
-  const v = JigLib.connectionView(bt({ held: true, heldRemainingMs: null }), device);
+test('connection view: disconnected stays until reconnect', () => {
+  const v = JigLib.connectionView(bt({ held: true, }), device);
   assert.equal(v.title, 'Disconnected');
   assert.match(v.detail, /until you press Reconnect/);
-  assert.doesNotMatch(v.detail, /another/);
+  assert.match(v.detail, /visible/i);
   assert.deepEqual(v.actions, ['reconnect']);
 });
 

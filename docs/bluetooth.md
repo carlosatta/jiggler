@@ -4,7 +4,7 @@ The board is a Bluetooth peripheral with **one** identity (see [Appearance](appe
 
 <p align="center">
   <img src="images/computers.png" alt="Pairing and paired computers" width="260">
-  <img src="images/status-disconnected.png" alt="After Disconnect: the device is hidden until Reconnect" width="260">
+  <img src="images/status-disconnected.png" alt="After Disconnect: visible, but nothing can connect until Reconnect" width="260">
 </p>
 
 ## Pairing is always closed, until you open it
@@ -28,13 +28,11 @@ Bluetooth does not give a peripheral the computer's name, only its address, so t
 
 ## Disconnect (without powering off)
 
-**Disconnect** (`POST /api/bluetooth/disconnect`) drops the link, closes any open pairing window and **hides the device until you reconnect it**: advertising stops, so no computer can reconnect. A paired computer reconnects within seconds on its own, so hiding is what makes the disconnect stick. **Reconnect** (`POST /api/bluetooth/reconnect`) or opening a pairing window makes the device visible again. The hold is not persisted: a restart brings the device back. The status reports `held: true` with `heldRemainingMs: null` (no countdown).
+**Disconnect** (`POST /api/bluetooth/disconnect`) drops the link, closes any open pairing window and leaves the device **visible but not connectable**: it still shows up in the computer's Bluetooth list, but nothing can open a link to it, so a paired computer cannot reconnect behind your back. **Reconnect** (`POST /api/bluetooth/reconnect`) or opening a pairing window makes it connectable again, and the paired computer then reconnects within seconds on its own. The state is not persisted: a restart brings the device back. The status reports it as `held: true`.
 
-A peripheral cannot tell a deliberate "connect" click on the computer from its automatic reconnection, so while the device is hidden nothing can connect.
+The same happens when you press *Disconnect* in the computer's own Bluetooth menu: the board sees the computer end the connection and treats it exactly like the dashboard's Disconnect (without this, macOS reconnects immediately because the device keeps accepting connections). A connection lost for other reasons (out of range, computer asleep or off) is not affected, and neither is a drop during pairing.
 
-### When the computer disconnects
-
-If you press *Disconnect* in the computer's own Bluetooth menu, the board sees the computer end the connection and hides the device, but only for 3 minutes (`heldRemainingMs` counts down), so the computer can come back by itself afterwards, which a dashboard Disconnect does not allow (without this, macOS reconnects immediately because the device keeps advertising). A connection lost for other reasons (out of range, computer asleep or off) is not affected, and neither is a drop during pairing.
+A peripheral cannot tell a deliberate "Connect" click on the computer from its automatic reconnection, so while the device is disconnected, clicking Connect on the computer does not work either: press Reconnect first (dashboard, API, or one tap of the BOOT button is *not* enough: that opens pairing).
 
 ## Forgetting
 
@@ -44,6 +42,6 @@ If you press *Disconnect* in the computer's own Bluetooth menu, the board sees t
 
 - The board has no display or keypad, so pairing is "Just Works": anyone in radio range while a window is open can pair. Keep windows short.
 - A refused intruder briefly holds an encrypted link before it is dropped.
-- A link that connects and never starts pairing is not refused by the policy; it cannot receive input reports without encryption. Hide the device with Disconnect if you suspect one.
+- A link that connects and never starts pairing is not refused by the policy; it cannot receive input reports without encryption. Press Disconnect if you suspect one: nothing can connect until you press Reconnect.
 - The device is always visible in a computer's Bluetooth list (it must be, so paired computers can reconnect); it just cannot be paired with.
 - Names are stored on the board, never read from the computer.

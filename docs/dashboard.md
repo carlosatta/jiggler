@@ -13,10 +13,10 @@ The first thing you see: **which computer is connected and since when**, and wha
 <p align="center">
   <img src="images/status-running.png" alt="Status while running for 30 minutes" width="260">
   <img src="images/status-paused.png" alt="Status while paused: it resumes in 15 minutes" width="260">
-  <img src="images/status-disconnected.png" alt="Status while the device is hidden after Disconnect" width="260">
+  <img src="images/status-disconnected.png" alt="Status after Disconnect: visible, but nothing can connect" width="260">
 </p>
 
-- **Connection.** *Connected to Computer 1, for 12 minutes.* **Disconnect** drops the link and hides the device until you press **Reconnect** (it does not power the device off). While hidden, the card offers **Reconnect**.
+- **Connection.** *Connected to Computer 1, for 12 minutes.* **Disconnect** drops the link and keeps the device visible but not connectable until you press **Reconnect** (it does not power the device off). Pressing Disconnect in the computer’s own Bluetooth menu has the same effect.
 - **Movement.** *Running*, *Paused* or *Stopped*, the time to the next movement, and, for a timed run, when it will stop.
 - **Run for** (shown while stopped): *until I stop it*, 5, 10 or 30 minutes, 1 hour, *until a time of day*, or a custom number of minutes (1 to 1440). **Start** applies it; **Move now** makes one movement immediately.
 - **Pause** (shown while running): *15 minutes, 30 minutes, 1 hour, 2 hours*, or *until I resume*. While paused the cursor does not move and the card says when it resumes by itself; **Resume** ends it at once and **Stop** stops everything. A time limit set with **Run for** keeps counting during a pause, and a schedule keeps its own timetable: a pause lasts until it ends or until the next window opens or closes. Use it when you sit down to work, or step away, without losing your schedule.

@@ -37,7 +37,7 @@ struct FakeLink : BleLink {
     return false;
   }
   void forgetAllBonds() override { bonded.clear(); }
-  void setAdvertising(bool) override {}
+  void setConnectable(bool) override {}
   void setPairingOpen(bool) override {}
   bool takePeerDisconnectRequest() override { return false; }
 };

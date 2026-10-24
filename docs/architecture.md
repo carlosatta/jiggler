@@ -12,7 +12,7 @@ All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio
      v         v                  v           v
  Controller  BluetoothManager  ScheduleEngine  AppearanceStore
  (run state, (pairing windows, (weekly windows, (how the device
-  timed runs) disconnect hold,  timezone)        appears)
+  timed runs) connect hold,     timezone)        appears)
      |        peers)                |
      |            |                 +--> Controller (start / stop)
      v            v (BleLink)

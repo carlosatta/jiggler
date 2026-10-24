@@ -79,7 +79,7 @@ void BleMouse::begin(const jig::ResolvedAppearance& device) {
   server_ = server;
   gBle = this;
   NimBLEDevice::setCustomGapHandler(gapListener);
-  server->advertiseOnDisconnect(false);  // BluetoothManager decides when the device is visible (see linkDown/setAdvertising)
+  server->advertiseOnDisconnect(false);  // BluetoothManager decides when the device is visible (see linkDown/setConnectable)
   server->setCallbacks(new ServerCallbacks(*this));
 
   reportMap_ = jig::buildReportMap(true, false);  // a mouse; the keyboard collection is parked
@@ -96,7 +96,7 @@ void BleMouse::begin(const jig::ResolvedAppearance& device) {
   NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
   adv->setAppearance(device.identity.appearance);
   adv->addServiceUUID(hid->hidService()->getUUID());
-  if (advertise_) adv->start();
+  adv->start();
 }
 
 std::string BleMouse::address() const { return lower(NimBLEDevice::getAddress().toString()); }
@@ -148,8 +148,8 @@ void BleMouse::linkDown(uint16_t handle) {
                  links_.end());
     refreshConnected();
   }
-  Serial.printf("BLE link down (handle %u), advertising %s\n", static_cast<unsigned>(handle), advertise_ ? "on" : "off");
-  if (advertise_) NimBLEDevice::startAdvertising();
+  Serial.printf("BLE link down (handle %u), advertising %s\n", static_cast<unsigned>(handle), connectable_ ? "connectable" : "not connectable");
+  if (!quiet_) NimBLEDevice::startAdvertising();
 }
 
 std::vector<std::string> BleMouse::bondedAddresses() {
@@ -192,19 +192,22 @@ void BleMouse::setQuiet(bool quiet) {
   if (quiet) {
     NimBLEDevice::stopAdvertising();
     disconnectAll();
-  }  // coming back: the 200 ms advertising watchdog (setAdvertising) restarts advertising
+  }  // coming back: the 200 ms advertising watchdog (setConnectable) restarts advertising
 }
 
-void BleMouse::setAdvertising(bool on) {
+void BleMouse::setConnectable(bool on) {
   if (quiet_) return;
-  const bool changed = advertise_.exchange(on) != on;
-  if (!on) {
-    if (changed) NimBLEDevice::stopAdvertising();
-    return;
+  const bool changed = connectable_.exchange(on) != on;
+  NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
+  if (changed) {
+    // Held: keep advertising so the device stays in the computer's list, but as non-connectable, so nothing
+    // (not even a paired computer's automatic reconnection) can open a link.
+    NimBLEDevice::stopAdvertising();
+    adv->setAdvertisementType(on ? BLE_GAP_CONN_MODE_UND : BLE_GAP_CONN_MODE_NON);
   }
-  // Called every 200 ms. Besides switching on after a hold, this is a watchdog: with nobody connected and the
-  // device meant to be visible, advertising must be running. If a restart attempt after a drop ever failed
-  // (links that flap), the board would stay online but invisible to the computer until restarted.
+  // Called every 200 ms. Besides applying a change, this is a watchdog: with nobody connected, advertising
+  // must be running. If a restart attempt after a drop ever failed (links that flap), the board would stay
+  // online but invisible to the computer until restarted.
   bool idle;
   {
     std::lock_guard<std::mutex> lock(linksMutex_);

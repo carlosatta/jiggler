@@ -14,7 +14,7 @@ An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, contro
 - The owner opens a 3-minute window (dashboard, API, MCP, or a tap of the BOOT button). It closes by itself after 3 minutes or when a computer pairs, and can be stopped early.
 - A computer that tries to pair while it is closed is refused.
 - The dashboard shows which computer is connected and since when; computers can be renamed, forgotten, disconnected.
-- **Disconnect** drops the link and hides the device for 3 minutes (also when the computer ends the connection itself), so the computer does not reconnect at once.
+- **Disconnect** drops the link and leaves the device visible but not connectable until Reconnect (also when the computer ends the connection itself), so the computer does not reconnect.
 - Everything except the dashboard page itself requires the API token.
 
 ## 3. Movement
@@ -47,7 +47,7 @@ An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, contro
 
 ## 8. Physical indications
 
-- Status LED: slow blink = no computer, solid = connected (brief flash per movement), fast blink = pairing open, short flash every 3 s = hidden after a disconnect.
+- Status LED: slow blink = no computer, solid = connected (brief flash per movement), fast blink = pairing open, short flash every 3 s = disconnected (not connectable).
 - BOOT button: tap = open pairing, hold 3 s = switch network mode.
 - USB power. After the first USB flash, firmware updates go over WiFi (OTA).
 

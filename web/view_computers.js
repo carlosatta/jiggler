@@ -18,7 +18,7 @@
     var info;
     if (timed) info = 'Pairing is open: closes in ' + JigLib.fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It also closes as soon as a computer pairs.';
     else info = 'Pairing is closed: no new computer can connect.';
-    if (bt.held && bt.heldRemainingMs != null) info += ' The device is hidden for another ' + JigLib.fmtDuration(Math.max(0, bt.heldRemainingMs - elapsed)) + ' (disconnected).';
+    if (bt.held) info += ' The device is disconnected: it stays visible, but nothing can connect until you press Reconnect on Status.';
     $('pairInfo').textContent = info;
     $('pairOpen').disabled = busy || (p.open && !timed);
     $('pairOpen').textContent = timed ? 'Restart the 3 minutes' : 'Open pairing for 3 minutes';

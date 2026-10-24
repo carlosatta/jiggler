@@ -51,7 +51,6 @@ class Device:
         self.network = {"mode": "auto", "apSsid": "Jiggler", "apPassword": ""}
         self.stop_at = None
         self.resume_at = None
-        self.held_until = None
         self.bonded_at_open = None
         self.tz = "Europe/London"
         self.schedules = [{"id": "workdays", "enabled": True, "days": ["mon", "tue", "wed", "thu", "fri"], "start": "09:00", "durationMin": 480}]
@@ -63,7 +62,6 @@ class Device:
         self.window_until = None
         self.connected_since = None
         self.peers = []
-        self.held_until = None
         self.bonded_at_open = None
         if name == "firstrun":
             self.state = "stopped"
@@ -77,7 +75,6 @@ class Device:
                 self.connected_since = now - 12 * 60 - 20
             if name == "held":
                 self.held = True
-                self.held_until = now + 140
             if name == "pairing":
                 self.window_until = now + 95
         else:
@@ -101,9 +98,6 @@ class Device:
         now = time.time()
         if self.window_until and (now >= self.window_until or (self.bonded_at_open is not None and len(self.peers) > self.bonded_at_open)):
             self.window_until = None
-        if self.held and self.held_until and now >= self.held_until:
-            self.held = False
-            self.held_until = None
         if self.state in ("running", "paused") and self.stop_at and now >= self.stop_at:
             self.state = "stopped"
             self.stop_at = None
@@ -135,7 +129,6 @@ class Device:
         open_ = bool(self.window_until)
         connected = self.connected_addr() is not None
         out = {"connected": connected, "held": self.held,
-               "heldRemainingMs": int((self.held_until - now) * 1000) if self.held and self.held_until else None,
                "pairing": {"open": open_, "remainingMs": int((self.window_until - now) * 1000) if self.window_until else None, },
                "computer": None, "peers": []}
         if connected:
@@ -148,7 +141,7 @@ class Device:
     def status(self):
         now = time.time()
         bt = self.bluetooth()
-        summary = {k: bt[k] for k in ("connected", "held", "heldRemainingMs", "pairing", "computer")}
+        summary = {k: bt[k] for k in ("connected", "held", "pairing", "computer")}
         summary["pairing"] = {"open": bt["pairing"]["open"], "remainingMs": bt["pairing"]["remainingMs"]}
         summary["peerCount"] = len(bt["peers"])
         if self.state == "running" and now >= self.next_move_at:
@@ -330,7 +323,7 @@ class Handler(BaseHTTPRequestHandler):
             d.window_until = time.time() + seconds; d.held = False; d.bonded_at_open = len(d.peers)
             return self.send(200, d.bluetooth())
         if path == "/api/bluetooth/disconnect":
-            d.held = True; d.held_until = None; d.window_until = None
+            d.held = True; d.window_until = None
             return self.send(200, d.bluetooth())
         if path == "/api/bluetooth/reconnect":
             d.held = False

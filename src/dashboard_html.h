@@ -490,10 +490,8 @@ var JigLib = (function () {
         detail: 'For ' + fmtSince(bt.computer.connectedForMs) + ' · ' + name + '.' + windowNote, actions: actions };
     }
     if (bt.held) {
-      var left = bt.heldRemainingMs !== null && bt.heldRemainingMs !== undefined ? fmtDuration(bt.heldRemainingMs) : '';
       return { tone: 'warn', title: 'Disconnected',
-        detail: left ? 'Hidden from computers for another ' + left + '; after that your computer can reconnect. Press Reconnect to show the device now.'
-          : 'Hidden from computers until you press Reconnect.', actions: ['reconnect'] };
+        detail: 'Still visible to computers, but nothing can connect until you press Reconnect.', actions: ['reconnect'] };
     }
     if (timed) {
       return { tone: 'open', title: 'Pairing is open',
@@ -814,11 +812,11 @@ var App = (function () {
   var ACTIONS = {
     disconnect: { label: 'Disconnect', primary: false, run: function () {
       return App.call('POST', '/api/bluetooth/disconnect').then(function (r) {
-        return r.status === 200 ? ['Disconnected. The device stays hidden until you press Reconnect.', 'good'] : fail(r);
+        return r.status === 200 ? ['Disconnected. The device stays visible, but nothing can connect until you press Reconnect.', 'good'] : fail(r);
       }); } },
     reconnect: { label: 'Reconnect', primary: true, run: function () {
       return App.call('POST', '/api/bluetooth/reconnect').then(function (r) {
-        return r.status === 200 ? ['Visible again: the computer reconnects by itself.', 'good'] : fail(r);
+        return r.status === 200 ? ['Connectable again: the computer reconnects by itself.', 'good'] : fail(r);
       }); } },
     pair: { label: 'Pair a computer', primary: true, run: function () {
       return App.call('POST', '/api/bluetooth/pairing').then(function (r) {
@@ -835,7 +833,6 @@ var App = (function () {
   function adjusted(status, elapsed) {
     var bt = JSON.parse(JSON.stringify(status.bluetooth || { pairing: {}, peerCount: 0 }));
     if (bt.pairing && bt.pairing.remainingMs != null) bt.pairing.remainingMs = Math.max(0, bt.pairing.remainingMs - elapsed);
-    if (bt.heldRemainingMs != null) bt.heldRemainingMs = Math.max(0, bt.heldRemainingMs - elapsed);
     if (bt.computer) bt.computer.connectedForMs += elapsed;
     return bt;
   }
@@ -861,7 +858,7 @@ var App = (function () {
       box.appendChild(b);
     });
     $('heroNote').textContent = key.indexOf('disconnect') >= 0
-      ? 'Disconnect does not power the device off: it drops the link and hides the device from every computer until you press Reconnect (a restart also brings it back).' : '';
+      ? 'Disconnect does not power the device off: it drops the link and keeps the device visible but not connectable until you press Reconnect (a restart also brings it back). Pressing Disconnect in the computer’s own Bluetooth menu does the same.' : '';
   }
 
   function renderMotion(s, elapsed) {
@@ -1034,7 +1031,7 @@ var App = (function () {
     var info;
     if (timed) info = 'Pairing is open: closes in ' + JigLib.fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It also closes as soon as a computer pairs.';
     else info = 'Pairing is closed: no new computer can connect.';
-    if (bt.held && bt.heldRemainingMs != null) info += ' The device is hidden for another ' + JigLib.fmtDuration(Math.max(0, bt.heldRemainingMs - elapsed)) + ' (disconnected).';
+    if (bt.held) info += ' The device is disconnected: it stays visible, but nothing can connect until you press Reconnect on Status.';
     $('pairInfo').textContent = info;
     $('pairOpen').disabled = busy || (p.open && !timed);
     $('pairOpen').textContent = timed ? 'Restart the 3 minutes' : 'Open pairing for 3 minutes';

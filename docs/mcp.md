@@ -47,7 +47,7 @@ Tool failures are returned as a normal result with `isError: true` and a JSON er
 | `set_schedules` | `timezone`, `schedules[]` (`id`, `enabled`, `days`, `start`, `durationMin`) | Replace the schedules (max 8) |
 | `get_bluetooth` | – | Connection, pairing window and paired computers |
 | `start_pairing` | `seconds` (30–600, default 180, optional) | Open a pairing window |
-| `disconnect_bluetooth` | – | Drop the link and hide the device until `reconnect_bluetooth` |
+| `disconnect_bluetooth` | – | Drop the link; the device stays visible but not connectable until `reconnect_bluetooth` |
 | `reconnect_bluetooth` | – | Make the device visible again |
 | `forget_computer` | `id` | Forget one paired computer |
 

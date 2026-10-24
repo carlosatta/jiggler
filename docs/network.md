@@ -43,4 +43,4 @@ GPIO 2 (the on-board LED on most `esp32dev` boards):
 - Blinking slowly (1 Hz): no computer connected.
 - Solid: connected. It goes off briefly (80 ms) right after each movement.
 - Blinking fast: **pairing is open**.
-- A short flash every 3 seconds: the device is **hidden** after a Disconnect.
+- A short flash every 3 seconds: the device is **disconnected** (visible, but not connectable) after a Disconnect.

@@ -15,7 +15,6 @@ namespace jig {
 constexpr uint32_t kMinPairingSec = 30;
 constexpr uint32_t kMaxPairingSec = 600;
 constexpr uint32_t kDefaultPairingSec = 180;  // the one length the dashboard and the BOOT button use
-constexpr uint32_t kDisconnectHoldSec = 180;
 constexpr size_t kMaxPeerLabelLen = 32;
 // The stack keeps kStackBondSlots bonds and, when full, silently evicts the OLDEST one to make room. Refused
 // pairings briefly occupy a slot (the bond is written before we learn who it is), so the owner's computers are
@@ -42,7 +41,7 @@ struct BleLink {
   virtual void disconnectAll() = 0;
   virtual bool forgetBond(const std::string& address) = 0;
   virtual void forgetAllBonds() = 0;
-  virtual void setAdvertising(bool on) = 0;     // false = invisible: nobody can connect or reconnect
+  virtual void setConnectable(bool on) = 0;     // false = still visible, but no computer can open a link (paired or not)
   virtual void setPairingOpen(bool open) = 0;   // false = refuse (and undo) new bonds
   // True once after the computer ended a connection on purpose (its "Disconnect" button), not after a
   // link loss or one we ended ourselves.
@@ -58,10 +57,9 @@ struct Peer {
 
 struct BluetoothStatus {
   bool connected = false;
-  bool held = false;                                // disconnected on request, advertising off
+  bool held = false;                                // disconnected on request: visible, but not connectable
   bool pairingOpen = false;
   std::optional<uint32_t> pairingRemainingMs;       // only while a timed window is open
-  std::optional<uint32_t> heldRemainingMs;          // only while held: when the device becomes visible again
   std::optional<std::string> connectedLabel;
   std::optional<uint32_t> connectedForMs;
   std::vector<Peer> peers;                          // paired computers
@@ -71,9 +69,9 @@ struct BluetoothStatus {
 //  - Pairing is ALWAYS closed, even on a board that has never been paired and after "forget all". The only way to
 //    open it is an explicit act by the owner: the dashboard/API/MCP, or the BOOT button on the board.
 //  - A window closes by itself when its time is up, when someone pairs, or when the owner stops it.
-//  - "Disconnect" drops the link and hides the device until "reconnect" (or a pairing window). The computer ending the
-//    link itself hides it for kDisconnectHoldSec only, so that computer can come back.
-// Thread-safe. The firmware enforces `setPairingOpen`/`setAdvertising` on the real stack.
+//  - "Disconnect" (from the dashboard, or the computer ending the link itself) drops the link and keeps the device
+//    visible but not connectable until "reconnect" (or a pairing window). There is no timer.
+// Thread-safe. The firmware enforces `setPairingOpen`/`setConnectable` on the real stack.
 class BluetoothManager {
  public:
   BluetoothManager(Platform& platform, BleLink& link, BlobStore& blobs);
@@ -93,7 +91,7 @@ class BluetoothManager {
  private:
   struct Locked;  // helpers that expect mutex_ to be held
   void applyLocked();
-  void expireLocked();  // closes a finished/used pairing window, ends an expired hold
+  void expireLocked();  // closes a finished/used pairing window
   bool pairingOpenLocked();
   std::string labelForLocked(const std::string& id);
   bool saveLabelsLocked();
@@ -108,8 +106,6 @@ class BluetoothManager {
   bool held_ = false;
   bool windowOpen_ = false;
   uint32_t windowUntilMs_ = 0;
-  uint32_t heldUntilMs_ = 0;
-  bool heldUntilReconnect_ = false;  // a dashboard Disconnect has no expiry
   std::vector<std::string> bondedAtOpen_;  // bonds when the window opened: a new one means someone paired
 };
 

@@ -41,13 +41,13 @@ struct Env {
   struct Link : BleLink {
     std::vector<std::string> bonded{"aa:bb:cc:dd:ee:01"}, connected;
     int disconnects = 0;
-    bool advertising = true, pairingOpen = false;
+    bool connectable = true, pairingOpen = false;
     std::vector<std::string> bondedAddresses() override { return bonded; }
     std::vector<std::string> connectedAddresses() override { return connected; }
     void disconnectAll() override { disconnects++; connected.clear(); }
     bool forgetBond(const std::string& a) override { bonded.clear(); return !a.empty(); }
     void forgetAllBonds() override { bonded.clear(); }
-    void setAdvertising(bool on) override { advertising = on; }
+    void setConnectable(bool on) override { connectable = on; }
     void setPairingOpen(bool open) override { pairingOpen = open; }
     bool takePeerDisconnectRequest() override { return false; }
   } link;

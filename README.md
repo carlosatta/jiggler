@@ -17,7 +17,7 @@ Nothing to install on the computer. It sees an ordinary Bluetooth mouse (a plain
 - **Guided first setup.** A new board walks you through it: connect, open pairing, pick the device on your computer. You are done in a minute.
 - **You decide when it runs.** Start it for 5, 10 or 30 minutes, until a time of day, or until you stop it. Or set weekly schedules ("Mon-Fri, 09:00 for 8 hours") and forget about it.
 - **Always know what it is doing.** The dashboard shows which computer is connected and since when, when the next movement happens, and when a timed run ends.
-- **Disconnect without unplugging.** Drop the link and hide the device until you reconnect it, rename computers, forget the ones you no longer use.
+- **Disconnect without unplugging.** Drop the link and keep the device from connecting until you press Reconnect, rename computers, forget the ones you no longer use.
 - **Works without internet.** The Bluetooth mouse never depends on WiFi. No WiFi at all? The board can create its own network.
 - **Talk to it.** A built-in [MCP](docs/mcp.md) server lets an assistant answer "is it running?", "keep it on for 30 minutes", or "run it Monday to Friday, 9 to 6".
 

@@ -9,11 +9,11 @@
   var ACTIONS = {
     disconnect: { label: 'Disconnect', primary: false, run: function () {
       return App.call('POST', '/api/bluetooth/disconnect').then(function (r) {
-        return r.status === 200 ? ['Disconnected. The device stays hidden until you press Reconnect.', 'good'] : fail(r);
+        return r.status === 200 ? ['Disconnected. The device stays visible, but nothing can connect until you press Reconnect.', 'good'] : fail(r);
       }); } },
     reconnect: { label: 'Reconnect', primary: true, run: function () {
       return App.call('POST', '/api/bluetooth/reconnect').then(function (r) {
-        return r.status === 200 ? ['Visible again: the computer reconnects by itself.', 'good'] : fail(r);
+        return r.status === 200 ? ['Connectable again: the computer reconnects by itself.', 'good'] : fail(r);
       }); } },
     pair: { label: 'Pair a computer', primary: true, run: function () {
       return App.call('POST', '/api/bluetooth/pairing').then(function (r) {
@@ -30,7 +30,6 @@
   function adjusted(status, elapsed) {
     var bt = JSON.parse(JSON.stringify(status.bluetooth || { pairing: {}, peerCount: 0 }));
     if (bt.pairing && bt.pairing.remainingMs != null) bt.pairing.remainingMs = Math.max(0, bt.pairing.remainingMs - elapsed);
-    if (bt.heldRemainingMs != null) bt.heldRemainingMs = Math.max(0, bt.heldRemainingMs - elapsed);
     if (bt.computer) bt.computer.connectedForMs += elapsed;
     return bt;
   }
@@ -56,7 +55,7 @@
       box.appendChild(b);
     });
     $('heroNote').textContent = key.indexOf('disconnect') >= 0
-      ? 'Disconnect does not power the device off: it drops the link and hides the device from every computer until you press Reconnect (a restart also brings it back).' : '';
+      ? 'Disconnect does not power the device off: it drops the link and keeps the device visible but not connectable until you press Reconnect (a restart also brings it back). Pressing Disconnect in the computer’s own Bluetooth menu does the same.' : '';
   }
 
   function renderMotion(s, elapsed) {

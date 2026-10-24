@@ -24,7 +24,7 @@ const char* kIdB = "aabbccddee02";
 
 struct FakeBleLink : BleLink {
   std::vector<std::string> bonded, connected;
-  bool advertising = true;
+  bool connectable = true;  // advertising is always on; this is whether a computer may open a link
   bool pairingOpen = false;
   bool peerRequestedDisconnect = false;
   int disconnects = 0;
@@ -41,7 +41,7 @@ struct FakeBleLink : BleLink {
     return true;
   }
   void forgetAllBonds() override { bonded.clear(); }
-  void setAdvertising(bool on) override { advertising = on; }
+  void setConnectable(bool on) override { connectable = on; }
   void setPairingOpen(bool open) override { pairingOpen = open; }
   bool takePeerDisconnectRequest() override {
     const bool b = peerRequestedDisconnect;
@@ -173,14 +173,14 @@ void test_disconnect_holds_the_link_until_reconnect() {
   e.link.connected = {kA};
   TEST_ASSERT_TRUE(e.bt.disconnect().ok);
   TEST_ASSERT_EQUAL_INT(1, e.link.disconnects);
-  TEST_ASSERT_FALSE(e.link.advertising);
+  TEST_ASSERT_FALSE(e.link.connectable);
   BluetoothStatus s = e.bt.status();
   TEST_ASSERT_TRUE(s.held);
   TEST_ASSERT_FALSE(s.connected);
   e.bt.tick();
-  TEST_ASSERT_FALSE(e.link.advertising);  // stays hidden: the computer cannot reconnect behind your back
+  TEST_ASSERT_FALSE(e.link.connectable);  // stays unconnectable: the computer cannot reconnect behind your back
   TEST_ASSERT_TRUE(e.bt.reconnect().ok);
-  TEST_ASSERT_TRUE(e.link.advertising);
+  TEST_ASSERT_TRUE(e.link.connectable);
   TEST_ASSERT_FALSE(e.bt.status().held);
 }
 
@@ -188,7 +188,7 @@ void test_starting_pairing_releases_a_hold() {
   Env e({kA});
   e.bt.disconnect();
   TEST_ASSERT_TRUE(e.bt.startPairing(60).ok);
-  TEST_ASSERT_TRUE(e.link.advertising);
+  TEST_ASSERT_TRUE(e.link.connectable);
   TEST_ASSERT_FALSE(e.bt.status().held);
 }
 
@@ -514,36 +514,27 @@ void test_disconnect_from_the_dashboard_stays_until_reconnect() {
   e.bt.disconnect();
   BluetoothStatus s = e.bt.status();
   TEST_ASSERT_TRUE(s.held);
-  TEST_ASSERT_FALSE(s.heldRemainingMs.has_value());  // no countdown: it does not expire
-  TEST_ASSERT_FALSE(e.link.advertising);
+  TEST_ASSERT_FALSE(e.link.connectable);
   e.clock.now = 48u * 3600u * 1000u;
   e.bt.tick();
   TEST_ASSERT_TRUE(e.bt.status().held);
-  TEST_ASSERT_FALSE(e.link.advertising);
+  TEST_ASSERT_FALSE(e.link.connectable);
   e.bt.reconnect();
   TEST_ASSERT_FALSE(e.bt.status().held);
-  TEST_ASSERT_TRUE(e.link.advertising);
+  TEST_ASSERT_TRUE(e.link.connectable);
 }
 
-void test_hold_countdown_is_in_the_json() {
+void test_held_is_in_the_json_without_a_countdown() {
   Env e({kA});
-  e.link.connected = {kA};
-  e.link.peerRequestedDisconnect = true;  // the computer ended it: a timed hold
-  e.link.connected.clear();
-  e.bt.tick();
+  e.bt.disconnect();
   JsonDocument d;
   deserializeJson(d, bluetoothToJson(e.bt.status()));
-  TEST_ASSERT_EQUAL_UINT32(180000, d["heldRemainingMs"].as<uint32_t>());
+  TEST_ASSERT_TRUE(d["held"].as<bool>());
+  TEST_ASSERT_FALSE(d.as<JsonObject>().containsKey("heldRemainingMs"));
   JsonDocument s;
   deserializeJson(s, bluetoothSummaryJson(e.bt.status()));
-  TEST_ASSERT_EQUAL_UINT32(180000, s["heldRemainingMs"].as<uint32_t>());
-  e.bt.disconnect();  // from the dashboard: held with no countdown
-  deserializeJson(d, bluetoothToJson(e.bt.status()));
-  TEST_ASSERT_TRUE(d["held"].as<bool>());
-  TEST_ASSERT_TRUE(d["heldRemainingMs"].isNull());
-  e.bt.reconnect();
-  deserializeJson(d, bluetoothToJson(e.bt.status()));
-  TEST_ASSERT_TRUE(d["heldRemainingMs"].isNull());
+  TEST_ASSERT_TRUE(s["held"].as<bool>());
+  TEST_ASSERT_FALSE(s.as<JsonObject>().containsKey("heldRemainingMs"));
 }
 
 void test_the_first_pairing_needs_a_window_like_every_other() {
@@ -570,7 +561,7 @@ void test_pairing_stays_closed_when_every_bond_disappears() {
   TEST_ASSERT_FALSE(e.link.pairingOpen);
 }
 
-void test_the_computer_disconnecting_hides_the_device_like_the_dashboard_does() {
+void test_the_computer_disconnecting_is_treated_exactly_like_the_dashboard_disconnect() {
   Env e({kA});
   e.link.connected = {kA};
   e.link.peerRequestedDisconnect = true;
@@ -578,12 +569,14 @@ void test_the_computer_disconnecting_hides_the_device_like_the_dashboard_does() 
   e.bt.tick();
   BluetoothStatus s = e.bt.status();
   TEST_ASSERT_TRUE(s.held);
-  TEST_ASSERT_EQUAL_UINT32(180000, *s.heldRemainingMs);
-  TEST_ASSERT_FALSE(e.link.advertising);   // otherwise the computer reconnects at once
-  e.clock.now = 180000;
+  TEST_ASSERT_FALSE(e.link.connectable);   // otherwise the computer reconnects at once
+  e.clock.now = 48u * 3600u * 1000u;       // no timer: same as a dashboard Disconnect
   e.bt.tick();
+  TEST_ASSERT_TRUE(e.bt.status().held);
+  TEST_ASSERT_FALSE(e.link.connectable);
+  e.bt.reconnect();
   TEST_ASSERT_FALSE(e.bt.status().held);
-  TEST_ASSERT_TRUE(e.link.advertising);
+  TEST_ASSERT_TRUE(e.link.connectable);
 }
 
 void test_a_disconnect_during_a_pairing_window_is_not_a_request_to_hide() {
@@ -592,7 +585,7 @@ void test_a_disconnect_during_a_pairing_window_is_not_a_request_to_hide() {
   e.link.peerRequestedDisconnect = true;   // the handshake can end links on its own
   e.bt.tick();
   TEST_ASSERT_FALSE(e.bt.status().held);
-  TEST_ASSERT_TRUE(e.link.advertising);
+  TEST_ASSERT_TRUE(e.link.connectable);
 }
 
 void test_a_disconnect_with_nothing_paired_is_not_a_request_to_hide() {
@@ -620,15 +613,7 @@ void test_remaining_time_never_underflows_when_the_deadline_passes_between_two_c
   BluetoothManager bt(clock, link, blobs);
   bt.begin();
   clock.t = 0;
-  link.connected = {kA};
-  link.peerRequestedDisconnect = true;
-  link.connected.clear();
-  bt.tick();                       // the computer hung up: hold until 180000
-  clock.t = 179999;              // status(): first read 179999 (still held), second read 180001
-  BluetoothStatus s = bt.status();
-  TEST_ASSERT_TRUE(s.heldRemainingMs.has_value());
-  TEST_ASSERT_TRUE(*s.heldRemainingMs < 1000);
-  clock.t = 0;
+  BluetoothStatus s;
   bt.startPairing(kMinPairingSec);  // window until 30000
   clock.t = 29999;
   s = bt.status();
@@ -678,10 +663,10 @@ int main() {
   RUN_TEST(test_window_stays_open_when_a_known_computer_reconnects);
   RUN_TEST(test_stopping_the_window_by_hand_still_works);
   RUN_TEST(test_disconnect_from_the_dashboard_stays_until_reconnect);
-  RUN_TEST(test_hold_countdown_is_in_the_json);
+  RUN_TEST(test_held_is_in_the_json_without_a_countdown);
   RUN_TEST(test_the_first_pairing_needs_a_window_like_every_other);
   RUN_TEST(test_pairing_stays_closed_when_every_bond_disappears);
-  RUN_TEST(test_the_computer_disconnecting_hides_the_device_like_the_dashboard_does);
+  RUN_TEST(test_the_computer_disconnecting_is_treated_exactly_like_the_dashboard_disconnect);
   RUN_TEST(test_a_disconnect_during_a_pairing_window_is_not_a_request_to_hide);
   RUN_TEST(test_a_disconnect_with_nothing_paired_is_not_a_request_to_hide);
   RUN_TEST(test_remaining_time_never_underflows_when_the_deadline_passes_between_two_clock_reads);
