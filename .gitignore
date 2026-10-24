@@ -4,3 +4,4 @@
 .impeccable/
 .playwright-mcp/
 __pycache__/
+.claude/
