@@ -47,7 +47,7 @@ All logic lives in `lib/core/src` with no Arduino headers, so it runs under `pio
 
 - Do not read NVS (`Preferences`) from global constructors: NVS is not initialised during static init. Read it in `setup()` or later.
 - Time comparisons use `(int32_t)(now - due)` because `millis()` wraps at ~49.7 days.
-- Partition table is `huge_app.csv` (3 MB app, no OTA); the default 1.25 MB partition was 95% full.
+- Partition table is `partitions.csv`: two 1.875 MB application slots for OTA updates (the default 1.25 MB partition was 95% full). Changing it needs a USB flash.
 - HTTP body bytes from ESPAsyncWebServer can exceed the declared Content-Length; always copy through `copyBodyChunk`.
 - Exact return-to-start is guaranteed in HID counts only. OS pointer acceleration can leave visible drift; this has not been measured on a real host.
 
