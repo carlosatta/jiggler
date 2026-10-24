@@ -106,7 +106,7 @@ void test_tools_list_includes_new_tools() {
   McpReply r = e.call("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}");
   JsonDocument doc = parse(r.body);  // keep the document alive while `tools` points into it
   JsonArray tools = doc["result"]["tools"].as<JsonArray>();
-  const char* expected[] = {"get_status", "start", "pause", "stop", "move_now", "set_config",
+  const char* expected[] = {"get_status", "start", "pause", "resume", "stop", "move_now", "set_config",
                             "get_appearance", "set_appearance", "list_scripts", "save_script",
                             "delete_script", "run_script", "get_automations", "set_automations", "press_key",
                             "type_text", "get_network", "set_network", "restart", "get_bluetooth", "start_pairing",

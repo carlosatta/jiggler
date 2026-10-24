@@ -14,7 +14,7 @@ constexpr int kInvalidRequest = -32600;
 constexpr int kMethodNotFound = -32601;
 constexpr int kInvalidParams = -32602;
 
-const char* const kToolNames[] = {"get_status", "start", "pause", "stop", "move_now", "set_config"};
+const char* const kToolNames[] = {"get_status", "start", "pause", "resume", "stop", "move_now", "set_config"};
 
 std::string serialize(JsonVariantConst doc) {
   std::string out;
@@ -66,7 +66,12 @@ void fillBaseTools(JsonArray tools) {
           &schema);
   addNumberProp(schema["properties"].to<JsonObject>(), "minutes", "integer", 1, 1440,
                 "Stop by itself after this many minutes (optional).");
-  addTool(tools, "pause", "Pause the jiggler; resuming keeps the remaining time.", &schema);
+  addTool(tools, "pause",
+          "Pause the jiggler. With `minutes` it resumes by itself after that long (1-1440); without it, it stays paused until `resume`. A time limit set with `start` keeps counting while paused.",
+          &schema);
+  addNumberProp(schema["properties"].to<JsonObject>(), "minutes", "integer", 1, 1440,
+                "Resume by itself after this many minutes (optional).");
+  addTool(tools, "resume", "End a pause now. Fails if the jiggler is not paused.", &schema);
   schema["properties"].to<JsonObject>();
   addTool(tools, "stop", "Stop the jiggler completely.", &schema);
   schema["properties"].to<JsonObject>();
@@ -349,8 +354,21 @@ ToolOutput callBaseTool(Controller& c, const std::string& name, JsonVariantConst
       return {errorJson(perr.code, perr.field, perr.message), true};
     CmdResult started = minutes ? c.startFor(*minutes) : c.start();
     if (!started.ok) return {errorJson(started.error, started.field, started.message), true};
-  } else if (name == "pause") c.pause();
-  else if (name == "stop") c.stop();
+  } else if (name == "pause") {
+    std::optional<uint32_t> minutes;
+    ParseError perr;
+    if (!args.isNull() && !parseStartRequest(args.as<JsonObjectConst>(), minutes, perr))
+      return {errorJson(perr.code, perr.field, perr.message), true};
+    if (minutes) {
+      CmdResult paused = c.pauseFor(*minutes);
+      if (!paused.ok) return {errorJson(paused.error, paused.field, paused.message), true};
+    } else {
+      c.pause();
+    }
+  } else if (name == "resume") {
+    CmdResult resumed = c.resume();
+    if (!resumed.ok) return {errorJson(resumed.error, resumed.field, resumed.message), true};
+  } else if (name == "stop") c.stop();
   else if (name == "move_now") {
     CmdResult r = c.moveNow();
     if (!r.ok) return {errorJson(r.error, r.field, r.message), true};

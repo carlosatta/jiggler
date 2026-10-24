@@ -26,7 +26,7 @@ An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, contro
 
 ## 4. Running it
 
-- Start/stop, a test movement, and **timed runs**: 5, 10 or 30 minutes, an hour, until a time of day, or a custom number of minutes.
+- Start/stop/**pause** (for a set time or until resumed; it keeps a timed run's deadline and the schedule's timetable), a test movement, and **timed runs**: 5, 10 or 30 minutes, an hour, until a time of day, or a custom number of minutes.
 - **Weekly schedules** (up to 8): days, start and end time (may cross midnight), forever or a set number of runs, in a chosen timezone; they start and stop the jiggler by the clock. Needs a synced clock.
 
 ## 5. Network
@@ -37,7 +37,7 @@ An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, contro
 
 ## 6. Dashboard
 
-- Five sections: Status, Computers, Movement, Schedule, System. A guided first-time setup while nothing is paired.
+- Five sections: Status, Computers, Device (movement settings and appearance), Schedule, System. A guided first-time setup while nothing is paired.
 - Phones and desktops, light and dark, installable to the home screen, English UI.
 - Recovers by itself from restarts and lost connections; every error says what is wrong and what to do.
 

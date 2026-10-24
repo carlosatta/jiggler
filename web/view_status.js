@@ -60,10 +60,18 @@
   }
 
   function renderMotion(s, elapsed) {
-    var running = s.state === 'running';
-    $('state').textContent = running ? 'Running' : 'Stopped';
+    var running = s.state === 'running', paused = s.state === 'paused';
+    $('state').textContent = running ? 'Running' : paused ? 'Paused' : 'Stopped';
     var next = $('next');
-    if (!running) next.textContent = 'Not running. Press Start to keep the computer awake.';
+    if (paused) {
+      var back = s.resumesInMs != null ? Math.max(0, s.resumesInMs - elapsed) : null;
+      var text = back != null ? 'Resumes in ' + fmtDuration(back) + ' (at ' + JigLib.stopsAt(back, new Date()) + ')' : 'Paused until you press Resume';
+      if (s.stopsInMs != null) {
+        var left0 = Math.max(0, s.stopsInMs - elapsed);
+        text += ' · stops at ' + JigLib.stopsAt(left0, new Date());
+      }
+      next.textContent = text + '.';
+    } else if (!running) next.textContent = 'Not running. Press Start to keep the computer awake.';
     else {
       var parts = [];
       if (!s.mouseConnected && s.msToNextMove === 0) parts.push('Waiting for a computer to connect.');
@@ -86,10 +94,13 @@
     if (!sc) $('clock').textContent = '—';
     else if (!sc.timeSynced) $('clock').textContent = 'Not synced (needs internet)';
     else $('clock').textContent = sc.localTime + ' · ' + sc.timezone + (sc.active ? ' · schedule open' : '');
-    var running = s.state === 'running';
-    $('bToggle').textContent = running ? 'Stop' : 'Start';
-    $('bToggle').className = running ? '' : 'primary';
-    $('runFor').hidden = running;
+    var running = s.state === 'running', paused = s.state === 'paused', stopped = !running && !paused;
+    $('bToggle').textContent = stopped ? 'Start' : 'Stop';
+    $('bToggle').className = stopped ? 'primary' : '';
+    $('bPause').hidden = !running;
+    $('bResume').hidden = !paused;
+    $('pauseFor').hidden = !running;
+    $('runFor').hidden = !stopped;
     $('runErr').textContent = running ? '' : $('runErr').textContent;
     $('bMove').disabled = !s.mouseConnected;
   }
@@ -168,10 +179,24 @@
     }).catch(function () {});
   }
 
+  $('bPause').onclick = function () {
+    var minutes = Number($('pauseChoice').value);
+    try { localStorage.setItem('jigglerPauseChoice', String(minutes)); } catch (e) {}
+    if (minutes > 0) control('POST', '/api/pause', { minutes: minutes }, 'Paused: it resumes by itself in ' + JigLib.fmtSince(minutes * 60000) + '.');
+    else control('POST', '/api/pause', undefined, 'Paused until you press Resume.');
+  };
+  $('bResume').onclick = function () { control('POST', '/api/resume', undefined, 'Resumed.'); };
+  (function restorePauseChoice() {
+    try {
+      var saved = localStorage.getItem('jigglerPauseChoice');
+      if (saved !== null && $('pauseChoice').querySelector('option[value="' + saved + '"]')) $('pauseChoice').value = saved;
+    } catch (e) {}
+  })();
+
   $('bToggle').onclick = function () {
     var s = App.status();
-    var running = s && s.state === 'running';
-    if (running) { control('POST', '/api/stop', undefined, 'Stopped.'); return; }
+    var active = s && (s.state === 'running' || s.state === 'paused');
+    if (active) { control('POST', '/api/stop', undefined, 'Stopped.'); return; }
     var minutes = JigLib.runForMinutes(readChoice(), new Date());
     if (minutes === null) {
       $('runErr').textContent = $('runChoice').value === 'until' ? 'Pick the time it should stop.' : 'Enter a whole number of minutes from 1 to 1440.';

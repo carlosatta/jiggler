@@ -32,7 +32,7 @@ Nothing to install on the computer. It sees an ordinary Bluetooth mouse (a plain
 <p align="center">
   <img src="docs/images/schedule.png" alt="Weekly schedules" width="250">
   <img src="docs/images/computers.png" alt="Paired computers" width="250">
-  <img src="docs/images/system-appearance.png" alt="Choosing how the device appears over Bluetooth" width="250">
+  <img src="docs/images/device-appearance.png" alt="Choosing how the device appears over Bluetooth" width="250">
 </p>
 
 The page adapts to phones and desktops, follows your light or dark theme, and can be added to a phone's home screen. [Take the full tour](docs/dashboard.md).

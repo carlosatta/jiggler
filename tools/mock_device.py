@@ -24,8 +24,14 @@ PROFILES = {
     "profiles": [
         {"id": "logitech-mx-master-3s", "label": "Logitech MX Master 3S", "kind": "mouse", "name": "MX Master 3S",
          "manufacturer": "Logitech", "vid": 1133, "pid": 45108, "oui": "00:1F:20"},
+        {"id": "logitech-mx-master-3", "label": "Logitech MX Master 3", "kind": "mouse", "name": "MX Master 3",
+         "manufacturer": "Logitech", "vid": 1133, "pid": 45091, "oui": "00:1F:20"},
+        {"id": "logitech-mx-anywhere-3", "label": "Logitech MX Anywhere 3", "kind": "mouse", "name": "MX Anywhere 3",
+         "manufacturer": "Logitech", "vid": 1133, "pid": 45093, "oui": "00:1F:20"},
         {"id": "razer-orochi-v2", "label": "Razer Orochi V2", "kind": "mouse", "name": "Razer Orochi V2",
-         "manufacturer": "Razer", "vid": 5426, "pid": 706, "oui": None},
+         "manufacturer": "Razer", "vid": 5426, "pid": 149, "oui": "44:5E:CD"},
+        {"id": "apple-magic-mouse-2", "label": "Apple Magic Mouse 2", "kind": "mouse", "name": "Magic Mouse 2",
+         "manufacturer": "Apple Inc.", "vid": 76, "pid": 617, "oui": "58:AD:12"},
     ],
     "custom": {"mouse": {"name": "Bluetooth Mouse", "manufacturer": "Generic", "vid": 4617, "pid": 1}},
 }
@@ -44,6 +50,7 @@ class Device:
         self.appearance = {"profile": "custom"}
         self.network = {"mode": "auto", "apSsid": "Jiggler", "apPassword": ""}
         self.stop_at = None
+        self.resume_at = None
         self.held_until = None
         self.bonded_at_open = None
         self.tz = "Europe/London"
@@ -97,9 +104,13 @@ class Device:
         if self.held and self.held_until and now >= self.held_until:
             self.held = False
             self.held_until = None
-        if self.state == "running" and self.stop_at and now >= self.stop_at:
+        if self.state in ("running", "paused") and self.stop_at and now >= self.stop_at:
             self.state = "stopped"
             self.stop_at = None
+            self.resume_at = None
+        if self.state == "paused" and self.resume_at and now >= self.resume_at:
+            self.state = "running"
+            self.resume_at = None
 
     def appearance_json(self, restart):
         a = dict(self.appearance)
@@ -146,7 +157,8 @@ class Device:
             self.next_move_at = now + 30 + (self.moves % 7) * 5
         return {"state": self.state, "mouseConnected": bt["connected"], "wifiConnected": True,
                 "msToNextMove": int((self.next_move_at - now) * 1000) if self.state == "running" else None,
-                "stopsInMs": int((self.stop_at - now) * 1000) if self.state == "running" and self.stop_at else None,
+                "stopsInMs": int((self.stop_at - now) * 1000) if self.state in ("running", "paused") and self.stop_at else None,
+                "resumesInMs": int((self.resume_at - now) * 1000) if self.state == "paused" and self.resume_at else None,
                 "schedule": {"timeSynced": True, "localTime": time.strftime("%H:%M"), "weekday": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"][time.localtime().tm_wday],
                              "active": False, "enabledCount": sum(1 for s in self.schedules if s["enabled"]), "timezone": self.tz},
                 "moveCount": self.moves, "lastMoveAgoMs": int((now - self.last_move) * 1000), "lastMoveAt": int(self.last_move),
@@ -246,10 +258,19 @@ class Handler(BaseHTTPRequestHandler):
             d.stop_at = time.time() + minutes * 60 if minutes else None
             return self.send(200, d.status())
         if path == "/api/pause":
-            d.state = "paused"; d.stop_at = None
+            if d.state != "running":
+                return self.err(409, "not_running", "", "only a running jiggler can be paused")
+            minutes = (body or {}).get("minutes") if isinstance(body, dict) else None
+            d.state = "paused"
+            d.resume_at = time.time() + minutes * 60 if minutes else None
+            return self.send(200, d.status())
+        if path == "/api/resume":
+            if d.state != "paused":
+                return self.err(409, "not_paused", "", "the jiggler is not paused")
+            d.state = "running"; d.resume_at = None
             return self.send(200, d.status())
         if path == "/api/stop":
-            d.state = "stopped"; d.stop_at = None
+            d.state = "stopped"; d.stop_at = None; d.resume_at = None
             return self.send(200, d.status())
         if path == "/api/move":
             if not d.connected_addr():

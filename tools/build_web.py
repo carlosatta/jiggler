@@ -15,7 +15,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 OUT = ROOT / "src" / "dashboard_html.h"
 ASSETS_OUT = ROOT / "src" / "web_assets.h"
-JS_ORDER = ["lib.js", "core.js", "view_status.js", "view_computers.js", "view_motion.js", "view_schedule.js", "view_system.js", "main.js"]
+JS_ORDER = ["lib.js", "core.js", "view_status.js", "view_computers.js", "view_device.js", "view_schedule.js", "view_system.js", "main.js"]
 ICONS = ["icon-192.png", "icon-512.png", "apple-touch-icon.png"]
 
 HEADER = (

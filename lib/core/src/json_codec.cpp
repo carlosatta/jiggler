@@ -38,6 +38,8 @@ std::string statusToJson(const Status& s) {
   else doc["msToNextMove"] = nullptr;
   if (s.msToAutoStop) doc["stopsInMs"] = *s.msToAutoStop;
   else doc["stopsInMs"] = nullptr;
+  if (s.msToResume) doc["resumesInMs"] = *s.msToResume;
+  else doc["resumesInMs"] = nullptr;
   doc["moveCount"] = s.moveCount;
   if (s.lastMoveAgoMs) doc["lastMoveAgoMs"] = *s.lastMoveAgoMs;
   else doc["lastMoveAgoMs"] = nullptr;

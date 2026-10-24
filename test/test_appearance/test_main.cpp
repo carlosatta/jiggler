@@ -78,6 +78,17 @@ void test_catalog_is_mouse_only_and_pins_verified_values() {
       {"logitech-mx-master-3s", 0x046D, 0xB034, 0x00, 0x1F, 0x20},
       {"razer-orochi-v2", 0x1532, 0x0095, 0x44, 0x5E, 0xCD},
       {"apple-magic-mouse-2", 0x004C, 0x0269, 0x58, 0xAD, 0x12},
+      // Linux drivers/hid/hid-logitech-hidpp.c, "... mouse over Bluetooth" (vendor 046D)
+      {"logitech-mx-master-3", 0x046D, 0xB023, 0x00, 0x1F, 0x20},
+      {"logitech-mx-master-2s", 0x046D, 0xB019, 0x00, 0x1F, 0x20},
+      {"logitech-mx-master-4", 0x046D, 0xB042, 0x00, 0x1F, 0x20},
+      {"logitech-mx-anywhere-3", 0x046D, 0xB025, 0x00, 0x1F, 0x20},
+      {"logitech-mx-anywhere-3s", 0x046D, 0xB037, 0x00, 0x1F, 0x20},
+      {"logitech-m720-triathlon", 0x046D, 0xB015, 0x00, 0x1F, 0x20},
+      {"logitech-mx-vertical", 0x046D, 0xB020, 0x00, 0x1F, 0x20},
+      // Linux drivers/hid/hid-ids.h: BT_VENDOR_ID_APPLE 0x004c with MAGICMOUSE 0x030d / MAGICMOUSE2_USBC 0x0323
+      {"apple-magic-mouse", 0x004C, 0x030D, 0x58, 0xAD, 0x12},
+      {"apple-magic-mouse-2-usbc", 0x004C, 0x0323, 0x58, 0xAD, 0x12},
   };
   for (const auto& e : expected) {
     const Profile* p = findProfile(e.id);
@@ -98,7 +109,7 @@ void test_catalog_is_mouse_only_and_pins_verified_values() {
     TEST_ASSERT_TRUE_MESSAGE(!p.identity.name.empty() && p.identity.name.size() <= 29, p.id.c_str());
     if (p.identity.oui) TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, (*p.identity.oui)[0] & 1, p.id.c_str());  // unicast
   }
-  TEST_ASSERT_TRUE(catalog().size() >= 3);
+  TEST_ASSERT_TRUE(catalog().size() >= 12);
 }
 
 void test_overrides_win_over_the_profile() {
@@ -171,7 +182,7 @@ void test_json_round_trip_and_what_the_computer_sees() {
   TEST_ASSERT_EQUAL_STRING("logitech-mx-master-3s", d["profile"].as<const char*>());
   TEST_ASSERT_EQUAL_STRING("Desk", d["name"].as<const char*>());
   TEST_ASSERT_EQUAL_STRING("Desk", d["shownAs"].as<const char*>());
-  TEST_ASSERT_TRUE(d["profiles"].size() >= 3);                     // what the dashboard offers
+  TEST_ASSERT_TRUE(d["profiles"].size() >= 12);                    // what the dashboard offers
   TEST_ASSERT_EQUAL_STRING("Bluetooth Mouse", d["custom"]["name"].as<const char*>());
   TEST_ASSERT_TRUE(d["restartRequired"].isNull());
   TEST_ASSERT_TRUE(parse(appearanceToJson(a, true))["restartRequired"].as<bool>());
@@ -256,7 +267,7 @@ void test_the_routes() {
   JsonDocument gd = parse(g.body);
   TEST_ASSERT_EQUAL_STRING("custom", gd["profile"].as<const char*>());
   TEST_ASSERT_EQUAL_STRING("Bluetooth Mouse", gd["shownAs"].as<const char*>());
-  TEST_ASSERT_TRUE(gd["profiles"].size() >= 3);
+  TEST_ASSERT_TRUE(gd["profiles"].size() >= 12);
 
   HttpResponse put = a.call("PUT", "/api/appearance", "{\"profile\":\"razer-orochi-v2\"}");
   TEST_ASSERT_EQUAL_INT(200, put.status);

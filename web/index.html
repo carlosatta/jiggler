@@ -27,7 +27,7 @@
 <nav class="nav" id="nav" aria-label="Sections">
 <a href="#status" data-view="status"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg><span>Status</span></a>
 <a href="#computers" data-view="computers"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="11" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg><span>Computers</span></a>
-<a href="#movement" data-view="movement"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg><span>Movement</span></a>
+<a href="#device" data-view="device"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg><span>Device</span></a>
 <a href="#schedule" data-view="schedule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></svg><span>Schedule</span></a>
 <a href="#system" data-view="system"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="8" cy="17" r="1.6"/></svg><span>System</span></a>
 </nav>
@@ -88,8 +88,20 @@
 <div class="field" id="runCustomBox" hidden><label for="runCustom">Minutes</label><input id="runCustom" inputmode="numeric" autocomplete="off" placeholder="1 to 1440"></div>
 </div>
 <div class="err" id="runErr"></div>
+<div class="runfor" id="pauseFor" hidden>
+<div class="field"><label for="pauseChoice">Pause for</label>
+<select id="pauseChoice">
+<option value="15">15 minutes</option>
+<option value="30">30 minutes</option>
+<option value="60">1 hour</option>
+<option value="120">2 hours</option>
+<option value="0">Until I resume</option>
+</select></div>
+</div>
 <div class="actions">
 <button id="bToggle" class="primary">Start</button>
+<button id="bPause" hidden>Pause</button>
+<button id="bResume" class="primary" hidden>Resume</button>
 <button id="bMove">Move now</button>
 </div>
 <p class="msg" id="msg" role="status" aria-live="polite"></p>
@@ -125,11 +137,11 @@
 </div>
 </section>
 
-<section class="view" id="view-movement" aria-labelledby="h-movement" hidden>
-<h1 id="h-movement">Movement</h1>
+<section class="view" id="view-device" aria-labelledby="h-device" hidden>
+<h1 id="h-device">Device</h1>
 
 <div class="block">
-<h2>Configuration</h2>
+<h2>Movement</h2>
 <form id="cfg" novalidate>
 <div class="row">
 <div class="field"><label for="minIntervalSec">Minimum interval (s)</label><input id="minIntervalSec" inputmode="numeric" autocomplete="off"><div class="err" id="e_minIntervalSec"></div></div>
@@ -144,6 +156,24 @@
 <div class="actions"><button class="primary" type="submit">Save</button></div>
 <p id="cfgMsg" class="msg" role="status" aria-live="polite"></p>
 </form>
+</div>
+
+<div class="block" id="appearanceBox">
+<h2>Appearance</h2>
+<p class="hint lead">How the device introduces itself to computers over Bluetooth. Pick Custom or a real mouse model, then change any detail you like. A field left empty uses the model's value (shown in grey).</p>
+<div class="field"><label for="apModel">Shown as</label><select id="apModel"></select><div class="err" data-err="profile"></div></div>
+<div class="field"><label for="apName">Name</label><input id="apName" maxlength="29" autocomplete="off"><div class="err" data-err="name"></div></div>
+<div class="field"><label for="apManufacturer">Manufacturer</label><input id="apManufacturer" maxlength="32" autocomplete="off"><div class="err" data-err="manufacturer"></div></div>
+<div class="row">
+<div class="field"><label for="apVid">Vendor ID (VID)</label><input id="apVid" autocomplete="off" spellcheck="false"><div class="err" data-err="vid"></div></div>
+<div class="field"><label for="apPid">Product ID (PID)</label><input id="apPid" autocomplete="off" spellcheck="false"><div class="err" data-err="pid"></div></div>
+</div>
+<div class="field"><label for="apMac">Bluetooth address</label><input id="apMac" autocomplete="off" spellcheck="false"><div class="err" data-err="mac"></div>
+<p class="hint">Like AA:BB:CC:DD:EE:FF, with an even first byte. Empty keeps the model's vendor prefix and the chip's own last three bytes (Custom: the chip's own address). Setting one also changes the board's WiFi address. VID and PID are hexadecimal (0x046D) or decimal.</p></div>
+<p class="note" id="apNow">&nbsp;</p>
+<p class="hint"><b>Changing this restarts the device.</b> Computers already paired will not recognise it afterwards: on each one, remove the device in its Bluetooth settings, then pair it again from Computers → Open pairing.</p>
+<div class="actions"><button class="primary" id="apApply">Apply and restart</button></div>
+<p id="apMsg" class="msg" role="status" aria-live="polite"></p>
 </div>
 
 </section>
@@ -188,17 +218,6 @@
 <p id="netMsg" class="msg" role="status" aria-live="polite"></p>
 </div>
 
-<div class="block" id="appearanceBox">
-<h2>Appearance</h2>
-<p class="hint lead">How the device introduces itself to computers over Bluetooth. By default it uses a neutral name. You can give it your own, or pick a real mouse model.</p>
-<div class="field"><label for="apModel">Shown as</label><select id="apModel"></select><div class="err" data-err="profile"></div></div>
-<div class="field" id="apNameBox" hidden><label for="apName">Name (optional)</label><input id="apName" maxlength="29" autocomplete="off"><div class="err" data-err="name"></div><p class="hint">Leave it empty to use the default name shown in the field.</p></div>
-<p class="note" id="apNow">&nbsp;</p>
-<p class="hint"><b>Changing this restarts the device.</b> Computers already paired will not recognise it afterwards: on each one, remove the device in its Bluetooth settings, then pair it again from Computers → Open pairing.</p>
-<div class="actions"><button class="primary" id="apApply">Apply and restart</button></div>
-<p id="apMsg" class="msg" role="status" aria-live="polite"></p>
-</div>
-
 <div class="block" id="fwBox">
 <h2>Firmware update</h2>
 <p class="hint lead">Replace the firmware over WiFi with a file built from this project. Your token, WiFi, pairings and schedules are kept.</p>
@@ -210,7 +229,7 @@
 </div>
 
 <div class="block">
-<h2>Device</h2>
+<h2>About this device</h2>
 <dl class="facts">
 <div><dt>Version</dt><dd id="infoVersion">—</dd></div>
 <div><dt>Bluetooth name</dt><dd id="infoName">—</dd></div>

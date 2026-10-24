@@ -41,6 +41,7 @@ Up to 8 schedules, each with a name, an on/off switch, days (Mon to Sun), a **st
 - **After a restart** the schedule is in charge: once the device knows the time, the jiggler matches whether a window is open. With no enabled schedule the jiggler boots running if a computer is paired, as before.
 - **A run is counted when its window opens**, even if you stop the jiggler by hand during it. A window already open when the board restarts is not counted twice.
 - **Saving a schedule never starts or stops anything** by itself, including when the device has no clock yet (once it has one, only a window opening or closing acts).
+- **Pause inside a window.** Pausing (from Status, the API or MCP) holds the jiggler for a while; the schedule keeps its timetable. A pause lasts until it ends or until the next window opens (it then resumes) or closes (it then stops).
 - **A window opening takes over a timed run.** If you started "run for 30 minutes" and a window opens meanwhile, the time limit is dropped and the jiggler runs until the window closes.
 - **It needs a computer paired.** The jiggler cannot run with nothing paired; a window that opens before the first pairing starts the jiggler once a computer pairs.
 - **It needs the time.** The device gets it from the internet (SNTP), so it needs your home WiFi with internet access; in own-network mode there is no clock and schedules do nothing. The dashboard says "Not synced" until the clock is known, and the status reports `timeSynced`.

@@ -210,7 +210,7 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <nav class="nav" id="nav" aria-label="Sections">
 <a href="#status" data-view="status"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg><span>Status</span></a>
 <a href="#computers" data-view="computers"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="11" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg><span>Computers</span></a>
-<a href="#movement" data-view="movement"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg><span>Movement</span></a>
+<a href="#device" data-view="device"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg><span>Device</span></a>
 <a href="#schedule" data-view="schedule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></svg><span>Schedule</span></a>
 <a href="#system" data-view="system"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="8" cy="17" r="1.6"/></svg><span>System</span></a>
 </nav>
@@ -271,8 +271,20 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <div class="field" id="runCustomBox" hidden><label for="runCustom">Minutes</label><input id="runCustom" inputmode="numeric" autocomplete="off" placeholder="1 to 1440"></div>
 </div>
 <div class="err" id="runErr"></div>
+<div class="runfor" id="pauseFor" hidden>
+<div class="field"><label for="pauseChoice">Pause for</label>
+<select id="pauseChoice">
+<option value="15">15 minutes</option>
+<option value="30">30 minutes</option>
+<option value="60">1 hour</option>
+<option value="120">2 hours</option>
+<option value="0">Until I resume</option>
+</select></div>
+</div>
 <div class="actions">
 <button id="bToggle" class="primary">Start</button>
+<button id="bPause" hidden>Pause</button>
+<button id="bResume" class="primary" hidden>Resume</button>
 <button id="bMove">Move now</button>
 </div>
 <p class="msg" id="msg" role="status" aria-live="polite"></p>
@@ -308,11 +320,11 @@ input[aria-invalid=true]{border-color:var(--bad)}
 </div>
 </section>
 
-<section class="view" id="view-movement" aria-labelledby="h-movement" hidden>
-<h1 id="h-movement">Movement</h1>
+<section class="view" id="view-device" aria-labelledby="h-device" hidden>
+<h1 id="h-device">Device</h1>
 
 <div class="block">
-<h2>Configuration</h2>
+<h2>Movement</h2>
 <form id="cfg" novalidate>
 <div class="row">
 <div class="field"><label for="minIntervalSec">Minimum interval (s)</label><input id="minIntervalSec" inputmode="numeric" autocomplete="off"><div class="err" id="e_minIntervalSec"></div></div>
@@ -327,6 +339,24 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <div class="actions"><button class="primary" type="submit">Save</button></div>
 <p id="cfgMsg" class="msg" role="status" aria-live="polite"></p>
 </form>
+</div>
+
+<div class="block" id="appearanceBox">
+<h2>Appearance</h2>
+<p class="hint lead">How the device introduces itself to computers over Bluetooth. Pick Custom or a real mouse model, then change any detail you like. A field left empty uses the model's value (shown in grey).</p>
+<div class="field"><label for="apModel">Shown as</label><select id="apModel"></select><div class="err" data-err="profile"></div></div>
+<div class="field"><label for="apName">Name</label><input id="apName" maxlength="29" autocomplete="off"><div class="err" data-err="name"></div></div>
+<div class="field"><label for="apManufacturer">Manufacturer</label><input id="apManufacturer" maxlength="32" autocomplete="off"><div class="err" data-err="manufacturer"></div></div>
+<div class="row">
+<div class="field"><label for="apVid">Vendor ID (VID)</label><input id="apVid" autocomplete="off" spellcheck="false"><div class="err" data-err="vid"></div></div>
+<div class="field"><label for="apPid">Product ID (PID)</label><input id="apPid" autocomplete="off" spellcheck="false"><div class="err" data-err="pid"></div></div>
+</div>
+<div class="field"><label for="apMac">Bluetooth address</label><input id="apMac" autocomplete="off" spellcheck="false"><div class="err" data-err="mac"></div>
+<p class="hint">Like AA:BB:CC:DD:EE:FF, with an even first byte. Empty keeps the model's vendor prefix and the chip's own last three bytes (Custom: the chip's own address). Setting one also changes the board's WiFi address. VID and PID are hexadecimal (0x046D) or decimal.</p></div>
+<p class="note" id="apNow">&nbsp;</p>
+<p class="hint"><b>Changing this restarts the device.</b> Computers already paired will not recognise it afterwards: on each one, remove the device in its Bluetooth settings, then pair it again from Computers → Open pairing.</p>
+<div class="actions"><button class="primary" id="apApply">Apply and restart</button></div>
+<p id="apMsg" class="msg" role="status" aria-live="polite"></p>
 </div>
 
 </section>
@@ -371,17 +401,6 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <p id="netMsg" class="msg" role="status" aria-live="polite"></p>
 </div>
 
-<div class="block" id="appearanceBox">
-<h2>Appearance</h2>
-<p class="hint lead">How the device introduces itself to computers over Bluetooth. By default it uses a neutral name. You can give it your own, or pick a real mouse model.</p>
-<div class="field"><label for="apModel">Shown as</label><select id="apModel"></select><div class="err" data-err="profile"></div></div>
-<div class="field" id="apNameBox" hidden><label for="apName">Name (optional)</label><input id="apName" maxlength="29" autocomplete="off"><div class="err" data-err="name"></div><p class="hint">Leave it empty to use the default name shown in the field.</p></div>
-<p class="note" id="apNow">&nbsp;</p>
-<p class="hint"><b>Changing this restarts the device.</b> Computers already paired will not recognise it afterwards: on each one, remove the device in its Bluetooth settings, then pair it again from Computers → Open pairing.</p>
-<div class="actions"><button class="primary" id="apApply">Apply and restart</button></div>
-<p id="apMsg" class="msg" role="status" aria-live="polite"></p>
-</div>
-
 <div class="block" id="fwBox">
 <h2>Firmware update</h2>
 <p class="hint lead">Replace the firmware over WiFi with a file built from this project. Your token, WiFi, pairings and schedules are kept.</p>
@@ -393,7 +412,7 @@ input[aria-invalid=true]{border-color:var(--bad)}
 </div>
 
 <div class="block">
-<h2>Device</h2>
+<h2>About this device</h2>
 <dl class="facts">
 <div><dt>Version</dt><dd id="infoVersion">—</dd></div>
 <div><dt>Bluetooth name</dt><dd id="infoName">—</dd></div>
@@ -709,6 +728,7 @@ var App = (function () {
 
   function route() {
     var name = (location.hash || '#status').slice(1);
+    if (name === 'movement') name = 'device';  // the section was renamed
     if (!views[name]) name = 'status';
     var changed = name !== current;
     current = name;
@@ -845,10 +865,18 @@ var App = (function () {
   }
 
   function renderMotion(s, elapsed) {
-    var running = s.state === 'running';
-    $('state').textContent = running ? 'Running' : 'Stopped';
+    var running = s.state === 'running', paused = s.state === 'paused';
+    $('state').textContent = running ? 'Running' : paused ? 'Paused' : 'Stopped';
     var next = $('next');
-    if (!running) next.textContent = 'Not running. Press Start to keep the computer awake.';
+    if (paused) {
+      var back = s.resumesInMs != null ? Math.max(0, s.resumesInMs - elapsed) : null;
+      var text = back != null ? 'Resumes in ' + fmtDuration(back) + ' (at ' + JigLib.stopsAt(back, new Date()) + ')' : 'Paused until you press Resume';
+      if (s.stopsInMs != null) {
+        var left0 = Math.max(0, s.stopsInMs - elapsed);
+        text += ' · stops at ' + JigLib.stopsAt(left0, new Date());
+      }
+      next.textContent = text + '.';
+    } else if (!running) next.textContent = 'Not running. Press Start to keep the computer awake.';
     else {
       var parts = [];
       if (!s.mouseConnected && s.msToNextMove === 0) parts.push('Waiting for a computer to connect.');
@@ -871,10 +899,13 @@ var App = (function () {
     if (!sc) $('clock').textContent = '—';
     else if (!sc.timeSynced) $('clock').textContent = 'Not synced (needs internet)';
     else $('clock').textContent = sc.localTime + ' · ' + sc.timezone + (sc.active ? ' · schedule open' : '');
-    var running = s.state === 'running';
-    $('bToggle').textContent = running ? 'Stop' : 'Start';
-    $('bToggle').className = running ? '' : 'primary';
-    $('runFor').hidden = running;
+    var running = s.state === 'running', paused = s.state === 'paused', stopped = !running && !paused;
+    $('bToggle').textContent = stopped ? 'Start' : 'Stop';
+    $('bToggle').className = stopped ? 'primary' : '';
+    $('bPause').hidden = !running;
+    $('bResume').hidden = !paused;
+    $('pauseFor').hidden = !running;
+    $('runFor').hidden = !stopped;
     $('runErr').textContent = running ? '' : $('runErr').textContent;
     $('bMove').disabled = !s.mouseConnected;
   }
@@ -953,10 +984,24 @@ var App = (function () {
     }).catch(function () {});
   }
 
+  $('bPause').onclick = function () {
+    var minutes = Number($('pauseChoice').value);
+    try { localStorage.setItem('jigglerPauseChoice', String(minutes)); } catch (e) {}
+    if (minutes > 0) control('POST', '/api/pause', { minutes: minutes }, 'Paused: it resumes by itself in ' + JigLib.fmtSince(minutes * 60000) + '.');
+    else control('POST', '/api/pause', undefined, 'Paused until you press Resume.');
+  };
+  $('bResume').onclick = function () { control('POST', '/api/resume', undefined, 'Resumed.'); };
+  (function restorePauseChoice() {
+    try {
+      var saved = localStorage.getItem('jigglerPauseChoice');
+      if (saved !== null && $('pauseChoice').querySelector('option[value="' + saved + '"]')) $('pauseChoice').value = saved;
+    } catch (e) {}
+  })();
+
   $('bToggle').onclick = function () {
     var s = App.status();
-    var running = s && s.state === 'running';
-    if (running) { control('POST', '/api/stop', undefined, 'Stopped.'); return; }
+    var active = s && (s.state === 'running' || s.state === 'paused');
+    if (active) { control('POST', '/api/stop', undefined, 'Stopped.'); return; }
     var minutes = JigLib.runForMinutes(readChoice(), new Date());
     if (minutes === null) {
       $('runErr').textContent = $('runChoice').value === 'until' ? 'Pick the time it should stop.' : 'Enter a whole number of minutes from 1 to 1440.';
@@ -1093,10 +1138,10 @@ var App = (function () {
   });
 })();
 
-// Movement: the random-movement configuration.
+// Device: how the movement behaves, and how the device appears over Bluetooth.
 (function () {
   'use strict';
-  var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
+  var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr, hex4 = JigLib.hex4;
   var labeled = App.labeled, clearErrors = App.clearErrors, showError = App.showError;
   var FIELDS = [
     { id: 'minIntervalSec', scale: 1 }, { id: 'maxIntervalSec', scale: 1 }, { id: 'amplitudePx', scale: 1 },
@@ -1138,8 +1183,90 @@ var App = (function () {
     }).catch(function () {});
   });
 
-  App.view('movement', {
-    load: function () { if (App.status()) populate(App.status()); },
+  // ---- Appearance (how the device introduces itself over Bluetooth) ----
+  var appearance = null, loadedKey = '';
+
+  function profileInfo(id) {
+    var list = appearance ? appearance.profiles : [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    var c = appearance.custom;
+    return { id: 'custom', name: c.name, manufacturer: c.manufacturer, vid: c.vid, pid: c.pid, oui: null };
+  }
+
+  function showPlaceholders() {
+    var p = profileInfo($('apModel').value);
+    $('apName').placeholder = p.name;
+    $('apManufacturer').placeholder = p.manufacturer;
+    $('apVid').placeholder = hex4(p.vid);
+    $('apPid').placeholder = hex4(p.pid);
+    $('apMac').placeholder = p.oui ? p.oui + ':xx:xx:xx (the rest from the chip)' : 'the chip’s own address';
+  }
+
+  function parseId(text) {
+    var t = text.trim();
+    if (/^0x[0-9a-f]{1,4}$/i.test(t)) return parseInt(t.slice(2), 16);
+    if (/^\d{1,5}$/.test(t) && Number(t) <= 65535) return Number(t);
+    return null;
+  }
+
+  // The request body for what the form shows now; { error: [field, message] } when a field cannot be read.
+  function readAppearance() {
+    var body = { profile: $('apModel').value };
+    var name = $('apName').value.trim(), man = $('apManufacturer').value.trim(), mac = $('apMac').value.trim();
+    if (name) body.name = name;
+    if (man) body.manufacturer = man;
+    if (mac) body.mac = mac;
+    var ids = [['vid', 'apVid'], ['pid', 'apPid']];
+    for (var i = 0; i < ids.length; i++) {
+      var raw = $(ids[i][1]).value.trim();
+      if (!raw) continue;
+      var n = parseId(raw);
+      if (n === null) return { error: [ids[i][0], 'must be an integer from 0 to 65535'] };
+      body[ids[i][0]] = n;
+    }
+    return { body: body };
+  }
+
+  function renderAppearance() {
+    var sel = $('apModel');
+    sel.textContent = '';
+    sel.appendChild(el('option', { value: 'custom', text: 'Custom' }));
+    appearance.profiles.forEach(function (p) { sel.appendChild(el('option', { value: p.id, text: p.label })); });
+    sel.value = appearance.profile;
+    $('apName').value = appearance.name || '';
+    $('apManufacturer').value = appearance.manufacturer || '';
+    $('apVid').value = appearance.vid !== undefined ? hex4(appearance.vid) : '';
+    $('apPid').value = appearance.pid !== undefined ? hex4(appearance.pid) : '';
+    $('apMac').value = appearance.mac || '';
+    showPlaceholders();
+    loadedKey = JSON.stringify(readAppearance().body);
+    $('apNow').textContent = 'Currently shown as: ' + appearance.shownAs + '.';
+  }
+
+  function loadAppearance() {
+    App.call('GET', '/api/appearance').then(function (res) {
+      if (res.status !== 200) return;
+      appearance = res.data;
+      renderAppearance();
+    }).catch(function () {});
+  }
+  $('apModel').addEventListener('change', showPlaceholders);
+
+  App.confirmInline($('apApply'), 'Confirm: restart and pair again', function () {
+    var root = $('appearanceBox');
+    clearErrors(root);
+    say('', '', 'apMsg');
+    var read = readAppearance();
+    if (read.error) { showError(root, read.error[0], read.error[1]); return; }
+    if (JSON.stringify(read.body) === loadedKey) { say('Nothing to change.', '', 'apMsg'); return; }
+    App.call('PUT', '/api/appearance', read.body).then(function (res) {
+      if (res.status === 200) { say('Saved. Restarting…', 'good', 'apMsg'); return App.restartDevice(); }
+      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Could not save.', 'bad', 'apMsg');
+    }).catch(function () {});
+  });
+
+  App.view('device', {
+    load: function () { if (App.status()) populate(App.status()); loadAppearance(); },
     onStatus: function (s) { populate(s); }
   });
 })();
@@ -1371,55 +1498,6 @@ var App = (function () {
   $('netSave').onclick = function () { saveNetwork(false); };
   $('netSaveRestart').onclick = function () { saveNetwork(true); };
 
-  // ---- Appearance (how the device introduces itself over Bluetooth) ----
-  var appearance = null, loadedProfile = '', loadedName = '';
-
-  function modelLabel(id) {
-    var list = appearance ? appearance.profiles : [];
-    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].label;
-    return id;
-  }
-
-  function showNameBox() { $('apNameBox').hidden = $('apModel').value !== 'custom'; }
-
-  function renderAppearance() {
-    var sel = $('apModel');
-    sel.textContent = '';
-    sel.appendChild(el('option', { value: 'custom', text: 'Custom name' }));
-    appearance.profiles.forEach(function (p) { sel.appendChild(el('option', { value: p.id, text: p.label })); });
-    sel.value = appearance.profile;
-    $('apName').placeholder = appearance.custom.name;
-    $('apName').value = appearance.name || '';
-    loadedProfile = sel.value;
-    loadedName = $('apName').value;
-    showNameBox();
-    $('apNow').textContent = 'Currently shown as: ' + appearance.shownAs + '.';
-  }
-
-  function loadAppearance() {
-    App.call('GET', '/api/appearance').then(function (res) {
-      if (res.status !== 200) return;
-      appearance = res.data;
-      renderAppearance();
-    }).catch(function () {});
-  }
-  $('apModel').addEventListener('change', showNameBox);
-
-  App.confirmInline($('apApply'), 'Confirm: restart and pair again', function () {
-    var root = $('appearanceBox');
-    clearErrors(root);
-    say('', '', 'apMsg');
-    var profile = $('apModel').value, name = $('apName').value.trim();
-    if (profile === loadedProfile && (profile !== 'custom' || name === loadedName)) { say('Nothing to change.', '', 'apMsg'); return; }
-    var next = { profile: profile };
-    ['manufacturer', 'vid', 'pid', 'mac'].forEach(function (k) { if (appearance[k] !== undefined) next[k] = appearance[k]; });  // advanced values set through the API stay
-    if (profile === 'custom' && name) next.name = name;
-    App.call('PUT', '/api/appearance', next).then(function (res) {
-      if (res.status === 200) { say('Saved. Restarting…', 'good', 'apMsg'); return App.restartDevice(); }
-      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Could not save.', 'bad', 'apMsg');
-    }).catch(function () {});
-  });
-
   // ---- Firmware update (OTA) ----
   function uploadFirmware(file) {
     var xhr = new XMLHttpRequest();
@@ -1469,7 +1547,7 @@ var App = (function () {
   App.confirmInline($('restartBtn'), 'Confirm: restart', function () { say('', '', 'sysMsg'); App.restartDevice(); });
 
   App.view('system', {
-    load: function () { loadNetwork(); loadAppearance(); if (App.status()) renderInfo(App.status()); },
+    load: function () { loadNetwork(); if (App.status()) renderInfo(App.status()); },
     onStatus: renderInfo
   });
 })();

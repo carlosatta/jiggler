@@ -20,7 +20,8 @@ struct Status {
   bool mouseConnected = false;
   bool wifiConnected = false;
   std::optional<uint32_t> msToNextMove;  // only while Running
-  std::optional<uint32_t> msToAutoStop;  // only while Running with a time limit
+  std::optional<uint32_t> msToAutoStop;  // while Running or Paused with a time limit
+  std::optional<uint32_t> msToResume;    // only while Paused with a timer
   uint32_t moveCount = 0;
   std::optional<uint32_t> lastMoveAgoMs;
   std::optional<uint32_t> lastMoveUnix;  // only when the wall clock is synced
@@ -43,7 +44,9 @@ class Controller {
   Status status() const;
   CmdResult start();                   // run until told otherwise (clears any time limit); error: no_computer_paired
   CmdResult startFor(uint32_t minutes);  // run, then stop by itself; 1..kMaxRunMinutes; errors: invalid_minutes, no_computer_paired
-  void pause();
+  void pause();                         // until resume(); keeps the remaining wait and any time limit
+  CmdResult pauseFor(uint32_t minutes);  // pause, then resume by itself; 1..kMaxRunMinutes; errors: invalid_minutes, not_running
+  CmdResult resume();                    // end a pause now, keeping any time limit; error: not_paused
   void stop();
   CmdResult moveNow();
   CmdResult updateConfig(const ConfigPatch& patch);
@@ -67,6 +70,8 @@ class Controller {
   uint32_t dueMs_ = 0;
   uint32_t stopAtMs_ = 0;
   bool hasStopAt_ = false;
+  uint32_t resumeAtMs_ = 0;
+  bool hasResumeAt_ = false;
   uint32_t pausedRemainingMs_ = 0;
   bool pendingMoveNow_ = false;
   uint32_t moveCount_ = 0;

@@ -245,7 +245,7 @@ void test_start_for_replaces_a_running_deadline() {
   TEST_ASSERT_EQUAL_UINT32(30u * 60000u, *f.c.status().msToAutoStop);
 }
 
-void test_plain_start_stop_and_pause_clear_the_deadline() {
+void test_plain_start_and_stop_clear_the_deadline() {
   Fixture f(10, 10);
   f.c.startFor(5);
   f.c.start();
@@ -253,9 +253,98 @@ void test_plain_start_stop_and_pause_clear_the_deadline() {
   f.c.startFor(5);
   f.c.stop();
   TEST_ASSERT_FALSE(f.c.status().msToAutoStop.has_value());
-  f.c.startFor(5);
+}
+
+void test_pause_keeps_the_time_limit_running() {
+  Fixture f(10, 10);
+  f.c.startFor(10);
+  f.clock.now = 60000;
   f.c.pause();
-  TEST_ASSERT_FALSE(f.c.status().msToAutoStop.has_value());
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Paused);
+  TEST_ASSERT_EQUAL_UINT32(540000, *f.c.status().msToAutoStop);   // a deadline is a moment, it keeps ticking
+  f.clock.now = 300000;
+  TEST_ASSERT_EQUAL_UINT32(300000, *f.c.status().msToAutoStop);
+  TEST_ASSERT_TRUE(f.c.resume().ok);
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Running);
+  TEST_ASSERT_EQUAL_UINT32(300000, *f.c.status().msToAutoStop);   // resuming did not clear it
+  f.c.pause();
+  f.clock.now = 600000;
+  f.c.tick();                                                     // the deadline passes during a pause
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Stopped);
+}
+
+void test_pause_for_resumes_by_itself() {
+  Fixture f(10, 10);
+  TEST_ASSERT_TRUE(f.c.pauseFor(5).ok);
+  Status s = f.c.status();
+  TEST_ASSERT_TRUE(s.runState == RunState::Paused);
+  TEST_ASSERT_EQUAL_UINT32(300000, *s.msToResume);
+  TEST_ASSERT_FALSE(s.msToNextMove.has_value());                  // nothing is scheduled while paused
+  f.clock.now = 299999;
+  f.c.tick();
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Paused);
+  f.clock.now = 300000;
+  f.c.tick();
+  s = f.c.status();
+  TEST_ASSERT_TRUE(s.runState == RunState::Running);
+  TEST_ASSERT_FALSE(s.msToResume.has_value());
+  TEST_ASSERT_TRUE(s.msToNextMove.has_value());
+}
+
+void test_pause_until_resumed_stays_paused() {
+  Fixture f(10, 10);
+  f.c.pause();
+  Status s = f.c.status();
+  TEST_ASSERT_TRUE(s.runState == RunState::Paused);
+  TEST_ASSERT_FALSE(s.msToResume.has_value());
+  f.clock.now = 10000000;
+  TEST_ASSERT_FALSE(f.c.tick().has_value());
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Paused);
+  TEST_ASSERT_TRUE(f.c.resume().ok);
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Running);
+}
+
+void test_manual_resume_cancels_the_pause_timer_and_stop_clears_it() {
+  Fixture f(10, 10);
+  f.c.pauseFor(5);
+  TEST_ASSERT_TRUE(f.c.resume().ok);
+  f.clock.now = 400000;
+  f.c.tick();
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Running);
+  f.c.pauseFor(5);
+  f.c.stop();
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Stopped);
+  TEST_ASSERT_FALSE(f.c.status().msToResume.has_value());
+  f.clock.now += 400000;
+  f.c.tick();
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Stopped);   // a pause timer never revives a stopped jiggler
+}
+
+void test_pause_for_validates_and_needs_a_running_jiggler() {
+  Fixture f(10, 10);
+  CmdResult bad = f.c.pauseFor(0);
+  TEST_ASSERT_EQUAL_STRING("invalid_minutes", bad.error.c_str());
+  TEST_ASSERT_FALSE(f.c.pauseFor(1441).ok);
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Running);   // nothing changed
+  f.c.stop();
+  CmdResult stopped = f.c.pauseFor(5);
+  TEST_ASSERT_FALSE(stopped.ok);
+  TEST_ASSERT_EQUAL_STRING("not_running", stopped.error.c_str());
+  CmdResult resumeStopped = f.c.resume();                          // resume only applies to a paused jiggler
+  TEST_ASSERT_FALSE(resumeStopped.ok);
+  TEST_ASSERT_EQUAL_STRING("not_paused", resumeStopped.error.c_str());
+}
+
+void test_pause_for_deadline_survives_the_millis_wraparound() {
+  Fixture f(10, 10);
+  f.clock.now = 0xFFFFFF00u;
+  f.c.pauseFor(1);
+  f.clock.now = 0xFFFFFF00u + 59999u;
+  f.c.tick();
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Paused);
+  f.clock.now = 0xFFFFFF00u + 60000u;
+  f.c.tick();
+  TEST_ASSERT_TRUE(f.c.status().runState == RunState::Running);
 }
 
 void test_start_for_rejects_out_of_range_minutes() {
@@ -336,7 +425,13 @@ int main() {
   RUN_TEST(test_last_move_unix_null_when_clock_unsynced);
   RUN_TEST(test_start_for_stops_by_itself);
   RUN_TEST(test_start_for_replaces_a_running_deadline);
-  RUN_TEST(test_plain_start_stop_and_pause_clear_the_deadline);
+  RUN_TEST(test_plain_start_and_stop_clear_the_deadline);
+  RUN_TEST(test_pause_keeps_the_time_limit_running);
+  RUN_TEST(test_pause_for_resumes_by_itself);
+  RUN_TEST(test_pause_until_resumed_stays_paused);
+  RUN_TEST(test_manual_resume_cancels_the_pause_timer_and_stop_clears_it);
+  RUN_TEST(test_pause_for_validates_and_needs_a_running_jiggler);
+  RUN_TEST(test_pause_for_deadline_survives_the_millis_wraparound);
   RUN_TEST(test_start_for_rejects_out_of_range_minutes);
   RUN_TEST(test_start_for_deadline_survives_the_millis_wraparound);
   RUN_TEST(test_it_cannot_run_without_a_paired_computer);

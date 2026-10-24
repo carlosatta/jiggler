@@ -51,55 +51,6 @@
   $('netSave').onclick = function () { saveNetwork(false); };
   $('netSaveRestart').onclick = function () { saveNetwork(true); };
 
-  // ---- Appearance (how the device introduces itself over Bluetooth) ----
-  var appearance = null, loadedProfile = '', loadedName = '';
-
-  function modelLabel(id) {
-    var list = appearance ? appearance.profiles : [];
-    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].label;
-    return id;
-  }
-
-  function showNameBox() { $('apNameBox').hidden = $('apModel').value !== 'custom'; }
-
-  function renderAppearance() {
-    var sel = $('apModel');
-    sel.textContent = '';
-    sel.appendChild(el('option', { value: 'custom', text: 'Custom name' }));
-    appearance.profiles.forEach(function (p) { sel.appendChild(el('option', { value: p.id, text: p.label })); });
-    sel.value = appearance.profile;
-    $('apName').placeholder = appearance.custom.name;
-    $('apName').value = appearance.name || '';
-    loadedProfile = sel.value;
-    loadedName = $('apName').value;
-    showNameBox();
-    $('apNow').textContent = 'Currently shown as: ' + appearance.shownAs + '.';
-  }
-
-  function loadAppearance() {
-    App.call('GET', '/api/appearance').then(function (res) {
-      if (res.status !== 200) return;
-      appearance = res.data;
-      renderAppearance();
-    }).catch(function () {});
-  }
-  $('apModel').addEventListener('change', showNameBox);
-
-  App.confirmInline($('apApply'), 'Confirm: restart and pair again', function () {
-    var root = $('appearanceBox');
-    clearErrors(root);
-    say('', '', 'apMsg');
-    var profile = $('apModel').value, name = $('apName').value.trim();
-    if (profile === loadedProfile && (profile !== 'custom' || name === loadedName)) { say('Nothing to change.', '', 'apMsg'); return; }
-    var next = { profile: profile };
-    ['manufacturer', 'vid', 'pid', 'mac'].forEach(function (k) { if (appearance[k] !== undefined) next[k] = appearance[k]; });  // advanced values set through the API stay
-    if (profile === 'custom' && name) next.name = name;
-    App.call('PUT', '/api/appearance', next).then(function (res) {
-      if (res.status === 200) { say('Saved. Restarting…', 'good', 'apMsg'); return App.restartDevice(); }
-      if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Could not save.', 'bad', 'apMsg');
-    }).catch(function () {});
-  });
-
   // ---- Firmware update (OTA) ----
   function uploadFirmware(file) {
     var xhr = new XMLHttpRequest();
@@ -149,7 +100,7 @@
   App.confirmInline($('restartBtn'), 'Confirm: restart', function () { say('', '', 'sysMsg'); App.restartDevice(); });
 
   App.view('system', {
-    load: function () { loadNetwork(); loadAppearance(); if (App.status()) renderInfo(App.status()); },
+    load: function () { loadNetwork(); if (App.status()) renderInfo(App.status()); },
     onStatus: renderInfo
   });
 })();

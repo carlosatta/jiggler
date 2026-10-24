@@ -56,6 +56,7 @@ struct Route {
 const Route kRoutes[] = {
     {"/api/status", {"GET", nullptr}}, {"/api/start", {"POST", nullptr}},
     {"/api/stop", {"POST", nullptr}},  {"/api/pause", {"POST", nullptr}},
+    {"/api/resume", {"POST", nullptr}},
     {"/api/move", {"POST", nullptr}},  {"/api/config", {"GET", "PUT"}},
 };
 }  // namespace
@@ -80,8 +81,20 @@ HttpResponse handleApi(Controller& c, const std::string& method, const std::stri
     CmdResult started = minutes ? c.startFor(*minutes) : c.start();
     if (!started.ok) return json(started.error == "no_computer_paired" ? 409 : 400, errorJson(started.error, started.field, started.message));
   } else if (path == "/api/stop") c.stop();
-  else if (path == "/api/pause") c.pause();
-  else if (path == "/api/move") {
+  else if (path == "/api/pause") {
+    std::optional<uint32_t> minutes;
+    ParseError perr;
+    if (!parseStartRequest(body, minutes, perr)) return json(400, errorJson(perr.code, perr.field, perr.message));
+    if (minutes) {
+      CmdResult paused = c.pauseFor(*minutes);
+      if (!paused.ok) return json(paused.error == "not_running" ? 409 : 400, errorJson(paused.error, paused.field, paused.message));
+    } else {
+      c.pause();
+    }
+  } else if (path == "/api/resume") {
+    CmdResult resumed = c.resume();
+    if (!resumed.ok) return json(409, errorJson(resumed.error, resumed.field, resumed.message));
+  } else if (path == "/api/move") {
     CmdResult r = c.moveNow();
     if (!r.ok) return json(409, errorJson(r.error, r.field, r.message));
     return json(202, "{\"queued\":true}");

@@ -47,7 +47,8 @@ Body size caps: 4096 bytes for MCP, 2048 for devices and schedules, 1024 for con
 |---|---|---|
 | GET | `/api/status` | Full status |
 | POST | `/api/start` | Start (or resume). Optional body `{"minutes": 1..1440}`: it then stops by itself after that long; without it, it runs until stopped |
-| POST | `/api/pause` | Pause; resuming keeps the remaining time |
+| POST | `/api/pause` | Pause. Optional body `{"minutes": 1..1440}`: it then resumes by itself after that long; without it, it stays paused until `resume`. Keeps any time limit running. `409 not_running` if nothing is running |
+| POST | `/api/resume` | End a pause now (`409 not_paused` otherwise) |
 | POST | `/api/stop` | Stop completely |
 | POST | `/api/move` | Queue one movement now. `202 {"queued":true}`, or `409 mouse_not_connected` |
 
@@ -60,6 +61,7 @@ Body size caps: 4096 bytes for MCP, 2048 for devices and schedules, 1024 for con
   "wifiConnected": true,
   "msToNextMove": 41250,
   "stopsInMs": null,
+  "resumesInMs": null,
   "moveCount": 17,
   "lastMoveAgoMs": 12000,
   "lastMoveAt": 1792750000,
@@ -68,7 +70,7 @@ Body size caps: 4096 bytes for MCP, 2048 for devices and schedules, 1024 for con
 }
 ```
 
-`state` is `running`, `paused` or `stopped`. `stopsInMs` is the time left before a timed run stops by itself (`null` when there is no limit). `msToNextMove`, `lastMoveAgoMs` and `lastMoveAt` (Unix time, needs NTP) are `null` when unknown.
+`state` is `running`, `paused` or `stopped`. `resumesInMs` is the time left in a timed pause (`null` otherwise). `stopsInMs` is the time left before a timed run stops by itself (`null` when there is no limit). `msToNextMove`, `lastMoveAgoMs` and `lastMoveAt` (Unix time, needs NTP) are `null` when unknown.
 
 ## Bluetooth
 

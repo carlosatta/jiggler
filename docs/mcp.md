@@ -28,7 +28,8 @@ Tool failures are returned as a normal result with `isError: true` and a JSON er
 |---|---|---|
 | `get_status` | – | Run state, mouse/WiFi connection, time to next movement, move count, last movement, config |
 | `start` | `minutes` (1–1440, optional) | Start or resume; with `minutes` it stops by itself after that long |
-| `pause` | – | Pause, keeping the remaining time |
+| `pause` | `minutes` (1–1440, optional) | Pause; with `minutes` it resumes by itself after that long |
+| `resume` | – | End a pause now |
 | `stop` | – | Stop |
 | `move_now` | – | Queue a test movement; fails if the mouse is not connected |
 | `set_config` | `minIntervalSec`, `maxIntervalSec`, `amplitudePx`, `clickProbability`, `scrollProbability` (all optional) | Change configuration |

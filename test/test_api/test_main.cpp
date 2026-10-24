@@ -288,6 +288,40 @@ void test_start_without_a_paired_computer_is_a_conflict() {
   TEST_ASSERT_EQUAL_INT(200, a.call("POST", "/api/start").status);
 }
 
+void test_pause_for_and_resume_over_the_api() {
+  Api a;
+  HttpResponse p = a.call("POST", "/api/pause", "{\"minutes\":15}");
+  TEST_ASSERT_EQUAL_INT(200, p.status);
+  JsonDocument d = parse(p.body);
+  TEST_ASSERT_EQUAL_STRING("paused", d["state"].as<const char*>());
+  TEST_ASSERT_EQUAL_UINT32(900000, d["resumesInMs"].as<uint32_t>());
+  TEST_ASSERT_TRUE(parse(a.call("GET", "/api/status").body)["resumesInMs"].as<uint32_t>() > 0);
+  HttpResponse r = a.call("POST", "/api/resume");
+  TEST_ASSERT_EQUAL_INT(200, r.status);
+  TEST_ASSERT_EQUAL_STRING("running", parse(r.body)["state"].as<const char*>());
+  TEST_ASSERT_TRUE(contains(a.call("GET", "/api/status").body, "\"resumesInMs\":null"));
+}
+
+void test_plain_pause_waits_for_a_resume() {
+  Api a;
+  HttpResponse p = a.call("POST", "/api/pause");
+  TEST_ASSERT_EQUAL_INT(200, p.status);
+  TEST_ASSERT_EQUAL_STRING("paused", parse(p.body)["state"].as<const char*>());
+  TEST_ASSERT_TRUE(contains(p.body, "\"resumesInMs\":null"));
+}
+
+void test_pause_and_resume_errors() {
+  Api a;
+  for (const char* body : {"{\"minutes\":0}", "{\"minutes\":1441}", "{\"minutes\":\"5\"}", "{\"hours\":1}", "nope"})
+    TEST_ASSERT_EQUAL_INT_MESSAGE(400, a.call("POST", "/api/pause", body).status, body);
+  TEST_ASSERT_EQUAL_INT(409, a.call("POST", "/api/resume").status);              // not paused
+  a.call("POST", "/api/stop");
+  HttpResponse stopped = a.call("POST", "/api/pause", "{\"minutes\":5}");
+  TEST_ASSERT_EQUAL_INT(409, stopped.status);
+  TEST_ASSERT_TRUE(contains(stopped.body, "not_running"));
+  TEST_ASSERT_EQUAL_INT(405, a.call("GET", "/api/resume").status);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_copy_body_chunk_never_writes_past_total);
@@ -309,5 +343,8 @@ int main() {
   RUN_TEST(test_start_with_minutes_sets_a_time_limit);
   RUN_TEST(test_start_rejects_bad_minutes_and_bodies);
   RUN_TEST(test_start_without_a_paired_computer_is_a_conflict);
+  RUN_TEST(test_pause_for_and_resume_over_the_api);
+  RUN_TEST(test_plain_pause_waits_for_a_resume);
+  RUN_TEST(test_pause_and_resume_errors);
   return UNITY_END();
 }

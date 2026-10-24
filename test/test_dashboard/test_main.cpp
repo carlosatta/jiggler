@@ -60,6 +60,8 @@ const Route kPageRoutes[] = {
     {"GET", "/api/status", ""},
     {"POST", "/api/start", ""},
     {"POST", "/api/start", "{\"minutes\":30}"},
+    {"POST", "/api/pause", "{\"minutes\":15}"},
+    {"POST", "/api/resume", ""},
     {"POST", "/api/stop", ""},
     {"POST", "/api/move", ""},
     {"PUT", "/api/config", "{}"},

@@ -82,9 +82,9 @@ void test_tools_list_names() {
   McpReply r = m.call("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}");
   JsonDocument d = parse(r.body);
   JsonArray tools = d["result"]["tools"].as<JsonArray>();
-  const char* expected[] = {"get_status", "start", "pause", "stop", "move_now", "set_config"};
-  TEST_ASSERT_EQUAL_UINT32(6, tools.size());
-  for (size_t i = 0; i < 6; i++) {
+  const char* expected[] = {"get_status", "start", "pause", "resume", "stop", "move_now", "set_config"};
+  TEST_ASSERT_EQUAL_UINT32(7, tools.size());
+  for (size_t i = 0; i < 7; i++) {
     TEST_ASSERT_EQUAL_STRING(expected[i], tools[i]["name"].as<const char*>());
     TEST_ASSERT_TRUE(tools[i]["description"].is<const char*>());
     TEST_ASSERT_TRUE(tools[i]["inputSchema"].is<JsonObject>());
@@ -123,6 +123,21 @@ void test_start_tool_refuses_without_a_paired_computer() {
   McpReply r = m.tool("start");
   TEST_ASSERT_TRUE(isError(r));
   TEST_ASSERT_TRUE(isError(m.tool("start", "{\"minutes\":10}")));
+}
+
+void test_pause_tool_takes_minutes_and_resume_ends_a_pause() {
+  Mcp m;
+  McpReply p = m.tool("pause", "{\"minutes\":20}");
+  TEST_ASSERT_FALSE(isError(p));
+  TEST_ASSERT_EQUAL_STRING("paused", toolText(p)["state"].as<const char*>());
+  TEST_ASSERT_EQUAL_UINT32(1200000, toolText(p)["resumesInMs"].as<uint32_t>());
+  McpReply r = m.tool("resume");
+  TEST_ASSERT_FALSE(isError(r));
+  TEST_ASSERT_EQUAL_STRING("running", toolText(r)["state"].as<const char*>());
+  TEST_ASSERT_TRUE(isError(m.tool("resume")));                          // not paused any more
+  TEST_ASSERT_TRUE(isError(m.tool("pause", "{\"minutes\":0}")));
+  m.tool("stop");
+  TEST_ASSERT_TRUE(isError(m.tool("pause", "{\"minutes\":5}")));       // nothing running to pause
 }
 
 void test_call_move_now() {
@@ -231,6 +246,7 @@ int main() {
   RUN_TEST(test_parse_error_reply_has_null_id);
   RUN_TEST(test_oversized_body_rejected);
   RUN_TEST(test_start_tool_accepts_minutes);
+  RUN_TEST(test_pause_tool_takes_minutes_and_resume_ends_a_pause);
   RUN_TEST(test_start_tool_refuses_without_a_paired_computer);
   return UNITY_END();
 }

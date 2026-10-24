@@ -21,9 +21,13 @@ Status Controller::status() const {
   s.mouseConnected = platform_.mouseConnected();
   s.wifiConnected = platform_.wifiConnected();
   if (state_ == RunState::Running) s.msToNextMove = remainingMsLocked();
-  if (state_ == RunState::Running && hasStopAt_) {
+  if (state_ != RunState::Stopped && hasStopAt_) {
     const int32_t left = static_cast<int32_t>(stopAtMs_ - platform_.nowMs());
     s.msToAutoStop = left > 0 ? static_cast<uint32_t>(left) : 0;
+  }
+  if (state_ == RunState::Paused && hasResumeAt_) {
+    const int32_t left = static_cast<int32_t>(resumeAtMs_ - platform_.nowMs());
+    s.msToResume = left > 0 ? static_cast<uint32_t>(left) : 0;
   }
   s.moveCount = moveCount_;
   if (hasMoved_) {
@@ -48,7 +52,10 @@ CmdResult noComputer() {
 CmdResult Controller::start() {
   std::lock_guard<std::mutex> lock(mutex_);
   CmdResult r = startLocked();
-  if (r.ok) hasStopAt_ = false;
+  if (r.ok) {
+    hasStopAt_ = false;
+    hasResumeAt_ = false;
+  }
   return r;
 }
 
@@ -63,6 +70,7 @@ CmdResult Controller::startFor(uint32_t minutes) {
   std::lock_guard<std::mutex> lock(mutex_);
   r = startLocked();
   if (!r.ok) return r;
+  hasResumeAt_ = false;
   stopAtMs_ = platform_.nowMs() + minutes * 60000u;
   hasStopAt_ = true;
   return r;
@@ -88,13 +96,48 @@ void Controller::pause() {
   if (state_ != RunState::Running) return;
   pausedRemainingMs_ = remainingMsLocked();
   state_ = RunState::Paused;
-  hasStopAt_ = false;
+  hasResumeAt_ = false;  // a time limit, if any, keeps running: it is a moment, not a stopwatch
+}
+
+CmdResult Controller::pauseFor(uint32_t minutes) {
+  CmdResult r;
+  if (minutes < 1 || minutes > kMaxRunMinutes) {
+    r.error = "invalid_minutes";
+    r.field = "minutes";
+    r.message = "must be between 1 and 1440";
+    return r;
+  }
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (state_ != RunState::Running) {
+    r.error = "not_running";
+    r.message = "only a running jiggler can be paused";
+    return r;
+  }
+  pausedRemainingMs_ = remainingMsLocked();
+  state_ = RunState::Paused;
+  resumeAtMs_ = platform_.nowMs() + minutes * 60000u;
+  hasResumeAt_ = true;
+  r.ok = true;
+  return r;
+}
+
+CmdResult Controller::resume() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  CmdResult r;
+  if (state_ != RunState::Paused) {
+    r.error = "not_paused";
+    r.message = "the jiggler is not paused";
+    return r;
+  }
+  hasResumeAt_ = false;
+  return startLocked();
 }
 
 void Controller::stop() {
   std::lock_guard<std::mutex> lock(mutex_);
   state_ = RunState::Stopped;
   hasStopAt_ = false;
+  hasResumeAt_ = false;
 }
 
 CmdResult Controller::moveNow() {
@@ -134,10 +177,16 @@ std::optional<Plan> Controller::tick() {
   if (hasStopAt_ && static_cast<int32_t>(platform_.nowMs() - stopAtMs_) >= 0) {
     state_ = RunState::Stopped;
     hasStopAt_ = false;
+    hasResumeAt_ = false;
   }
-  if (state_ == RunState::Running && !platform_.computerPaired()) {  // every computer was forgotten
+  if (state_ == RunState::Paused && hasResumeAt_ && static_cast<int32_t>(platform_.nowMs() - resumeAtMs_) >= 0) {
+    hasResumeAt_ = false;
+    startLocked();  // the pause is over
+  }
+  if (state_ != RunState::Stopped && !platform_.computerPaired()) {  // every computer was forgotten
     state_ = RunState::Stopped;
     hasStopAt_ = false;
+    hasResumeAt_ = false;
   }
   if (pendingMoveNow_) {
     pendingMoveNow_ = false;

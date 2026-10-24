@@ -1,6 +1,6 @@
 # Dashboard tour
 
-The dashboard is a single page served by the board at `http://jiggler.local/`. It works on phones (bottom bar) and desktops (side bar), follows your light or dark theme, and signs in with your [token](network.md#the-token). Five sections.
+The dashboard is a single page served by the board at `http://jiggler.local/`. It works on phones (bottom bar) and desktops (side bar), follows your light or dark theme, and signs in with your [token](network.md#the-token). Five sections: Status, Computers, Device, Schedule, System.
 
 <p align="center">
   <img src="images/desktop-status-light.png" alt="Dashboard on a desktop, light theme" width="760">
@@ -12,12 +12,14 @@ The first thing you see: **which computer is connected and since when**, and wha
 
 <p align="center">
   <img src="images/status-running.png" alt="Status while running for 30 minutes" width="260">
+  <img src="images/status-paused.png" alt="Status while paused: it resumes in 15 minutes" width="260">
   <img src="images/status-disconnected.png" alt="Status while the device is hidden after Disconnect" width="260">
 </p>
 
 - **Connection.** *Connected to Computer 1, for 12 minutes.* **Disconnect** drops the link and hides the device for 3 minutes, so the computer does not reconnect at once (it does not power the device off). While hidden, the card counts down and offers **Reconnect**.
-- **Movement.** *Running* or *Stopped*, the time to the next movement, and, for a timed run, when it will stop.
+- **Movement.** *Running*, *Paused* or *Stopped*, the time to the next movement, and, for a timed run, when it will stop.
 - **Run for** (shown while stopped): *until I stop it*, 5, 10 or 30 minutes, 1 hour, *until a time of day*, or a custom number of minutes (1 to 1440). **Start** applies it; **Move now** makes one movement immediately.
+- **Pause** (shown while running): *15 minutes, 30 minutes, 1 hour, 2 hours*, or *until I resume*. While paused the cursor does not move and the card says when it resumes by itself; **Resume** ends it at once and **Stop** stops everything. A time limit set with **Run for** keeps counting during a pause, and a schedule keeps its own timetable: a pause lasts until it ends or until the next window opens or closes. Use it when you sit down to work, or step away, without losing your schedule.
 - **Facts.** Last movement, movements made, the device clock (with its timezone) and WiFi.
 
 On a new board, Status shows the guided **Set up your Jiggler** card until a computer is paired ([Getting started](getting-started.md)). The jiggler cannot start before that.
@@ -33,13 +35,15 @@ On a new board, Status shows the guided **Set up your Jiggler** card until a com
 
 Details and the reasoning are in [Bluetooth](bluetooth.md).
 
-## Movement
+## Device
 
 <p align="center">
-  <img src="images/movement.png" alt="Movement configuration" width="260">
+  <img src="images/device.png" alt="Movement settings" width="260">
+  <img src="images/device-appearance.png" alt="Appearance, with the model list and the spoofing fields" width="260">
 </p>
 
-How a movement looks and how often it happens: the minimum and maximum interval between movements, the movement size, and the chance of a random click (always a left click) or scroll. Defaults are conservative: 30 to 120 seconds, 150 px, no clicks, a few scrolls.
+- **Movement.** How a movement looks and how often it happens: the minimum and maximum interval between movements, the movement size, and the chance of a random click (always a left click) or scroll. Defaults are conservative: 30 to 120 seconds, 150 px, no clicks, a few scrolls.
+- **Appearance.** How the device introduces itself over Bluetooth. **Shown as** starts with **Custom** (a neutral "Bluetooth Mouse") followed by real mouse models; under it you can change the **name, manufacturer, vendor and product ID, and Bluetooth address** (the spoofing fields). A field left empty uses the model's value, shown in grey. Applying restarts the device and each paired computer must pair again. See [Appearance](appearance.md).
 
 ## Schedule
 
@@ -53,14 +57,13 @@ Weekly windows that start and stop the jiggler for you, in the **timezone** you 
 
 <p align="center">
   <img src="images/system.png" alt="Security and network" width="260">
-  <img src="images/system-appearance.png" alt="Appearance and device information" width="260">
 </p>
 
 - **Security.** Change the token (you need the current one).
 - **Network.** *Auto* (your home WiFi, with the setup network as a fallback) or *Own network* (the board creates a protected WiFi network). The own-network password is optional: leave it empty and one is generated the first time. See [Network](network.md).
 - **Appearance.** The name the device shows over Bluetooth: a neutral "Bluetooth Mouse" by default, a name of your own, or a real mouse model. Changing it restarts the device and needs each computer to pair again. See [Appearance](appearance.md).
 - **Firmware update.** Upload a `.bin` to update the device over WiFi; see [Getting started](getting-started.md#updating-the-firmware-later-no-cable).
-- **Device.** Firmware version, Bluetooth name and address, and **Restart**.
+- **About this device.** Firmware version, Bluetooth name and address, and **Restart**.
 
 ## When something goes wrong
 

@@ -110,6 +110,7 @@ var App = (function () {
 
   function route() {
     var name = (location.hash || '#status').slice(1);
+    if (name === 'movement') name = 'device';  // the section was renamed
     if (!views[name]) name = 'status';
     var changed = name !== current;
     current = name;
