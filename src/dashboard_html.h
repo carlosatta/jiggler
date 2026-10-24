@@ -129,6 +129,9 @@ body.offline .hero{opacity:.55}
 .waiting .pulse::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--accent);animation:pulse 2.4s var(--ease) infinite}
 @media (prefers-reduced-motion:reduce){.waiting .pulse::after{animation:none!important}}
 
+progress{width:100%;height:10px;margin:var(--s2) 0;accent-color:var(--accent)}
+code{font:.875em ui-monospace,SFMono-Regular,Menlo,monospace}
+
 /* Run for */
 .runfor{display:flex;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s4);align-items:flex-end}
 .runfor .field{margin:0;min-width:10rem;flex:1 1 10rem}
@@ -376,6 +379,16 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <p class="hint"><b>Changing this restarts the device.</b> Computers already paired will not recognise it afterwards: on each one, remove the device in its Bluetooth settings, then pair it again from Computers → Open pairing.</p>
 <div class="actions"><button class="primary" id="apApply">Apply and restart</button></div>
 <p id="apMsg" class="msg" role="status" aria-live="polite"></p>
+</div>
+
+<div class="block" id="fwBox">
+<h2>Firmware update</h2>
+<p class="hint lead">Replace the firmware over WiFi with a file built from this project. Your token, WiFi, pairings and schedules are kept.</p>
+<div class="field"><label for="fwFile">Firmware file (.bin)</label><input id="fwFile" type="file" accept=".bin"><div class="err" id="e_fwFile"></div></div>
+<progress id="fwProgress" max="100" value="0" hidden aria-label="Upload progress"></progress>
+<div class="actions"><button class="primary" id="fwUpload">Upload and restart</button></div>
+<p id="fwMsg" class="msg" role="status" aria-live="polite"></p>
+<p class="hint">Build the file with <code>pio run -e esp32</code>; it is <code>.pio/build/esp32/firmware.bin</code>. A file that is not a valid ESP32 firmware is refused and nothing changes. A firmware that starts but is broken in another way can only be recovered with a USB cable.</p>
 </div>
 
 <div class="block">
@@ -735,7 +748,7 @@ var App = (function () {
   return {
     $: $, el: el, labeled: labeled, clearErrors: clearErrors, showError: showError, say: say, banner: banner,
     call: call, setToken: setToken, getToken: getToken, showLogin: showLogin, confirmInline: confirmInline,
-    view: view, route: route, poll: poll, tick: tick, restartDevice: restartDevice, reloadCurrent: reloadCurrent,
+    view: view, route: route, poll: poll, tick: tick, restartDevice: restartDevice, waitForDevice: waitForDevice, reloadCurrent: reloadCurrent,
     status: function () { return status; }
   };
 })();
@@ -1353,6 +1366,45 @@ var App = (function () {
       if (res.status === 200) { say('Saved. Restarting…', 'good', 'apMsg'); return App.restartDevice(); }
       if (!res.data.field || !showError(root, res.data.field, res.data.message)) say(tr(res.data.message) || 'Could not save.', 'bad', 'apMsg');
     }).catch(function () {});
+  });
+
+  // ---- Firmware update (OTA) ----
+  function uploadFirmware(file) {
+    var xhr = new XMLHttpRequest();
+    var bar = $('fwProgress');
+    bar.hidden = false;
+    bar.value = 0;
+    $('fwUpload').disabled = true;
+    say('Uploading ' + Math.round(file.size / 1024) + ' KB…', '', 'fwMsg');
+    xhr.upload.onprogress = function (e) { if (e.lengthComputable) bar.value = Math.round((e.loaded / e.total) * 100); };
+    xhr.onload = function () {
+      var data = {};
+      try { data = JSON.parse(xhr.responseText); } catch (e) {}
+      $('fwUpload').disabled = false;
+      if (xhr.status === 200) {
+        bar.value = 100;
+        say('Updated. Restarting…', 'good', 'fwMsg');
+        App.waitForDevice();
+        return;
+      }
+      bar.hidden = true;
+      if (xhr.status === 401) say('The token was refused.', 'bad', 'fwMsg');
+      else say(tr(data.message) || 'The update failed.', 'bad', 'fwMsg');
+    };
+    xhr.onerror = function () { bar.hidden = true; $('fwUpload').disabled = false; say('Could not reach the device.', 'bad', 'fwMsg'); };
+    var form = new FormData();
+    form.append('firmware', file, file.name);
+    xhr.open('POST', '/api/update');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + App.getToken());
+    xhr.send(form);
+  }
+  App.confirmInline($('fwUpload'), 'Confirm: upload and restart', function () {
+    $('e_fwFile').textContent = '';
+    say('', '', 'fwMsg');
+    var file = $('fwFile').files[0];
+    if (!file) { $('e_fwFile').textContent = 'Choose a firmware file first.'; return; }
+    if (!/\.bin$/i.test(file.name)) { $('e_fwFile').textContent = 'That does not look like a firmware file (.bin).'; return; }
+    uploadFirmware(file);
   });
 
   // ---- Device info and restart ----

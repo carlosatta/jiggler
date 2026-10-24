@@ -1,10 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+- **Firmware updates over WiFi (OTA).** System → Firmware update takes a `.bin` built with `pio run -e esp32`; `POST /api/update` (multipart, Bearer token) does the same from a script. **The first time needs a USB flash**, because the partition table changes to two application slots (`partitions.csv`); the token, WiFi, pairings and schedules are kept. After that no cable is needed.
+- **One device, configured as a single "Appearance"**, not a list. The default is **Custom**: a neutral "Bluetooth Mouse" with the chip's own address, not a Logitech. Pick a mouse model or your own name. API: `GET/PUT /api/appearance` replaces `/api/devices` and `/api/profiles`; MCP: `get_appearance` / `set_appearance`. **Upgrading a board that used the old default changes its Bluetooth name and address, so computers must pair again.**
+- **Bluetooth stays visible.** A watchdog restarts advertising if it ever stops while nothing is connected (the board could stay online but invisible to the computer after a series of drops).
+- Removed the fixed connection parameters added in 0.4.0: they made the periodic `0x28` drops far more frequent (every 10 to 40 s instead of every 7 to 13 min).
+
 ## 0.4.0
 
 - **Mouse only.** The keyboard mode is gone from the dashboard, the API and the device list; keyboards are rejected. **Scripts and automations** are removed from the product (dashboard, REST, MCP, firmware wiring). The code stays in the repository, parked, and in the tag `v0.3.1-with-scripts-keyboard`.
 - **Schedule has its own section** with the timezone, separate from Movement (five sections: Status, Computers, Movement, Schedule, System).
-- **Appearance** replaces "Bluetooth identity" and there is **one device, not a list**. The default is **Custom**: a neutral "Bluetooth Mouse" with the chip's own address, not a Logitech. Pick a mouse model or your own name, with one plain sentence about what changing it means (restart, pair again). API: `GET/PUT /api/appearance` replaces `/api/devices` and `/api/profiles`; MCP: `get_appearance` / `set_appearance`. Advanced overrides remain in the API only. **Upgrading a board that used the old default changes its Bluetooth name and address, so computers must pair again.**
+- **Appearance** replaces "Bluetooth identity": pick a mouse model or a custom name, with one plain sentence about what changing it means (restart, pair again). Advanced overrides remain in the API only. (Superseded by 0.5.0: one device, default Custom.)
 - The own-network password field is empty unless one was set, with an explanation instead of placeholder text.
 - First-setup fixes: the board restarts once after the WiFi portal (the dashboard could not bind port 80), and the API token is no longer written to the serial log.
 - Documentation rewritten with real screenshots (neutral data): [README](README.md), [getting started](docs/getting-started.md), [dashboard tour](docs/dashboard.md).

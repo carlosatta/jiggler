@@ -179,7 +179,7 @@ var App = (function () {
   return {
     $: $, el: el, labeled: labeled, clearErrors: clearErrors, showError: showError, say: say, banner: banner,
     call: call, setToken: setToken, getToken: getToken, showLogin: showLogin, confirmInline: confirmInline,
-    view: view, route: route, poll: poll, tick: tick, restartDevice: restartDevice, reloadCurrent: reloadCurrent,
+    view: view, route: route, poll: poll, tick: tick, restartDevice: restartDevice, waitForDevice: waitForDevice, reloadCurrent: reloadCurrent,
     status: function () { return status; }
   };
 })();

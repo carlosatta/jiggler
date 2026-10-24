@@ -1,6 +1,7 @@
 #include "http_server.h"
 
 #include <ESPAsyncWebServer.h>
+#include <Update.h>
 #include <WiFi.h>
 
 #include <cstdlib>
@@ -11,6 +12,18 @@
 #include "json_codec.h"
 #include "mcp_server.h"
 #include "web_assets.h"
+
+namespace {
+// State of one firmware upload, kept in the request (freed by the library with the request).
+struct UpdateState {
+  bool authorized;
+  bool started;
+  bool done;
+  char error[96];
+};
+
+void setError(UpdateState* st, const char* message) { snprintf(st->error, sizeof(st->error), "%s", message); }
+}  // namespace
 
 struct HttpServer::Impl {
   Impl(jig::ApiContext& a, TokenStore& t) : api(a), tokens(t), server(80) {}
@@ -37,6 +50,51 @@ struct HttpServer::Impl {
 
   static void onBody(Impl* self, AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
     self->acceptBody(req, data, len, index, total);
+  }
+
+  // POST /api/update, multipart form with the firmware .bin. Nothing is written unless the token is right.
+  void handleUpload(AsyncWebServerRequest* req, size_t index, uint8_t* data, size_t len, bool final) {
+    UpdateState* st = static_cast<UpdateState*>(req->_tempObject);
+    if (index == 0) {
+      if (!st) {
+        st = static_cast<UpdateState*>(calloc(1, sizeof(UpdateState)));
+        req->_tempObject = st;
+      }
+      if (!st) return;
+      st->authorized = isAuthorized(req);
+      if (!st->authorized) return;
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+        setError(st, Update.errorString());
+        return;
+      }
+      st->started = true;
+    }
+    if (!st || !st->started) return;
+    if (len > 0 && Update.write(data, len) != len) {
+      setError(st, Update.errorString());
+      Update.abort();
+      st->started = false;
+      return;
+    }
+    if (final) {
+      st->started = false;
+      if (Update.end(true)) st->done = true;
+      else setError(st, Update.errorString());
+    }
+  }
+
+  void finishUpdate(AsyncWebServerRequest* req) {
+    UpdateState* st = static_cast<UpdateState*>(req->_tempObject);
+    if (!st ? !isAuthorized(req) : !st->authorized) {
+      AsyncWebServerResponse* res = req->beginResponse(401, "application/json", jig::errorJson("unauthorized").c_str());
+      res->addHeader("Connection", "close");
+      return req->send(res);
+    }
+    if (!st) return json(req, 400, jig::errorJson("update_failed", "", "no firmware file was sent"));
+    if (st->error[0]) return json(req, 400, jig::errorJson("update_failed", "", st->error));
+    if (!st->done) return json(req, 400, jig::errorJson("update_failed", "", "the upload was incomplete"));
+    json(req, 200, "{\"updated\":true,\"restarting\":true}");
+    if (api.restart) api.restart();  // lets this response go out first
   }
 
   void handle(AsyncWebServerRequest* req) {
@@ -105,6 +163,11 @@ void HttpServer::begin(bool captive) {
   s->servePng("/icon-192.png", webassets::kIcon192, webassets::kIcon192Size);
   s->servePng("/icon-512.png", webassets::kIcon512, webassets::kIcon512Size);
   s->servePng("/apple-touch-icon.png", webassets::kAppleTouchIcon, webassets::kAppleTouchIconSize);
+  s->server.on(
+      "/api/update", HTTP_POST, [s](AsyncWebServerRequest* req) { s->finishUpdate(req); },
+      [s](AsyncWebServerRequest* req, const String&, size_t index, uint8_t* data, size_t len, bool final) {
+        s->handleUpload(req, index, data, len, final);
+      });
   s->server.onRequestBody([s](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
     Impl::onBody(s, req, data, len, index, total);
   });

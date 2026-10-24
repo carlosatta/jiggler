@@ -102,7 +102,7 @@ All logic lives in a hardware-free core that is tested on a laptop; the firmware
 - **Skin-deep identity.** If you pick a real mouse model, the device presents that model's name and identifiers but does not implement the vendor's proprietary protocol; vendor software will not treat it as the real thing.
 - **Plain HTTP.** The token travels unencrypted: use it on a network you trust. Because of that, browsers offer "Add to Home Screen" rather than a full app install.
 - **Schedules need the time**, which the board gets from the internet; in own-network mode there is no clock. [Schedules](docs/schedules.md).
-- **No OTA updates.** Flash over USB.
+- **Updates over WiFi (OTA)** from the dashboard once the board has been flashed over USB with the OTA partition table (a one-time step). A firmware that starts but is broken needs a USB cable to recover. [Updating](docs/getting-started.md#updating-the-firmware-later-no-cable).
 - **Cursor drift is unmeasured.** The cursor returns exactly in mouse counts, but your operating system's pointer acceleration can leave a visible offset.
 
 ## Documentation

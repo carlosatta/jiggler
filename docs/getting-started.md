@@ -58,6 +58,19 @@ The jiggler **cannot run until a computer is paired**, so nothing moves before t
 
 Add the page to your phone's home screen from the browser menu for a full-screen shortcut.
 
+## Updating the firmware later (no cable)
+
+Once the board has been flashed over USB with a build that has OTA (0.5.0 or later), you can update it over WiFi:
+
+- **From the dashboard:** System → **Firmware update**, choose `.pio/build/esp32/firmware.bin`, **Upload and restart**. The page shows the progress and reconnects when the board is back.
+- **From a terminal:**
+  ```sh
+  pio run -e esp32
+  curl -H "Authorization: Bearer $TOKEN" -F firmware=@.pio/build/esp32/firmware.bin http://jiggler.local/api/update
+  ```
+
+Your token, WiFi, pairings and schedules are kept. A file that is not a valid ESP32 firmware is refused and nothing changes. The board keeps two application slots, so a build that cannot even start falls back to the previous one; a build that starts but is broken in some other way (for example one that cannot join WiFi) needs a USB cable to recover. **The very first OTA-capable flash has to be done over USB**, because it changes the partition table.
+
 ## No WiFi at home?
 
 Switch the board to **own network** mode: it creates a protected WiFi network that serves the dashboard at `192.168.4.1`. Hold the **BOOT** button for 3 seconds to switch between the two modes (the board restarts), or change it in **System → Network**. See [Network](network.md). Schedules need the internet for the time, so they do nothing in this mode.

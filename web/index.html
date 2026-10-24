@@ -199,6 +199,16 @@
 <p id="apMsg" class="msg" role="status" aria-live="polite"></p>
 </div>
 
+<div class="block" id="fwBox">
+<h2>Firmware update</h2>
+<p class="hint lead">Replace the firmware over WiFi with a file built from this project. Your token, WiFi, pairings and schedules are kept.</p>
+<div class="field"><label for="fwFile">Firmware file (.bin)</label><input id="fwFile" type="file" accept=".bin"><div class="err" id="e_fwFile"></div></div>
+<progress id="fwProgress" max="100" value="0" hidden aria-label="Upload progress"></progress>
+<div class="actions"><button class="primary" id="fwUpload">Upload and restart</button></div>
+<p id="fwMsg" class="msg" role="status" aria-live="polite"></p>
+<p class="hint">Build the file with <code>pio run -e esp32</code>; it is <code>.pio/build/esp32/firmware.bin</code>. A file that is not a valid ESP32 firmware is refused and nothing changes. A firmware that starts but is broken in another way can only be recovered with a USB cable.</p>
+</div>
+
 <div class="block">
 <h2>Device</h2>
 <dl class="facts">

@@ -151,7 +151,7 @@ class Device:
                              "active": False, "enabledCount": sum(1 for s in self.schedules if s["enabled"]), "timezone": self.tz},
                 "moveCount": self.moves, "lastMoveAgoMs": int((now - self.last_move) * 1000), "lastMoveAt": int(self.last_move),
                 "config": self.config, "bluetooth": summary,
-                "device": {"version": "0.4.0", "bleName": "Bluetooth Mouse", "bleAddress": "02:aa:bb:cc:00:01"}}
+                "device": {"version": "0.5.0", "bleName": "Bluetooth Mouse", "bleAddress": "02:aa:bb:cc:00:01"}}
 
 
 DEV = None
@@ -211,6 +211,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, (ROOT / "web" / "manifest.webmanifest").read_bytes(), "application/manifest+json")
         if method == "GET" and path in ("/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"):
             return self.send(200, (ROOT / "web" / "icons" / path[1:]).read_bytes(), "image/png")
+        if method == "POST" and path == "/api/update":
+            if self.headers.get("Authorization") != "Bearer " + DEV.token:
+                return self.send(401, {"error": "unauthorized"})
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            return self.send(200, {"updated": True, "restarting": True})
         if method == "POST" and path == "/__pair":
             with DEV.lock:
                 ok = DEV.pair_computer()

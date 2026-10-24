@@ -49,7 +49,7 @@ An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, contro
 
 - Status LED: slow blink = no computer, solid = connected (brief flash per movement), fast blink = pairing open, short flash every 3 s = hidden after a disconnect.
 - BOOT button: tap = open pairing, hold 3 s = switch network mode.
-- USB power.
+- USB power. After the first USB flash, firmware updates go over WiFi (OTA).
 
 ## Not included for now
 

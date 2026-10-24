@@ -13,7 +13,8 @@ Hardware: a classic `esp32dev` board (ESP32-WROOM), USB cable. Nothing else is n
 | Host unit tests (no board) | `pio test -e native` |
 | One suite | `pio test -e native -f test_controller` |
 | Build firmware | `pio run -e esp32` |
-| Flash | `pio run -e esp32 -t upload --upload-port /dev/cu.usbserial-0001` |
+| Flash over USB | `pio run -e esp32 -t upload --upload-port /dev/cu.usbserial-0001` |
+| Flash over WiFi (OTA) | `curl -H "Authorization: Bearer $TOKEN" -F firmware=@.pio/build/esp32/firmware.bin http://jiggler.local/api/update` |
 | Serial monitor (115200 baud) | `pio device monitor` |
 
 Suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_schedule`, `test_appearance`, `test_mcp_ex`, plus `test_keyboard`, `test_script` and `test_automation` for the parked modules (see below).

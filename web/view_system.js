@@ -100,6 +100,45 @@
     }).catch(function () {});
   });
 
+  // ---- Firmware update (OTA) ----
+  function uploadFirmware(file) {
+    var xhr = new XMLHttpRequest();
+    var bar = $('fwProgress');
+    bar.hidden = false;
+    bar.value = 0;
+    $('fwUpload').disabled = true;
+    say('Uploading ' + Math.round(file.size / 1024) + ' KB…', '', 'fwMsg');
+    xhr.upload.onprogress = function (e) { if (e.lengthComputable) bar.value = Math.round((e.loaded / e.total) * 100); };
+    xhr.onload = function () {
+      var data = {};
+      try { data = JSON.parse(xhr.responseText); } catch (e) {}
+      $('fwUpload').disabled = false;
+      if (xhr.status === 200) {
+        bar.value = 100;
+        say('Updated. Restarting…', 'good', 'fwMsg');
+        App.waitForDevice();
+        return;
+      }
+      bar.hidden = true;
+      if (xhr.status === 401) say('The token was refused.', 'bad', 'fwMsg');
+      else say(tr(data.message) || 'The update failed.', 'bad', 'fwMsg');
+    };
+    xhr.onerror = function () { bar.hidden = true; $('fwUpload').disabled = false; say('Could not reach the device.', 'bad', 'fwMsg'); };
+    var form = new FormData();
+    form.append('firmware', file, file.name);
+    xhr.open('POST', '/api/update');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + App.getToken());
+    xhr.send(form);
+  }
+  App.confirmInline($('fwUpload'), 'Confirm: upload and restart', function () {
+    $('e_fwFile').textContent = '';
+    say('', '', 'fwMsg');
+    var file = $('fwFile').files[0];
+    if (!file) { $('e_fwFile').textContent = 'Choose a firmware file first.'; return; }
+    if (!/\.bin$/i.test(file.name)) { $('e_fwFile').textContent = 'That does not look like a firmware file (.bin).'; return; }
+    uploadFirmware(file);
+  });
+
   // ---- Device info and restart ----
   function renderInfo(s) {
     if (!s.device) return;

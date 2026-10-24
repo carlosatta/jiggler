@@ -100,6 +100,14 @@ See [schedules.md](schedules.md). `GET /api/status` also carries `"schedule": {t
                    "start": "09:00", "durationMin": 480 } ] }
 ```
 
+## Firmware update
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/update` | Upload a firmware `.bin` as a multipart form (`-F firmware=@firmware.bin`). Needs the Bearer token; nothing is written without it. `200 {"updated":true,"restarting":true}` and the device restarts; `400 update_failed` with a message if the file is refused |
+
+See [Getting started](getting-started.md#updating-the-firmware-later-no-cable).
+
 ## API token
 
 `PUT /api/token` with `{"current":"<old>","token":"<new>"}` (new token: 8–40 printable characters, no spaces). A wrong `current` answers `403 wrong_current`. The old token stops working immediately; update dashboards and MCP clients.

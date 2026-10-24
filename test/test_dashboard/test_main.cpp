@@ -103,7 +103,10 @@ void test_dashboard_only_references_real_routes() {
   std::set<std::string> known;
   for (const Route& r : kPageRoutes)
     for (const std::string& p : apiPathsIn(r.path)) known.insert(p);
-  for (const std::string& p : referenced) TEST_ASSERT_TRUE_MESSAGE(known.count(p) == 1, p.c_str());
+  // Routes served by the HTTP transport itself (a streamed upload cannot go through handleApiEx).
+  const std::set<std::string> transportRoutes = {"/api/update"};
+  for (const std::string& p : referenced)
+    TEST_ASSERT_TRUE_MESSAGE(known.count(p) == 1 || transportRoutes.count(p) == 1, p.c_str());
   for (const std::string& p : known) TEST_ASSERT_TRUE_MESSAGE(referenced.count(p) == 1, p.c_str());
 
   FakeClock clock;

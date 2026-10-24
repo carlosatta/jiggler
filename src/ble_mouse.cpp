@@ -108,10 +108,7 @@ void BleMouse::linkUp(uint16_t handle, const std::string& peerAddress) {
   std::lock_guard<std::mutex> lock(linksMutex_);
   links_.push_back(std::move(link));
   refreshConnected();
-  // Fix the connection parameters (15-30 ms interval, no slave latency, 4 s timeout, within Apple's accessory
-  // guidelines). Left to the central, macOS renegotiates them and the link was dropped every few minutes with
-  // HCI error 0x28 (instant passed), then re-established a couple of seconds later.
-  if (server_) server_->updateConnParams(handle, 12, 24, 0, 400);
+
   Serial.printf("BLE link up (handle %u)\n", static_cast<unsigned>(handle));
 }
 
@@ -191,11 +188,22 @@ bool BleMouse::forgetBond(const std::string& address) {
 void BleMouse::forgetAllBonds() { NimBLEDevice::deleteAllBonds(); }
 
 void BleMouse::setAdvertising(bool on) {
-  if (advertise_.exchange(on) == on) return;
-  if (on) {
+  const bool changed = advertise_.exchange(on) != on;
+  if (!on) {
+    if (changed) NimBLEDevice::stopAdvertising();
+    return;
+  }
+  // Called every 200 ms. Besides switching on after a hold, this is a watchdog: with nobody connected and the
+  // device meant to be visible, advertising must be running. If a restart attempt after a drop ever failed
+  // (links that flap), the board would stay online but invisible to the computer until restarted.
+  bool idle;
+  {
+    std::lock_guard<std::mutex> lock(linksMutex_);
+    idle = links_.empty();
+  }
+  if (changed || (idle && !NimBLEDevice::getAdvertising()->isAdvertising())) {
+    if (!changed) Serial.println("BLE advertising was off: restarted");
     NimBLEDevice::startAdvertising();
-  } else {
-    NimBLEDevice::stopAdvertising();
   }
 }
 
