@@ -13,14 +13,14 @@ The first thing you see: **which computer is connected and since when**, and wha
 <p align="center">
   <img src="images/status-running.png" alt="Status while running for 30 minutes" width="260">
   <img src="images/status-paused.png" alt="Status while paused: it resumes in 15 minutes" width="260">
-  <img src="images/status-disconnected.png" alt="Status after Disconnect: visible, but nothing can connect" width="260">
+  <img src="images/status-bluetooth-off.png" alt="Status with Bluetooth switched off" width="260">
 </p>
 
-- **Connection.** *Connected to Computer 1, for 12 minutes.* **Disconnect** drops the link and keeps the device visible but not connectable until you press **Reconnect** (it does not power the device off). Pressing Disconnect in the computer’s own Bluetooth menu has the same effect.
+- **Connection.** One of four states: *Bluetooth is off*, *Waiting for a computer*, *Discovery is open* (with a countdown) or *Connected to Computer 1, for 12 minutes*, with the buttons that make sense for it: **Start Discovery** / **Stop Discovery**, **Turn Bluetooth off** (disconnects and silences the radio; the computer's own Disconnect does the same by default) and **Turn Bluetooth on**. See [Bluetooth](bluetooth.md).
 - **Movement.** *Running*, *Paused* or *Stopped*, the time to the next movement, and, for a timed run, when it will stop.
 - **Run for** (shown while stopped): *until I stop it*, 5, 10 or 30 minutes, 1 hour, *until a time of day*, or a custom number of minutes (1 to 1440). **Start** applies it; **Move now** makes one movement immediately.
 - **Pause** (shown while running): *15 minutes, 30 minutes, 1 hour, 2 hours*, or *until I resume*. While paused the cursor does not move and the card says when it resumes by itself; **Resume** ends it at once and **Stop** stops everything. A time limit set with **Run for** keeps counting during a pause, and a schedule keeps its own timetable: a pause lasts until it ends or until the next window opens or closes. Use it when you sit down to work, or step away, without losing your schedule.
-- **Facts.** Last movement, movements made, the device clock (with its timezone) and WiFi.
+- **Facts.** Last movement, movements made, the device clock (where it comes from and its timezone) and WiFi. If a schedule window is open but no computer is paired, a note says why the jiggler has not started.
 
 On a new board, Status shows the guided **Set up your Jiggler** card until a computer is paired ([Getting started](getting-started.md)). The jiggler cannot start before that.
 
@@ -30,7 +30,8 @@ On a new board, Status shows the guided **Set up your Jiggler** card until a com
   <img src="images/computers.png" alt="Pairing and the list of paired computers" width="260">
 </p>
 
-- **Pairing** is closed by default. **Open pairing for 3 minutes** lets one new computer pair; it closes by itself after 3 minutes or as soon as a computer pairs, and **Stop pairing** closes it earlier.
+- **Bluetooth** shows the state and **Turn Bluetooth off / on**.
+- **Discovery** is closed by default. **Start Discovery** lets a new computer pair (180 seconds by default, set it here from 30 to 600); it closes by itself when the time is up or a computer pairs, and **Stop Discovery** closes it earlier. A checkbox decides whether the computer's own Disconnect switches Bluetooth off.
 - **Paired computers.** Bluetooth does not tell the device a computer's name, so they are numbered. **Rename** gives one a name you will recognise; **Forget** removes it (confirm with a second tap); **Forget all** removes every one. Up to 3 can be paired.
 
 Details and the reasoning are in [Bluetooth](bluetooth.md).
@@ -51,7 +52,7 @@ Details and the reasoning are in [Bluetooth](bluetooth.md).
   <img src="images/schedule.png" alt="Weekly schedules" width="260">
 </p>
 
-Weekly windows that start and stop the jiggler for you, in the **timezone** you pick: choose the days, a start and an end time (an end earlier than the start means the next day), and whether it repeats **forever** or a **limited** number of times. Details in [Schedules](schedules.md).
+Weekly entries, in the device's timezone (set in System → Time). A **window** runs the jiggler between a start and an end time (an end earlier than the start means the next day); an **action** does one thing at a time: start, stop, pause, resume, Bluetooth on or off, open Discovery. Each can have a **random shift** of up to 120 minutes either way, chosen afresh each day, and repeats **forever** or a **limited** number of times. A window that is open when you save it starts the jiggler. Details in [Schedules](schedules.md).
 
 ## System
 
@@ -60,6 +61,8 @@ Weekly windows that start and stop the jiggler for you, in the **timezone** you 
 </p>
 
 - **Security.** Change the token (you need the current one).
+- **Time.** Timezone, NTP server, and **Set the time from this browser** for a board with no internet.
+- **Button.** Which GPIO the physical button uses (default BOOT, GPIO 0) and what each press does.
 - **Network.** *Auto* (your home WiFi, with the setup network as a fallback) or *Own network* (the board creates a protected WiFi network). The own-network password is optional: leave it empty and one is generated the first time. See [Network](network.md).
 - **Appearance.** The name the device shows over Bluetooth: a neutral "Bluetooth Mouse" by default, a name of your own, or a real mouse model. Changing it restarts the device and needs each computer to pair again. See [Appearance](appearance.md).
 - **Firmware update.** Upload a `.bin` to update the device over WiFi; see [Getting started](getting-started.md#updating-the-firmware-later-no-cable).

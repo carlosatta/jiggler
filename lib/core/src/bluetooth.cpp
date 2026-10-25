@@ -16,6 +16,9 @@ uint32_t msUntil(uint32_t until, uint32_t now) {
 }
 
 constexpr const char* kLabelsKey = "peers";
+constexpr const char* kSettingsKey = "btsettings";
+
+bool validDiscoverySeconds(uint32_t s) { return s >= kMinPairingSec && s <= kMaxPairingSec; }
 
 std::string lower(std::string s) {
   for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -44,6 +47,16 @@ std::string trim(const std::string& s) {
 
 }  // namespace
 
+const char* bluetoothStateName(BluetoothState state) {
+  switch (state) {
+    case BluetoothState::Off: return "off";
+    case BluetoothState::Waiting: return "waiting";
+    case BluetoothState::Discovery: return "discovery";
+    case BluetoothState::Connected: return "connected";
+  }
+  return "waiting";
+}
+
 std::string peerId(const std::string& address) {
   std::string out;
   for (char c : address)
@@ -64,6 +77,17 @@ void BluetoothManager::begin() {
       for (JsonPair kv : doc.as<JsonObject>())
         if (kv.value().is<const char*>()) labels_[kv.key().c_str()] = kv.value().as<std::string>();
   }
+  settings_ = BluetoothSettings{};
+  const std::string rawSettings = blobs_.get(kSettingsKey);
+  if (!rawSettings.empty()) {
+    JsonDocument doc;
+    if (!deserializeJson(doc, rawSettings) && doc.is<JsonObject>()) {
+      if (doc["enabled"].is<bool>()) settings_.enabled = doc["enabled"].as<bool>();
+      if (doc["discoverySeconds"].is<uint32_t>() && validDiscoverySeconds(doc["discoverySeconds"].as<uint32_t>()))
+        settings_.discoverySeconds = doc["discoverySeconds"].as<uint32_t>();
+      if (doc["offWhenComputerDisconnects"].is<bool>()) settings_.offWhenComputerDisconnects = doc["offWhenComputerDisconnects"].as<bool>();
+    }
+  }
   applyLocked();
 }
 
@@ -71,10 +95,12 @@ void BluetoothManager::tick() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (labelsDirty_ && saveLabelsLocked()) labelsDirty_ = false;
   expireLocked();
-  if (link_.takePeerDisconnectRequest() && !held_ && !windowOpen_ && !link_.bondedAddresses().empty()) {
-    // The computer ended the connection on purpose. Left visible it would reconnect at once.
-    held_ = true;
+  if (link_.takePeerDisconnectRequest() && settings_.enabled && settings_.offWhenComputerDisconnects && !windowOpen_ &&
+      !link_.bondedAddresses().empty()) {
+    // The computer ended the connection on purpose; left on, it would reconnect at once.
+    settings_.enabled = false;
     connectedSince_.clear();
+    saveSettingsLocked();
   }
   applyLocked();
 }
@@ -97,8 +123,8 @@ void BluetoothManager::expireLocked() {
 bool BluetoothManager::pairingOpenLocked() { return windowOpen_; }
 
 void BluetoothManager::applyLocked() {
-  link_.setConnectable(!held_);
-  link_.setPairingOpen(pairingOpenLocked());
+  link_.setEnabled(settings_.enabled);
+  link_.setPairingOpen(settings_.enabled && pairingOpenLocked());
 }
 
 std::string BluetoothManager::labelForLocked(const std::string& id) {
@@ -134,9 +160,9 @@ BluetoothStatus BluetoothManager::status() {
   BluetoothStatus s;
   const std::vector<std::string> bonded = link_.bondedAddresses();
   const std::vector<std::string> connected = link_.connectedAddresses();
-  s.held = held_;
-  s.pairingOpen = windowOpen_;
-  if (windowOpen_) s.pairingRemainingMs = msUntil(windowUntilMs_, now);
+  s.settings = settings_;
+  s.pairingOpen = windowOpen_ && settings_.enabled;
+  if (s.pairingOpen) s.pairingRemainingMs = msUntil(windowUntilMs_, now);
 
   // forget connections that ended without a callback, learn ones that began without one
   for (auto it = connectedSince_.begin(); it != connectedSince_.end();)
@@ -160,14 +186,21 @@ BluetoothStatus BluetoothManager::status() {
     s.connectedLabel = it != s.peers.end() ? it->label : std::string("Nuovo computer");
     s.connectedForMs = now - connectedSince_[first];
   }
+  s.state = !settings_.enabled ? BluetoothState::Off
+            : s.pairingOpen    ? BluetoothState::Discovery
+            : s.connected      ? BluetoothState::Connected
+                               : BluetoothState::Waiting;
   return s;
 }
 
 CmdResult BluetoothManager::startPairing(uint32_t seconds) {
-  if (seconds < kMinPairingSec || seconds > kMaxPairingSec)
-    return fail("invalid_seconds", "the pairing window must last between 30 and 600 seconds");
   std::lock_guard<std::mutex> lock(mutex_);
-  held_ = false;
+  if (seconds == 0) seconds = settings_.discoverySeconds;
+  else if (!validDiscoverySeconds(seconds)) return fail("invalid_seconds", "the pairing window must last between 30 and 600 seconds");
+  if (!settings_.enabled) {
+    settings_.enabled = true;  // pairing needs the radio
+    saveSettingsLocked();
+  }
   windowOpen_ = true;
   windowUntilMs_ = platform_.nowMs() + seconds * 1000;
   bondedAtOpen_ = link_.bondedAddresses();
@@ -182,20 +215,51 @@ CmdResult BluetoothManager::stopPairing() {
   return ok();
 }
 
-CmdResult BluetoothManager::disconnect() {
+bool BluetoothManager::saveSettingsLocked() {
+  JsonDocument doc;
+  doc["enabled"] = settings_.enabled;
+  doc["discoverySeconds"] = settings_.discoverySeconds;
+  doc["offWhenComputerDisconnects"] = settings_.offWhenComputerDisconnects;
+  std::string out;
+  serializeJson(doc, out);
+  return blobs_.put(kSettingsKey, out);
+}
+
+CmdResult BluetoothManager::enable() {
   std::lock_guard<std::mutex> lock(mutex_);
-  held_ = true;
-  windowOpen_ = false;  // a hidden device cannot be paired with, so an open window would only lie
-  link_.disconnectAll();
-  connectedSince_.clear();
+  settings_.enabled = true;
+  if (!saveSettingsLocked()) return fail("storage_error", "could not save the setting (storage full?)");
   applyLocked();
   return ok();
 }
 
-CmdResult BluetoothManager::reconnect() {
+CmdResult BluetoothManager::disable() {
   std::lock_guard<std::mutex> lock(mutex_);
-  held_ = false;
+  settings_.enabled = false;
+  windowOpen_ = false;  // a silent radio cannot be paired with, so an open window would only lie
+  link_.disconnectAll();
+  connectedSince_.clear();
+  const bool saved = saveSettingsLocked();
   applyLocked();
+  return saved ? ok() : fail("storage_error", "Bluetooth is off, but the setting could not be saved (storage full?)");
+}
+
+BluetoothSettings BluetoothManager::settings() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return settings_;
+}
+
+CmdResult BluetoothManager::updateSettings(std::optional<uint32_t> discoverySeconds, std::optional<bool> offWhenComputerDisconnects) {
+  if (discoverySeconds && !validDiscoverySeconds(*discoverySeconds))
+    return fail("invalid_seconds", "the discovery time must be between 30 and 600 seconds");
+  std::lock_guard<std::mutex> lock(mutex_);
+  const BluetoothSettings before = settings_;
+  if (discoverySeconds) settings_.discoverySeconds = *discoverySeconds;
+  if (offWhenComputerDisconnects) settings_.offWhenComputerDisconnects = *offWhenComputerDisconnects;
+  if (!saveSettingsLocked()) {
+    settings_ = before;
+    return fail("storage_error", "could not save the settings (storage full?)");
+  }
   return ok();
 }
 
@@ -253,6 +317,12 @@ void fillComputer(JsonObject o, const BluetoothStatus& s) {
   o["label"] = *s.connectedLabel;
   o["connectedForMs"] = *s.connectedForMs;
 }
+void fillCommon(JsonObject doc, const BluetoothStatus& s) {
+  doc["state"] = bluetoothStateName(s.state);
+  doc["enabled"] = s.settings.enabled;
+  doc["discoverySeconds"] = s.settings.discoverySeconds;
+  doc["offWhenComputerDisconnects"] = s.settings.offWhenComputerDisconnects;
+}
 void fillPairing(JsonObject o, const BluetoothStatus& s) {
   o["open"] = s.pairingOpen;
   if (s.pairingRemainingMs) o["remainingMs"] = *s.pairingRemainingMs;
@@ -263,7 +333,7 @@ void fillPairing(JsonObject o, const BluetoothStatus& s) {
 std::string bluetoothToJson(const BluetoothStatus& s) {
   JsonDocument doc;
   doc["connected"] = s.connected;
-  doc["held"] = s.held;
+  fillCommon(doc.as<JsonObject>(), s);
   fillPairing(doc["pairing"].to<JsonObject>(), s);
   if (s.connected) fillComputer(doc["computer"].to<JsonObject>(), s);
   else doc["computer"] = nullptr;
@@ -283,7 +353,7 @@ std::string bluetoothToJson(const BluetoothStatus& s) {
 std::string bluetoothSummaryJson(const BluetoothStatus& s) {
   JsonDocument doc;
   doc["connected"] = s.connected;
-  doc["held"] = s.held;
+  fillCommon(doc.as<JsonObject>(), s);
   fillPairing(doc["pairing"].to<JsonObject>(), s);
   if (s.connected) fillComputer(doc["computer"].to<JsonObject>(), s);
   else doc["computer"] = nullptr;

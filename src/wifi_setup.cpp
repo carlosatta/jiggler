@@ -161,7 +161,6 @@ bool WifiSetup::loop() {
       Serial.println("WiFi set up: restarting to start the dashboard");
       return false;
     }
-    configTime(0, 0, "pool.ntp.org", "time.google.com");
     MDNS.begin("jiggler");
     MDNS.addService("http", "tcp", 80);
     Serial.printf("WiFi connected, IP %s (jiggler.local)\n", WiFi.localIP().toString().c_str());

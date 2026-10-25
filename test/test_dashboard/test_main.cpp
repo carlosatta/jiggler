@@ -37,7 +37,7 @@ struct FakeLink : BleLink {
     return false;
   }
   void forgetAllBonds() override { bonded.clear(); }
-  void setConnectable(bool) override {}
+  void setEnabled(bool) override {}
   void setPairingOpen(bool) override {}
   bool takePeerDisconnectRequest() override { return false; }
 };
@@ -68,14 +68,20 @@ const Route kPageRoutes[] = {
     {"GET", "/api/appearance", ""},
     {"PUT", "/api/appearance", "{\"profile\":\"logitech-mx-master-3s\"}"},
     {"GET", "/api/schedules", ""},
-    {"PUT", "/api/schedules", "{\"timezone\":\"Europe/Rome\",\"schedules\":[]}"},
+    {"PUT", "/api/schedules", "{\"schedules\":[]}"},
+    {"GET", "/api/button", ""},
+    {"PUT", "/api/button", "{\"gpio\":0}"},
+    {"GET", "/api/time", ""},
+    {"PUT", "/api/time", "{\"timezone\":\"Europe/Rome\"}"},
+    {"POST", "/api/time/set", "{\"epoch\":1795000000}"},
+    {"POST", "/api/bluetooth/enable", ""},
+    {"POST", "/api/bluetooth/disable", ""},
+    {"PUT", "/api/bluetooth/settings", "{\"discoverySeconds\":180}"},
     {"GET", "/api/network", ""},
     {"PUT", "/api/network", "{}"},
     {"GET", "/api/bluetooth", ""},
     {"POST", "/api/bluetooth/pairing", "{\"seconds\":120}"},
     {"DELETE", "/api/bluetooth/pairing", ""},
-    {"POST", "/api/bluetooth/disconnect", ""},
-    {"POST", "/api/bluetooth/reconnect", ""},
     {"PUT", "/api/bluetooth/peers/aabbccddeeff", "{\"label\":\"Mac\"}"},
     {"DELETE", "/api/bluetooth/peers/aabbccddeeff", ""},
     {"DELETE", "/api/bluetooth/peers", ""},
@@ -123,7 +129,9 @@ void test_dashboard_only_references_real_routes() {
   ScriptLibrary scripts(blobs);
   AutomationEngine automations(clock, rng, scripts, blobs);
   automations.begin();
-  ScheduleEngine schedules(clock, controller, blobs);
+  ClockStore clockStore(clock, blobs);
+  clockStore.begin();
+  ScheduleEngine schedules(clock, controller, blobs, clockStore);
   schedules.begin();
   FakeLink link;
   MemBlobStore peerBlobs;
@@ -134,6 +142,10 @@ void test_dashboard_only_references_real_routes() {
   ApiContext ctx{controller};
   ctx.bluetooth = &bluetooth;
   ctx.schedules = &schedules;
+  ButtonStore buttonStore(blobs);
+  buttonStore.begin();
+  ctx.clock = &clockStore;
+  ctx.button = &buttonStore;
   ctx.tokens = &tokens;
   ctx.network = &net;
   ctx.appearance = &appearance;

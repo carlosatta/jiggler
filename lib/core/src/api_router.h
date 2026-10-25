@@ -12,7 +12,7 @@ namespace jig {
 // Transport cap (HTTP server, MCP, script upload); small JSON routes enforce tighter limits themselves.
 constexpr size_t kMaxBodyBytes = 4096;
 constexpr size_t kMaxSmallBodyBytes = 1024;   // /api/config, /api/network
-constexpr size_t kMaxMediumBodyBytes = 2048;  // /api/devices, /api/automations
+constexpr size_t kMaxMediumBodyBytes = 4096;  // /api/schedules, /api/automations
 
 struct HttpResponse {
   int status;

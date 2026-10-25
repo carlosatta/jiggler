@@ -1,4 +1,4 @@
-// Sistema: token, network, Bluetooth identity, device info, restart.
+// System: token, time, button, network, firmware update, device info, restart.
 (function () {
   'use strict';
   var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
@@ -25,6 +25,62 @@
       if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Could not change the token.', 'bad', 'tokMsg');
     }).catch(function () {});
   });
+
+  // ---- Time ----
+  var timeDirty = false;
+  function renderTimeNow(s) { if (s.time) $('timeNow').textContent = JigLib.clockLine(s.time); }
+  function loadTime() {
+    App.call('GET', '/api/time').then(function (res) {
+      if (res.status !== 200) return;
+      var sel = $('tzSelect');
+      if (sel.options.length !== res.data.timezones.length) {
+        sel.textContent = '';
+        res.data.timezones.forEach(function (z) { sel.appendChild(el('option', { value: z, text: z.replace('_', ' ') })); });
+      }
+      if (!timeDirty) { sel.value = res.data.timezone; $('ntpServer').value = res.data.ntpServer; }
+    }).catch(function () {});
+  }
+  ['tzSelect', 'ntpServer'].forEach(function (id) { $(id).addEventListener('input', function () { timeDirty = true; }); });
+  $('timeSave').onclick = function () {
+    var root = $('timeBox');
+    clearErrors(root);
+    say('', '', 'timeMsg');
+    App.call('PUT', '/api/time', { timezone: $('tzSelect').value, ntpServer: $('ntpServer').value.trim() }).then(function (res) {
+      if (res.status === 200) { timeDirty = false; say('Saved.', 'good', 'timeMsg'); App.poll(); return; }
+      var d = res.data;
+      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Could not save.', 'bad', 'timeMsg');
+    }).catch(function () {});
+  };
+  $('timeSet').onclick = function () {
+    say('', '', 'timeMsg');
+    App.call('POST', '/api/time/set', { epoch: Math.floor(Date.now() / 1000) }).then(function (res) {
+      if (res.status === 200) { say('The device clock now follows this browser’s time. It is lost when the device restarts unless NTP sets it again.', 'good', 'timeMsg'); App.poll(); return; }
+      say(tr(res.data && res.data.message) || 'Could not set the time.', 'bad', 'timeMsg');
+    }).catch(function () {});
+  };
+
+  // ---- Button ----
+  function loadButton() {
+    App.call('GET', '/api/button').then(function (res) {
+      if (res.status !== 200) return;
+      var sel = $('btnGpio');
+      if (sel.options.length !== res.data.gpios.length) {
+        sel.textContent = '';
+        res.data.gpios.forEach(function (g) { sel.appendChild(el('option', { value: String(g), text: 'GPIO ' + g + (g === res.data['default'] ? ' (BOOT button)' : '') })); });
+      }
+      sel.value = String(res.data.gpio);
+    }).catch(function () {});
+  }
+  $('btnSave').onclick = function () {
+    var root = $('buttonBox');
+    clearErrors(root);
+    say('', '', 'btnMsg');
+    App.call('PUT', '/api/button', { gpio: Number($('btnGpio').value) }).then(function (res) {
+      if (res.status === 200) { say('Saved. The button works on that pin now.', 'good', 'btnMsg'); return; }
+      var d = res.data;
+      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Could not save.', 'bad', 'btnMsg');
+    }).catch(function () {});
+  };
 
   // ---- Network ----
   function loadNetwork() {
@@ -108,7 +164,7 @@
   App.confirmInline($('restartBtn'), 'Confirm: restart', function () { say('', '', 'sysMsg'); App.restartDevice(); });
 
   App.view('system', {
-    load: function () { loadNetwork(); if (App.status()) renderInfo(App.status()); },
-    onStatus: renderInfo
+    load: function () { loadNetwork(); loadTime(); loadButton(); if (App.status()) { renderInfo(App.status()); renderTimeNow(App.status()); } },
+    onStatus: function (s) { renderInfo(s); renderTimeNow(s); }
   });
 })();

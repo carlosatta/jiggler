@@ -6,7 +6,7 @@
 Serves the dashboard built from web/ plus an in-memory imitation of the API (status, Bluetooth pairing and
 peers, config, scripts, automations, devices, network, token). Not a test oracle: the firmware's host tests are.
 Scenarios can be forced for screenshots:  curl -X POST localhost:8080/__scenario/<name>
-  firstrun (no computer paired) | connected | idle | held | pairing | many
+  firstrun (no computer paired) | connected | idle | off | pairing | many
 """
 import argparse
 import json
@@ -53,12 +53,20 @@ class Device:
         self.resume_at = None
         self.bonded_at_open = None
         self.tz = "Europe/London"
-        self.schedules = [{"id": "workdays", "enabled": True, "days": ["mon", "tue", "wed", "thu", "fri"], "start": "09:00", "durationMin": 480}]
+        self.ntp = "pool.ntp.org"
+        self.time_source = "ntp"
+        self.disc_seconds = 180
+        self.off_on_disconnect = True
+        self.button_gpio = 0
+        self.schedules = [{"id": "workdays", "enabled": True, "kind": "window", "days": ["mon", "tue", "wed", "thu", "fri"], "start": "09:00",
+                           "durationMin": 480, "jitterMin": 10, "times": None, "remaining": None},
+                          {"id": "lunch", "enabled": True, "kind": "action", "action": "pause", "days": ["mon", "tue", "wed", "thu", "fri"],
+                           "start": "12:30", "jitterMin": 5, "times": None, "remaining": None}]
         self.scenario("connected")
 
     def scenario(self, name):
         now = time.time()
-        self.held = False
+        self.enabled = True
         self.window_until = None
         self.connected_since = None
         self.peers = []
@@ -66,15 +74,15 @@ class Device:
         if name == "firstrun":
             self.state = "stopped"
             self.stop_at = None
-        elif name in ("connected", "held", "pairing", "idle", "many"):
+        elif name in ("connected", "off", "pairing", "idle", "many"):
             self.peers = [{"address": "02:00:00:00:00:01", "label": "Computer 1"}]
             if name == "many":
                 self.peers += [{"address": "02:00:00:00:00:02", "label": "Office desktop"},
                                {"address": "02:00:00:00:00:03", "label": "Computer 3"}]
             if name in ("connected", "pairing", "many"):
                 self.connected_since = now - 12 * 60 - 20
-            if name == "held":
-                self.held = True
+            if name == "off":
+                self.enabled = False
             if name == "pairing":
                 self.window_until = now + 95
         else:
@@ -121,15 +129,17 @@ class Device:
         return address.replace(":", "")
 
     def connected_addr(self):
-        return self.peers[0]["address"] if (self.connected_since and not self.held and self.peers) else None
+        return self.peers[0]["address"] if (self.connected_since and self.enabled and self.peers) else None
 
     def bluetooth(self):
         now = time.time()
         self.expire()
-        open_ = bool(self.window_until)
+        open_ = bool(self.window_until) and self.enabled
         connected = self.connected_addr() is not None
-        out = {"connected": connected, "held": self.held,
-               "pairing": {"open": open_, "remainingMs": int((self.window_until - now) * 1000) if self.window_until else None, },
+        state = "off" if not self.enabled else "discovery" if open_ else "connected" if connected else "waiting"
+        out = {"state": state, "enabled": self.enabled, "discoverySeconds": self.disc_seconds,
+               "offWhenComputerDisconnects": self.off_on_disconnect, "connected": connected,
+               "pairing": {"open": open_, "remainingMs": int((self.window_until - now) * 1000) if open_ else None},
                "computer": None, "peers": []}
         if connected:
             out["computer"] = {"label": self.peers[0]["label"], "connectedForMs": int((now - self.connected_since) * 1000)}
@@ -138,11 +148,15 @@ class Device:
                                  "connected": connected and p is self.peers[0]})
         return out
 
+    def time_json(self):
+        wd = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"][time.localtime().tm_wday]
+        return {"synced": self.time_source != "none", "source": self.time_source, "timezone": self.tz,
+                "localTime": time.strftime("%H:%M"), "weekday": wd, "epoch": int(time.time())}
+
     def status(self):
         now = time.time()
         bt = self.bluetooth()
-        summary = {k: bt[k] for k in ("connected", "held", "pairing", "computer")}
-        summary["pairing"] = {"open": bt["pairing"]["open"], "remainingMs": bt["pairing"]["remainingMs"]}
+        summary = {k: bt[k] for k in ("state", "enabled", "discoverySeconds", "offWhenComputerDisconnects", "connected", "pairing", "computer")}
         summary["peerCount"] = len(bt["peers"])
         if self.state == "running" and now >= self.next_move_at:
             self.moves += 1
@@ -152,8 +166,8 @@ class Device:
                 "msToNextMove": int((self.next_move_at - now) * 1000) if self.state == "running" else None,
                 "stopsInMs": int((self.stop_at - now) * 1000) if self.state in ("running", "paused") and self.stop_at else None,
                 "resumesInMs": int((self.resume_at - now) * 1000) if self.state == "paused" and self.resume_at else None,
-                "schedule": {"timeSynced": True, "localTime": time.strftime("%H:%M"), "weekday": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"][time.localtime().tm_wday],
-                             "active": False, "enabledCount": sum(1 for s in self.schedules if s["enabled"]), "timezone": self.tz},
+                "time": self.time_json(),
+                "schedule": {"active": False, "enabledCount": sum(1 for s in self.schedules if s["enabled"]), "blocked": None},
                 "moveCount": self.moves, "lastMoveAgoMs": int((now - self.last_move) * 1000), "lastMoveAt": int(self.last_move),
                 "config": self.config, "bluetooth": summary,
                 "device": {"version": "0.5.0", "bleName": "Bluetooth Mouse", "bleAddress": "02:aa:bb:cc:00:01"}}
@@ -294,16 +308,36 @@ class Handler(BaseHTTPRequestHandler):
                 d.network.update(body)
             return self.send(200, d.network)
         if path == "/api/schedules":
+            actions = ["start", "stop", "pause", "resume", "bluetooth_on", "bluetooth_off", "discovery"]
+            if method == "PUT":
+                b = body or {}
+                for i, s_ in enumerate(b.get("schedules", d.schedules)):
+                    if not s_.get("days"):
+                        return self.err(400, "invalid_schedule", "schedules[%d].days" % i, "pick at least one day")
+                d.schedules = b.get("schedules", d.schedules)
+            return self.send(200, {"schedules": d.schedules, "actions": actions})
+        if path == "/api/time" and method in ("GET", "PUT"):
             zones = ["UTC", "Europe/London", "Europe/Rome", "Europe/Paris", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Asia/Tokyo"]
             if method == "PUT":
                 b = body or {}
                 if "timezone" in b:
+                    if b["timezone"] not in zones:
+                        return self.err(400, "invalid_clock", "timezone", "unknown timezone")
                     d.tz = b["timezone"]
-                for i, s in enumerate(b.get("schedules", d.schedules)):
-                    if not s.get("days"):
-                        return self.err(400, "invalid_schedule", "schedules[%d].days" % i, "pick at least one day")
-                d.schedules = b.get("schedules", d.schedules)
-            return self.send(200, {"timezone": d.tz, "schedules": d.schedules, "timezones": zones})
+                if "ntpServer" in b:
+                    d.ntp = b["ntpServer"]
+            return self.send(200, {"timezone": d.tz, "ntpServer": d.ntp, "status": d.time_json(), "timezones": zones})
+        if path == "/api/time/set" and method == "POST":
+            d.time_source = "manual"
+            return self.send(200, {"timezone": d.tz, "ntpServer": d.ntp, "status": d.time_json()})
+        if path == "/api/button":
+            gpios = [0, 4, 5, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33]
+            if method == "PUT":
+                g = (body or {}).get("gpio")
+                if g not in gpios:
+                    return self.err(400, "invalid_gpio", "gpio", "pick one of the listed pins (0 is the BOOT button)")
+                d.button_gpio = g
+            return self.send(200, {"gpio": d.button_gpio, "default": 0, "gpios": gpios})
         if path == "/api/token" and method == "PUT":
             if body.get("current") != d.token:
                 return self.err(403, "wrong_current", "current", "the current token is not correct")
@@ -317,21 +351,30 @@ class Handler(BaseHTTPRequestHandler):
             if method == "DELETE":
                 d.window_until = None
                 return self.send(200, d.bluetooth())
-            seconds = (body or {}).get("seconds", 180)
+            seconds = (body or {}).get("seconds", d.disc_seconds)
             if not 30 <= seconds <= 600:
                 return self.err(400, "invalid_seconds", "seconds", "the pairing window must last between 30 and 600 seconds")
-            d.window_until = time.time() + seconds; d.held = False; d.bonded_at_open = len(d.peers)
+            d.window_until = time.time() + seconds; d.enabled = True; d.bonded_at_open = len(d.peers)
             return self.send(200, d.bluetooth())
-        if path == "/api/bluetooth/disconnect":
-            d.held = True; d.window_until = None
+        if path == "/api/bluetooth/disable":
+            d.enabled = False; d.window_until = None
             return self.send(200, d.bluetooth())
-        if path == "/api/bluetooth/reconnect":
-            d.held = False
+        if path == "/api/bluetooth/enable":
+            d.enabled = True
             if d.peers and not d.connected_since:
                 d.connected_since = time.time()
             return self.send(200, d.bluetooth())
+        if path == "/api/bluetooth/settings" and method == "PUT":
+            b = body or {}
+            if "discoverySeconds" in b:
+                if not isinstance(b["discoverySeconds"], int) or not 30 <= b["discoverySeconds"] <= 600:
+                    return self.err(400, "invalid_seconds", "discoverySeconds", "the discovery time must be between 30 and 600 seconds")
+                d.disc_seconds = b["discoverySeconds"]
+            if "offWhenComputerDisconnects" in b:
+                d.off_on_disconnect = bool(b["offWhenComputerDisconnects"])
+            return self.send(200, d.bluetooth())
         if path == "/api/bluetooth/peers" and method == "DELETE":
-            d.peers = []; d.connected_since = None; d.held = False
+            d.peers = []; d.connected_since = None
             return self.send(200, d.bluetooth())
         if path.startswith("/api/bluetooth/peers/"):
             pid = path.rsplit("/", 1)[1]

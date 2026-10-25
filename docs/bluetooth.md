@@ -1,47 +1,57 @@
-# Bluetooth: pairing, computers and disconnecting
+# Bluetooth: states, pairing and computers
 
 The board is a Bluetooth peripheral with **one** identity (see [Appearance](appearance.md)). One computer is connected at a time, but up to **3** can be paired; the board reconnects to whichever one is in range.
 
 <p align="center">
-  <img src="images/computers.png" alt="Pairing and paired computers" width="260">
-  <img src="images/status-disconnected.png" alt="After Disconnect: visible, but nothing can connect until Reconnect" width="260">
+  <img src="images/computers.png" alt="Bluetooth state, Discovery and paired computers" width="260">
+  <img src="images/status-bluetooth-off.png" alt="Bluetooth switched off" width="260">
 </p>
 
-## Pairing is always closed, until you open it
+## The four states
 
-| Situation | Pairing |
-|---|---|
-| Default, **always**: a brand-new board, a board with computers paired, after "Forget all" | **Closed.** A computer that tries to pair is refused, and its bond, if it made one, is removed. |
-| Window opened by you | Open for **3 minutes** (the API also accepts 30–600 s), then it closes by itself. It closes earlier if you stop it, or **as soon as a new computer pairs**. |
+| State | What it means | Who can find and reach the device |
+|---|---|---|
+| **Off** | The radio is silent. | Nobody. The device is invisible and cannot be connected to. |
+| **Waiting** | On, not connected, **Discovery closed**. | Only computers that are already paired. The device is not discoverable and does not show its name, so it does not appear in anyone else's "nearby devices" list. |
+| **Discovery** | On, and a window is open so a **new computer can pair**. | Everyone in range: the device is discoverable and shows its name. |
+| **Connected** | Linked to a computer. | (Discovery, when open, wins in the status so you can see it is open.) |
 
-Open a window from **Computers → Open pairing**, with `POST /api/bluetooth/pairing`, with the `start_pairing` MCP tool, or with a **short tap of the BOOT button** on the board (the LED blinks fast while it is open). The dashboard shows a countdown; stop it early with **Stop pairing** (`DELETE /api/bluetooth/pairing`).
+The state is `state` (`off`, `waiting`, `discovery`, `connected`) in `GET /api/bluetooth` and in the `bluetooth` object of `GET /api/status`. The status LED shows it too (see [Network and security](network.md#the-status-led)).
 
-To pair the very first computer on a new board you therefore need either the board in your hand (the BOOT tap) or the token (the dashboard): nobody else can do it.
+## Discovery: pairing is always closed until you open it
 
-**How it is enforced.** While the window is closed the board refuses at the start of pairing (it claims it can confirm a code and always declines), which stops even a computer that merely forgot the device from re-pairing. Hosts that cannot show a code are caught by a second check: as soon as the board learns the newcomer's identity its link is dropped and its bond, if any, is deleted. Computers that are already paired are never affected. Any new bond closes the window, so whoever pairs first in range uses it up: pair your computer yourself, promptly, and look at **Computers** afterwards.
+A new computer can pair only while Discovery is open. By default it is **closed**, always: a brand-new board, a board with computers paired, after "Forget all". A computer that tries to pair while it is closed is refused, and its bond, if it made one, is removed.
 
-**At most 3 computers** can be paired. A fourth is refused even while a window is open: forget one first. (The Bluetooth stack keeps 5 bond slots and evicts the oldest when full; the spare slots keep a refused newcomer from ever pushing a real bond out.)
+You open Discovery from **Computers → Start Discovery**, with `POST /api/bluetooth/pairing` (optional body `{"seconds": 120}`), with the `start_pairing` MCP tool, with a schedule action, or by **holding the button on the board for 5 to 10 seconds and letting go** (the LED blinks fast while you can let go). If Bluetooth was off, opening Discovery switches it on. It lasts **180 seconds by default**; change that on Computers (30 to 600 s, `PUT /api/bluetooth/settings {"discoverySeconds": 300}`). It closes by itself when the time is up, when a computer pairs, or when you stop it (`DELETE /api/bluetooth/pairing`).
+
+To pair the very first computer on a new board you need either the board in your hand (the button) or the token (the dashboard): nobody else can do it.
+
+**How it is enforced.** While Discovery is closed the board refuses at the start of pairing (it claims it can confirm a code and always declines), which stops even a computer that merely forgot the device from re-pairing. Hosts that cannot show a code are caught by a second check: as soon as the board learns the newcomer's identity its link is dropped and its bond, if any, is deleted. Computers that are already paired are never affected. Any new bond closes Discovery, so whoever pairs first in range uses it up: pair your computer yourself, promptly, and look at **Computers** afterwards.
+
+**At most 3 computers** can be paired. A fourth is refused even while Discovery is open: forget one first. (The Bluetooth stack keeps 5 bond slots and evicts the oldest when full; the spare slots keep a refused newcomer from ever pushing a real bond out.)
+
+## Turning Bluetooth off and on
+
+**Turn Bluetooth off** (`POST /api/bluetooth/disable`, MCP `disable_bluetooth`, or a schedule action) disconnects the computer, closes Discovery and silences the radio. Pairings are kept. **Turn Bluetooth on** (`POST /api/bluetooth/enable`) lets the paired computers find the device and reconnect by themselves. The choice is stored, so a restart does not undo it.
+
+The same happens when you press *Disconnect* in the **computer's own Bluetooth menu** while the setting **Turn Bluetooth off when the computer itself disconnects** is ticked (it is by default): the board sees the computer end the connection and switches Bluetooth off, because otherwise the computer reconnects at once (macOS does). Untick it, or `PUT /api/bluetooth/settings {"offWhenComputerDisconnects": false}`, and the device just goes back to Waiting.
+
+> **Sleep.** Some computers disconnect Bluetooth devices on their own when they go to sleep, and the board cannot tell that apart from you pressing Disconnect. With the setting ticked, Bluetooth then switches off, and the computer cannot reconnect after waking until you turn it on again from the dashboard. If that happens to you, untick the setting.
+
+A peripheral cannot tell a deliberate "Connect" click on the computer from its automatic reconnection, so while Bluetooth is off nothing can connect, not even by hand.
 
 ## Which computer is connected?
 
-Bluetooth does not give a peripheral the computer's name, only its address, so the board numbers computers ("Computer 1", "Computer 2", …) and stores any name you give them (**Rename**, or `PUT /api/bluetooth/peers/<id>`, 1–32 characters). To tell them apart: disconnect, see which computer loses the mouse, and rename the one marked *Connected now*.
-
-## Disconnect (without powering off)
-
-**Disconnect** (`POST /api/bluetooth/disconnect`) drops the link, closes any open pairing window and leaves the device **visible but not connectable**: it still shows up in the computer's Bluetooth list, but nothing can open a link to it, so a paired computer cannot reconnect behind your back. **Reconnect** (`POST /api/bluetooth/reconnect`) or opening a pairing window makes it connectable again, and the paired computer then reconnects within seconds on its own. The state is not persisted: a restart brings the device back. The status reports it as `held: true`.
-
-The same happens when you press *Disconnect* in the computer's own Bluetooth menu: the board sees the computer end the connection and treats it exactly like the dashboard's Disconnect (without this, macOS reconnects immediately because the device keeps accepting connections). A connection lost for other reasons (out of range, computer asleep or off) is not affected, and neither is a drop during pairing.
-
-A peripheral cannot tell a deliberate "Connect" click on the computer from its automatic reconnection, so while the device is disconnected, clicking Connect on the computer does not work either: press Reconnect first (dashboard, API, or one tap of the BOOT button is *not* enough: that opens pairing).
+Bluetooth does not give a peripheral the computer's name, only its address, so the board numbers computers ("Computer 1", "Computer 2", …) and stores any name you give them (**Rename**, or `PUT /api/bluetooth/peers/<id>`, 1–32 characters). To tell them apart: turn Bluetooth off, see which computer loses the mouse, and rename the one marked *Connected now*.
 
 ## Forgetting
 
-**Forget** (`DELETE /api/bluetooth/peers/<id>`) removes one bond on the board and drops that computer's link if it is connected. **Forget all** (`DELETE /api/bluetooth/peers`) removes all of them; pairing stays closed until you open a window. **Also remove the device in the computer's Bluetooth settings**, otherwise that computer keeps a stale key and may fail to reconnect until you do.
+**Forget** (`DELETE /api/bluetooth/peers/<id>`) removes one bond on the board and drops that computer's link if it is connected. **Forget all** (`DELETE /api/bluetooth/peers`) removes all of them; Discovery stays closed until you open it. **Also remove the device in the computer's Bluetooth settings**, otherwise that computer keeps a stale key and may fail to reconnect until you do.
 
 ## Limits
 
-- The board has no display or keypad, so pairing is "Just Works": anyone in radio range while a window is open can pair. Keep windows short.
+- The board has no display or keypad, so pairing is "Just Works": anyone in radio range while Discovery is open can pair. Keep it short.
 - A refused intruder briefly holds an encrypted link before it is dropped.
-- A link that connects and never starts pairing is not refused by the policy; it cannot receive input reports without encryption. Press Disconnect if you suspect one: nothing can connect until you press Reconnect.
-- The device is always visible in a computer's Bluetooth list (it must be, so paired computers can reconnect); it just cannot be paired with.
+- A link that connects and never starts pairing is not refused by the policy; it cannot receive input reports without encryption. Turn Bluetooth off if you suspect one.
+- In **Waiting** the device is not discoverable, which hides it from the "nearby devices" lists, but a determined scanner can still see that something is advertising. It is a courtesy, not a security boundary: the security is that pairing is refused.
 - Names are stored on the board, never read from the computer.

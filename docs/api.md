@@ -74,33 +74,53 @@ Body size caps: 4096 bytes for MCP, 2048 for devices and schedules, 1024 for con
 
 ## Bluetooth
 
-See [bluetooth.md](bluetooth.md) for the pairing policy. `GET /api/status` also carries a compact `"bluetooth"` object (`connected`, `held`, `heldRemainingMs`, `pairing{open, remainingMs}`, `computer{label, connectedForMs}`, `peerCount`) and a `"device"` object (`version`, `bleName`, `bleAddress`).
+See [bluetooth.md](bluetooth.md) for the states and the pairing policy. `GET /api/status` also carries a compact `"bluetooth"` object (`state`, `enabled`, `discoverySeconds`, `offWhenComputerDisconnects`, `connected`, `pairing{open, remainingMs}`, `computer{label, connectedForMs}`, `peerCount`), a `"time"` object (see Time) and a `"device"` object (`version`, `bleName`, `bleAddress`).
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/bluetooth` | Full state: connection, pairing window, `computer`, and `peers[]` (`id`, `address`, `label`, `connected`) |
-| POST | `/api/bluetooth/pairing` | Open a pairing window. Optional body `{"seconds":180}` (30–600; default 180). It closes by itself when a computer pairs |
-| DELETE | `/api/bluetooth/pairing` | Close the window |
-| POST | `/api/bluetooth/disconnect` | Drop the link; the device stays visible but not connectable until reconnect |
-| POST | `/api/bluetooth/reconnect` | Make the device visible again |
+| GET | `/api/bluetooth` | Full state: `state` (`off`, `waiting`, `discovery`, `connected`), the settings, the Discovery window, `computer`, and `peers[]` (`id`, `address`, `label`, `connected`) |
+| POST | `/api/bluetooth/pairing` | Open Discovery (switches Bluetooth on). Optional body `{"seconds":120}` (30–600; default: the configured length, 180). It closes by itself when a computer pairs |
+| DELETE | `/api/bluetooth/pairing` | Close Discovery |
+| POST | `/api/bluetooth/disable` | Switch Bluetooth off: disconnects the computer, closes Discovery, silences the radio. Stored |
+| POST | `/api/bluetooth/enable` | Switch Bluetooth on |
+| PUT | `/api/bluetooth/settings` | `{"discoverySeconds":300,"offWhenComputerDisconnects":false}` (30–600 s; both optional) |
 | PUT | `/api/bluetooth/peers/<id>` | Rename a paired computer: `{"label":"Office desktop"}` (1–32 chars) |
 | DELETE | `/api/bluetooth/peers/<id>` | Forget one computer (`404 not_found` if unknown) |
-| DELETE | `/api/bluetooth/peers` | Forget all computers. Pairing stays closed until you open a window |
+| DELETE | `/api/bluetooth/peers` | Forget all computers. Discovery stays closed until you open it |
 
 ## Schedules
 
-See [schedules.md](schedules.md). `GET /api/status` also carries `"schedule": {timeSynced, localTime, weekday, active, enabledCount, timezone}`.
+See [schedules.md](schedules.md). `GET /api/status` also carries `"schedule": {active, enabledCount, blocked}`; `blocked` is `"no_computer_paired"` while an open window cannot start the jiggler yet, else `null`.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/schedules` | `{"timezone", "schedules":[...], "timezones":[...]}` (the last is the list of accepted zones) |
-| PUT | `/api/schedules` | Replace the schedules (max 8; each may have `times` 1–999 and `remaining` for a limited number of runs) and/or set the timezone; keys you omit keep their value. `400 invalid_schedule` with the offending `field` |
+| GET | `/api/schedules` | `{"schedules":[...], "actions":[...]}` (the last lists the accepted actions) |
+| PUT | `/api/schedules` | Replace the schedules (max 8). Each is a window (`kind` `window`, `start`, `durationMin`) or an action (`kind` `action`, `action`, `start`), with optional `jitterMin` 0–120, `times` 1–999 and `remaining`. `400 invalid_schedule` with the offending `field` |
 
 ```json
-{ "timezone": "Europe/Rome",
-  "schedules": [ { "id": "workdays", "enabled": true, "days": ["mon","tue","wed","thu","fri"],
-                   "start": "09:00", "durationMin": 480 } ] }
+{ "schedules": [
+  { "id": "workdays", "enabled": true, "kind": "window", "days": ["mon","tue","wed","thu","fri"],
+    "start": "09:00", "durationMin": 480, "jitterMin": 10 },
+  { "id": "lunch", "enabled": true, "kind": "action", "action": "pause", "days": ["mon","tue","wed","thu","fri"],
+    "start": "12:30" } ] }
 ```
+
+## Time
+
+`GET /api/status` carries `"time": {synced, source, timezone, localTime, weekday, epoch}` (`source` is `ntp`, `manual` or `none`; the rest is `null` until the clock is known).
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/time` | `{"timezone", "ntpServer", "status":{...}, "timezones":[...]}` |
+| PUT | `/api/time` | `{"timezone":"Europe/Rome","ntpServer":"pool.ntp.org"}` (an empty `ntpServer` stops using NTP). `400 invalid_clock` with the `field` |
+| POST | `/api/time/set` | `{"epoch":1795000000}` sets the clock by hand (Unix seconds, 2023–2100). A board with no internet loses it at every restart |
+
+## Button
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/button` | `{"gpio":0,"default":0,"gpios":[...]}`: the pin of the physical button and the pins that can be used |
+| PUT | `/api/button` | `{"gpio":14}`; applies at once. `400 invalid_gpio` for a pin that is not listed |
 
 ## Firmware update
 

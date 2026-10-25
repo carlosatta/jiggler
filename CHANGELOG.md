@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0
+
+- **Four clear Bluetooth states.** **Off** (the radio is silent: invisible, nothing can connect), **Waiting** (on; only computers that are already paired can find and reach the device), **Discovery** (a window is open so a new computer can pair) and **Connected**. Status, Computers, the LED, the API (`state`) and MCP all use them. "Disconnect" and "Reconnect" are gone: **Turn Bluetooth off / on** (`POST /api/bluetooth/disable|enable`, MCP `disable_bluetooth` / `enable_bluetooth`; the choice is stored). The computer's own Disconnect also switches Bluetooth off by default (`offWhenComputerDisconnects`, untick it on Computers); a computer that disconnects when it goes to sleep does the same, so untick it if your computer does not reconnect after waking. `held` and `heldRemainingMs` are removed from the API.
+- **Strangers no longer see the device.** In Waiting the device advertises as non-discoverable and without its name, so it should not show up in other computers' "nearby devices" lists (it used to appear there even while pairing was closed, although pairing was refused). Only Discovery makes it discoverable and named.
+- **Discovery length is configurable** (30 to 600 s, default 180) on Computers, `PUT /api/bluetooth/settings`. "Pairing" is called Discovery in the dashboard.
+- **A button on the board.** Tap = start or stop the jiggler (three LED blinks). Hold 5 to 10 s and let go = open Discovery. Hold 30 s = switch the network mode (it used to be 3 s, and a tap used to open pairing). The pin is configurable (default the BOOT button, GPIO 0) in **System → Button**, `GET/PUT /api/button`, MCP `get_button` / `set_button`. The LED shows what letting go would do while you hold.
+- **LED patterns** per state: off = one short flash every 3 s, waiting = slow blink, Discovery = fast blink, connected and running = solid, connected but stopped or paused = two short flashes every 3 s.
+- **Time settings.** New **System → Time**: timezone (moved here from Schedule), NTP server (default `pool.ntp.org`, empty to stop using NTP) and **Set the time from this browser** for a board with no internet (lost at every restart). `GET/PUT /api/time`, `POST /api/time/set`, MCP `get_time` / `set_time`; `time` in the status. The timezone is no longer part of `/api/schedules`; a timezone saved by the old Schedule page is kept.
+- **Schedules redesigned.** Two kinds: a **window** (start to end, runs the jiggler) and an **action** at a time (start, stop, pause, resume, Bluetooth on or off, open Discovery). Every entry can have a **random shift** of up to 120 minutes either way, drawn afresh each day. API: `kind`, `action`, `jitterMin`; `actions` in the GET.
+- **Fix: a schedule saved while its window is open never started.** Saving used to mark an open window as "already open", so the jiggler did not start and the Start button stayed as it was. A window you add or change that is open at that moment now starts the jiggler (an untouched window you stopped by hand stays stopped). When an open window cannot start because no computer is paired, Status says so (`schedule.blocked`).
+- Schedule body limit raised to 4096 bytes.
+
 ## 0.5.0
 
 - **Pause.** Besides Start and Stop, **Pause** holds the jiggler for 15 minutes, 30 minutes, 1 or 2 hours, or until you press **Resume**. While paused nothing moves; a "run for" deadline keeps counting and schedules keep their timetable. `POST /api/pause {"minutes": n}`, `POST /api/resume`, `resumesInMs` in the status, MCP `pause` (with `minutes`) and `resume`.

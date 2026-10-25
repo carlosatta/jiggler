@@ -4,7 +4,7 @@
 
 Install PlatformIO (`pipx install platformio`; `pio` lives in `~/.local/bin`).
 
-Hardware: a classic `esp32dev` board (ESP32-WROOM), USB cable. Nothing else is needed; the status LED is the on-board one (GPIO 2) and the BOOT button is GPIO 0.
+Hardware: a classic `esp32dev` board (ESP32-WROOM), USB cable. Nothing else is needed; the status LED is the on-board one (GPIO 2) and the BOOT button (GPIO 0) is the default jiggler button.
 
 ## Commands
 
@@ -17,7 +17,7 @@ Hardware: a classic `esp32dev` board (ESP32-WROOM), USB cable. Nothing else is n
 | Flash over WiFi (OTA) | `curl -H "Authorization: Bearer $TOKEN" -F firmware=@.pio/build/esp32/firmware.bin http://jiggler.local/api/update` |
 | Serial monitor (115200 baud) | `pio device monitor` |
 
-Suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_schedule`, `test_appearance`, `test_mcp_ex`, plus `test_keyboard`, `test_script` and `test_automation` for the parked modules (see below).
+Suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_schedule`, `test_appearance`, `test_mcp_ex`, `test_clock`, `test_button_settings`, plus `test_keyboard`, `test_script` and `test_automation` for the parked modules (see below).
 
 Adjust the upload port to your system (`pio device list`).
 
@@ -49,7 +49,7 @@ Scripts, automations and the keyboard mode were built and then taken out of the 
 
 ## Screenshots
 
-The images in `docs/images/` are real screenshots of the dashboard page, served by `tools/mock_device.py` with neutral data ("Computer 1", made-up addresses) so they contain nothing personal. Start the mock (`python3 tools/mock_device.py --port 8765`, token `mocktoken1`), force a state with `curl -X POST localhost:8765/__scenario/<firstrun|connected|idle|held|pairing|many>` (and `/__pair` to simulate a computer pairing while a window is open), and capture the pages with a browser at 390x844 (phone) and 1280x800 (desktop) at 2x scale.
+The images in `docs/images/` are real screenshots of the dashboard page, served by `tools/mock_device.py` with neutral data ("Computer 1", made-up addresses) so they contain nothing personal. Start the mock (`python3 tools/mock_device.py --port 8765`, token `mocktoken1`), force a state with `curl -X POST localhost:8765/__scenario/<firstrun|connected|idle|off|pairing|many>` (and `/__pair` to simulate a computer pairing while a window is open), and capture the pages with a browser at 390x844 (phone) and 1280x800 (desktop) at 2x scale.
 
 ## Conventions
 

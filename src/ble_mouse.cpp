@@ -93,10 +93,8 @@ void BleMouse::begin(const jig::ResolvedAppearance& device) {
   hid->setBatteryLevel(100);
   hid->startServices();
 
-  NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
-  adv->setAppearance(device.identity.appearance);
-  adv->addServiceUUID(hid->hidService()->getUUID());
-  adv->start();
+  appearance_ = device.identity.appearance;
+  refreshAdvertising();
 }
 
 std::string BleMouse::address() const { return lower(NimBLEDevice::getAddress().toString()); }
@@ -148,8 +146,8 @@ void BleMouse::linkDown(uint16_t handle) {
                  links_.end());
     refreshConnected();
   }
-  Serial.printf("BLE link down (handle %u), advertising %s\n", static_cast<unsigned>(handle), connectable_ ? "connectable" : "not connectable");
-  if (!quiet_) NimBLEDevice::startAdvertising();
+  Serial.printf("BLE link down (handle %u), advertising %s\n", static_cast<unsigned>(handle), enabled_ ? "on" : "off");
+  if (!quiet_ && enabled_) NimBLEDevice::startAdvertising();
 }
 
 std::vector<std::string> BleMouse::bondedAddresses() {
@@ -195,35 +193,58 @@ void BleMouse::setQuiet(bool quiet) {
   }  // coming back: the 200 ms advertising watchdog (setConnectable) restarts advertising
 }
 
-void BleMouse::setConnectable(bool on) {
-  if (quiet_) return;
-  const bool changed = connectable_.exchange(on) != on;
+// Discovery (a pairing window is open): general discoverable, with the name, so the computer's Bluetooth list shows
+// the device. Waiting: not discoverable and nameless, so only a computer that already knows the device (by its
+// address) reconnects, and nothing shows up for anyone else.
+void BleMouse::refreshAdvertising() {
+  if (quiet_ || !enabled_) return;
+  const bool discoverable = pairingOpen_;
+  NimBLEDevice::stopAdvertising();
   NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
-  if (changed) {
-    // Held: keep advertising so the device stays in the computer's list, but as non-connectable, so nothing
-    // (not even a paired computer's automatic reconnection) can open a link.
-    NimBLEDevice::stopAdvertising();
-    adv->setAdvertisementType(on ? BLE_GAP_CONN_MODE_UND : BLE_GAP_CONN_MODE_NON);
+  NimBLEAdvertisementData advData, scanData;
+  advData.setFlags(discoverable ? (BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP) : BLE_HS_ADV_F_BREDR_UNSUP);
+  advData.setAppearance(appearance_);
+  advData.setCompleteServices(NimBLEUUID(static_cast<uint16_t>(0x1812)));  // HID over GATT
+  if (discoverable) scanData.setName(name_);
+  adv->setAdvertisementData(advData);
+  adv->setScanResponseData(scanData);
+  bool room;
+  {
+    std::lock_guard<std::mutex> lock(linksMutex_);
+    room = links_.empty() || (discoverable && links_.size() < 3);
   }
-  // Called every 200 ms. Besides applying a change, this is a watchdog: with nobody connected, advertising
-  // must be running. If a restart attempt after a drop ever failed (links that flap), the board would stay
-  // online but invisible to the computer until restarted.
+  if (room) NimBLEDevice::startAdvertising();
+}
+
+void BleMouse::setEnabled(bool on) {
+  if (quiet_) return;
+  const bool changed = enabled_.exchange(on) != on;
+  if (!on) {
+    if (changed) NimBLEDevice::stopAdvertising();
+    return;
+  }
+  // Called every 200 ms. Besides applying a change, this is a watchdog: with nobody connected, advertising must be
+  // running. If a restart attempt after a drop ever failed (links that flap), the board would stay online but
+  // invisible to the computer until restarted.
   bool idle;
   {
     std::lock_guard<std::mutex> lock(linksMutex_);
     idle = links_.empty();
   }
-  if (changed || (idle && !NimBLEDevice::getAdvertising()->isAdvertising())) {
-    if (!changed) Serial.println("BLE advertising was off: restarted");
-    NimBLEDevice::startAdvertising();
+  if (changed) {
+    refreshAdvertising();
+  } else if (idle && !NimBLEDevice::getAdvertising()->isAdvertising()) {
+    Serial.println("BLE advertising was off: restarted");
+    refreshAdvertising();
   }
 }
 
 void BleMouse::setPairingOpen(bool open) {
-  pairingOpen_ = open;
+  const bool changed = pairingOpen_.exchange(open) != open;
   // Open: "Just Works" (no code). Closed: advertise a display+yes/no capability so a pairing attempt reaches
   // onConfirmPIN, where it is refused before any key is stored. Does not affect already-bonded reconnections.
   NimBLEDevice::setSecurityIOCap(open ? BLE_HS_IO_NO_INPUT_OUTPUT : BLE_HS_IO_DISPLAY_YESNO);
+  if (changed) refreshAdvertising();  // Discovery makes the device discoverable and named; closing hides it again
 }
 
 void BleMouse::sendMouse(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel) {

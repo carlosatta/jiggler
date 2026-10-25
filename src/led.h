@@ -1,11 +1,9 @@
 #pragma once
 
-#include <cstdint>
-
-#include "controller.h"
+#include "led_logic.h"
 
 class Led {
  public:
   void begin();
-  void update(const jig::Status& status, bool pairingOpen, bool held, uint32_t nowMs);
+  void update(const jig::LedContext& context);
 };

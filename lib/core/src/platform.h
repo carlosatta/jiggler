@@ -28,6 +28,7 @@ inline int32_t randRange(Rng& rng, int32_t lo, int32_t hi) {
 struct LocalTime {
   uint8_t weekday = 0;
   uint16_t minuteOfDay = 0;  // 0..1439
+  uint32_t day = 0;          // whole local days since 1970-01-01 (what a daily random offset is keyed on)
 };
 
 struct Platform {
@@ -38,6 +39,15 @@ struct Platform {
   virtual bool wifiConnected() const = 0;
   // At least one computer is paired. Without one the jiggler has nothing to keep awake and must not run.
   virtual bool computerPaired() const { return true; }
+  // Which clock the time comes from: "ntp", "manual" or "none".
+  virtual const char* timeSource() const { return unixSeconds() ? "ntp" : "none"; }
+  // Sets the NTP server ("" = stop using NTP). Takes effect at once, also before the network is up.
+  virtual void setNtpServer(const std::string& server) { (void)server; }
+  // Sets the wall clock by hand (a device with no internet has no other way). false = not supported.
+  virtual bool setUnixTime(uint32_t epochSeconds) {
+    (void)epochSeconds;
+    return false;
+  }
   // `posixTz` is a POSIX TZ string such as "CET-1CEST,M3.5.0,M10.5.0/3". nullopt = clock not synced.
   virtual std::optional<LocalTime> localTime(const std::string& posixTz) const {
     (void)posixTz;

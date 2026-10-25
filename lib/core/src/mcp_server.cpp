@@ -102,6 +102,8 @@ bool hasNetwork(const ApiContext& c) { return c.network != nullptr; }
 bool hasRestart(const ApiContext& c) { return static_cast<bool>(c.restart); }
 bool hasBluetooth(const ApiContext& c) { return c.bluetooth != nullptr; }
 bool hasSchedules(const ApiContext& c) { return c.schedules != nullptr; }
+bool hasClock(const ApiContext& c) { return c.clock != nullptr; }
+bool hasButton(const ApiContext& c) { return c.button != nullptr; }
 
 const ExtTool kExtTools[] = {
     {"get_appearance", hasAppearance}, {"set_appearance", hasAppearance},
@@ -109,9 +111,11 @@ const ExtTool kExtTools[] = {
     {"run_script", hasAutomations},  {"get_automations", hasAutomations}, {"set_automations", hasAutomations},
     {"press_key", hasAutomations},   {"type_text", hasAutomations},       {"get_network", hasNetwork},
     {"set_network", hasNetwork},     {"restart", hasRestart},
-    {"get_bluetooth", hasBluetooth}, {"start_pairing", hasBluetooth},     {"disconnect_bluetooth", hasBluetooth},
-    {"reconnect_bluetooth", hasBluetooth}, {"forget_computer", hasBluetooth},
+    {"get_bluetooth", hasBluetooth}, {"start_pairing", hasBluetooth},     {"disable_bluetooth", hasBluetooth},
+    {"enable_bluetooth", hasBluetooth}, {"set_bluetooth_settings", hasBluetooth}, {"forget_computer", hasBluetooth},
     {"get_schedules", hasSchedules}, {"set_schedules", hasSchedules},
+    {"get_time", hasClock},          {"set_time", hasClock},
+    {"get_button", hasButton},       {"set_button", hasButton},
 };
 
 const ExtTool* findExtTool(const ApiContext& ctx, const std::string& name) {
@@ -178,14 +182,13 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
       addProp(p, "enabled", "boolean", "Whether it runs.");
       schema["required"].add("automations");
     } else if (name == "get_schedules") {
-      addTool(tools, t.name, "Get the weekly schedules (windows when the jiggler starts and stops by itself) and the timezone.", &schema);
+      addTool(tools, t.name, "Get the weekly schedules: windows when the jiggler starts and stops by itself, and actions done at one time (start, stop, pause, resume, Bluetooth on/off, discovery).", &schema);
       schema["properties"].to<JsonObject>();
     } else if (name == "set_schedules") {
       addTool(tools, t.name,
-              "Replace the weekly schedules (max 8). While a window is open the jiggler runs; it starts at the start time and stops at the end. Needs the device clock to be synced (WiFi with internet).",
+              "Replace the weekly schedules (max 8). A window (kind window) runs the jiggler from its start time for durationMin minutes. An action (kind action) does one thing at its start time. jitterMin shifts every time by a random +/- number of minutes, drawn afresh each day. A window that is open when you save it starts at once. Needs the clock (get_time).",
               &schema);
       JsonObject props = schema["properties"].to<JsonObject>();
-      addProp(props, "timezone", "string", "Timezone name, e.g. Europe/Rome, America/New_York, UTC (see get_schedules for the list).");
       JsonObject items = props["schedules"].to<JsonObject>();
       items["type"] = "array";
       JsonObject item = items["items"].to<JsonObject>();
@@ -193,15 +196,34 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
       JsonObject p = item["properties"].to<JsonObject>();
       addProp(p, "id", "string", "Unique id (a-z 0-9 _ -).");
       addProp(p, "enabled", "boolean", "Whether the schedule is active (default true).");
+      addProp(p, "kind", "string", "window (default) or action.");
+      addProp(p, "action", "string", "For an action: start, stop, pause, resume, bluetooth_on, bluetooth_off or discovery.");
       JsonObject days = p["days"].to<JsonObject>();
       days["type"] = "array";
       days["items"]["type"] = "string";
       days["description"] = "Days it applies to: mon, tue, wed, thu, fri, sat, sun.";
-      addProp(p, "start", "string", "Start time HH:MM in the schedule timezone, e.g. 09:00.");
-      addNumberProp(p, "durationMin", "integer", 1, 1440, "How long the window lasts, in minutes. It may run past midnight.");
-      addNumberProp(p, "times", "integer", 1, 999, "Run this many windows and then turn the schedule off. Omit or null for no limit (every week).");
-      addNumberProp(p, "remaining", "integer", 0, 999, "Windows left when times is set (read it from get_schedules; omit to start a fresh run).");
+      addProp(p, "start", "string", "Start time HH:MM in the device timezone, e.g. 09:00. For an action, the time it happens.");
+      addNumberProp(p, "durationMin", "integer", 1, 1440, "A window's length in minutes. It may run past midnight.");
+      addNumberProp(p, "jitterMin", "integer", 0, 120, "Random shift of each time, plus or minus this many minutes (default 0).");
+      addNumberProp(p, "times", "integer", 1, 999, "Run this many times and then turn the schedule off. Omit or null for no limit (every week).");
+      addNumberProp(p, "remaining", "integer", 0, 999, "Runs left when times is set (read it from get_schedules; omit to start a fresh run).");
       schema["required"].add("schedules");
+    } else if (name == "get_time") {
+      addTool(tools, t.name, "Get the device clock (whether it is set, from NTP or by hand, and the local time) with its timezone and NTP server.", &schema);
+      schema["properties"].to<JsonObject>();
+    } else if (name == "set_time") {
+      addTool(tools, t.name, "Change the timezone or NTP server, or set the clock by hand (a device without internet loses the time at every restart).", &schema);
+      JsonObject p = schema["properties"].to<JsonObject>();
+      addProp(p, "timezone", "string", "Timezone name, e.g. Europe/Rome, America/New_York, UTC (see get_time for the list).");
+      addProp(p, "ntpServer", "string", "NTP server host name, e.g. pool.ntp.org; empty to stop using NTP.");
+      addNumberProp(p, "epoch", "integer", 1700000000, 4102444800, "Set the clock to this Unix time in seconds.");
+    } else if (name == "get_button") {
+      addTool(tools, t.name, "Get which GPIO the physical button is wired to (default 0, the BOOT button) and the pins that can be used. A tap starts or stops the jiggler, a 5 to 10 s hold opens Discovery, a 30 s hold switches the network mode.", &schema);
+      schema["properties"].to<JsonObject>();
+    } else if (name == "set_button") {
+      addTool(tools, t.name, "Choose the GPIO of the physical button (wired to ground).", &schema);
+      addNumberProp(schema["properties"].to<JsonObject>(), "gpio", "integer", 0, 33, "A pin from get_button.");
+      schema["required"].add("gpio");
     } else if (name == "press_key") {
       addTool(tools, t.name, "Press a key (or combination such as Ctrl+C) on the keyboard now.", &schema);
       JsonObject p = schema["properties"].to<JsonObject>();
@@ -228,17 +250,22 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
       addTool(tools, t.name, "Restart the device (needed after changing the appearance or network).", &schema);
       schema["properties"].to<JsonObject>();
     } else if (name == "get_bluetooth") {
-      addTool(tools, t.name, "Get the Bluetooth state: which computer is connected and for how long, whether pairing is open, and the paired computers.", &schema);
+      addTool(tools, t.name, "Get the Bluetooth state (off, waiting, discovery or connected), which computer is connected and for how long, the discovery time, and the paired computers.", &schema);
       schema["properties"].to<JsonObject>();
     } else if (name == "start_pairing") {
-      addTool(tools, t.name, "Open the pairing window so a new computer can pair (default 180 s). While it is closed, new computers are refused.", &schema);
-      addNumberProp(schema["properties"].to<JsonObject>(), "seconds", "integer", 30, 600, "How long the window stays open (default 180).");
-    } else if (name == "disconnect_bluetooth") {
-      addTool(tools, t.name, "Disconnect the computer; the device stays visible but not connectable until reconnect_bluetooth (it stays powered and keeps its pairings).", &schema);
+      addTool(tools, t.name, "Open Discovery (the pairing window) so a new computer can pair; it also switches Bluetooth on. While it is closed, new computers are refused.", &schema);
+      addNumberProp(schema["properties"].to<JsonObject>(), "seconds", "integer", 30, 600, "How long the window stays open (default: the configured discovery time, 180 s).");
+    } else if (name == "disable_bluetooth") {
+      addTool(tools, t.name, "Switch Bluetooth off: the computer is disconnected and the device is invisible until enable_bluetooth (it keeps its pairings).", &schema);
       schema["properties"].to<JsonObject>();
-    } else if (name == "reconnect_bluetooth") {
-      addTool(tools, t.name, "Make the device visible again so paired computers can reconnect.", &schema);
+    } else if (name == "enable_bluetooth") {
+      addTool(tools, t.name, "Switch Bluetooth on: paired computers can find and reconnect to the device.", &schema);
       schema["properties"].to<JsonObject>();
+    } else if (name == "set_bluetooth_settings") {
+      addTool(tools, t.name, "Change the Bluetooth settings.", &schema);
+      JsonObject p = schema["properties"].to<JsonObject>();
+      addNumberProp(p, "discoverySeconds", "integer", 30, 600, "How long Discovery stays open (default 180).");
+      addProp(p, "offWhenComputerDisconnects", "boolean", "Switch Bluetooth off when the computer itself ends the connection (default true).");
     } else if (name == "forget_computer") {
       addTool(tools, t.name, "Forget one paired computer (it will have to pair again). Use the id from get_bluetooth.", &schema);
       addProp(schema["properties"].to<JsonObject>(), "id", "string", "The computer id from get_bluetooth.");
@@ -284,12 +311,32 @@ ToolOutput callExtTool(ApiContext& ctx, const std::string& name, JsonVariantCons
   if (name == "set_automations") return wrapArray(ctx, "automations", "/api/automations", args);
   if (name == "get_schedules") return viaRoute(ctx, "GET", "/api/schedules");
   if (name == "set_schedules") return viaRoute(ctx, "PUT", "/api/schedules", args.isNull() ? "{}" : serialize(args));
+  if (name == "get_time") return viaRoute(ctx, "GET", "/api/time");
+  if (name == "set_time") {
+    ToolOutput last = viaRoute(ctx, "GET", "/api/time");
+    if (args["epoch"].is<int64_t>()) {
+      JsonDocument doc;
+      doc["epoch"] = args["epoch"];
+      last = viaRoute(ctx, "POST", "/api/time/set", serialize(doc));
+      if (last.isError) return last;
+    } else if (!args["epoch"].isNull()) {
+      return argError("epoch", "must be a Unix time in seconds");
+    }
+    JsonDocument settings;
+    if (!args["timezone"].isNull()) settings["timezone"] = args["timezone"];
+    if (!args["ntpServer"].isNull()) settings["ntpServer"] = args["ntpServer"];
+    if (!settings.as<JsonObject>().isNull() && settings.size() > 0) last = viaRoute(ctx, "PUT", "/api/time", serialize(settings));
+    return last;
+  }
+  if (name == "get_button") return viaRoute(ctx, "GET", "/api/button");
+  if (name == "set_button") return viaRoute(ctx, "PUT", "/api/button", args.isNull() ? "{}" : serialize(args));
   if (name == "get_network") return viaRoute(ctx, "GET", "/api/network");
   if (name == "restart") return viaRoute(ctx, "POST", "/api/restart");
   if (name == "get_bluetooth") return viaRoute(ctx, "GET", "/api/bluetooth");
   if (name == "start_pairing") return viaRoute(ctx, "POST", "/api/bluetooth/pairing", args.isNull() ? "" : serialize(args));
-  if (name == "disconnect_bluetooth") return viaRoute(ctx, "POST", "/api/bluetooth/disconnect");
-  if (name == "reconnect_bluetooth") return viaRoute(ctx, "POST", "/api/bluetooth/reconnect");
+  if (name == "disable_bluetooth") return viaRoute(ctx, "POST", "/api/bluetooth/disable");
+  if (name == "enable_bluetooth") return viaRoute(ctx, "POST", "/api/bluetooth/enable");
+  if (name == "set_bluetooth_settings") return viaRoute(ctx, "PUT", "/api/bluetooth/settings", serialize(args));
   if (name == "forget_computer") {
     if (!args["id"].is<const char*>() || args["id"].as<std::string>().empty()) return argError("id", "is required");
     return viaRoute(ctx, "DELETE", "/api/bluetooth/peers/" + args["id"].as<std::string>());

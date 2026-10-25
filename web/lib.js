@@ -38,32 +38,34 @@ var JigLib = (function () {
 
   function hex4(n) { return '0x' + ('0000' + n.toString(16).toUpperCase()).slice(-4); }
 
-  // What the Status page says about the Bluetooth link, from /api/status. Pure so the wording is testable.
+  // What the Status page says about Bluetooth, from /api/status: one of four states (off, waiting, discovery,
+  // connected). Pure so the wording is testable.
   function connectionView(bt, device) {
     var name = (device && device.bleName) || 'the device';
     var pairing = bt.pairing || {};
     var timed = pairing.open && pairing.remainingMs !== null && pairing.remainingMs !== undefined;
-    var windowNote = timed ? ' Pairing is open for ' + fmtDuration(pairing.remainingMs) + '.' : '';
+    var state = bt.state || (bt.enabled === false ? 'off' : timed ? 'discovery' : bt.connected ? 'connected' : 'waiting');
+    var note = timed ? ' Discovery is open for ' + fmtDuration(pairing.remainingMs) + '.' : '';
+    if (state === 'off') {
+      return { tone: 'warn', title: 'Bluetooth is off',
+        detail: 'The device is invisible and nothing can connect. Turn Bluetooth on and your paired computers reconnect by themselves.', actions: ['enable'] };
+    }
     if (bt.connected && bt.computer) {
-      var actions = ['disconnect'];
-      if (timed) actions.push('closePairing');
+      var actions = ['disable'];
+      if (timed) actions.unshift('closePairing');
       return { tone: 'ok', title: 'Connected to ' + bt.computer.label,
-        detail: 'For ' + fmtSince(bt.computer.connectedForMs) + ' · ' + name + '.' + windowNote, actions: actions };
+        detail: 'For ' + fmtSince(bt.computer.connectedForMs) + ' · ' + name + '.' + note, actions: actions };
     }
-    if (bt.held) {
-      return { tone: 'warn', title: 'Disconnected',
-        detail: 'Still visible to computers, but nothing can connect until you press Reconnect.', actions: ['reconnect'] };
-    }
-    if (timed) {
-      return { tone: 'open', title: 'Pairing is open',
+    if (state === 'discovery' || timed) {
+      return { tone: 'open', title: 'Discovery is open',
         detail: 'Closes in ' + fmtDuration(pairing.remainingMs) + '. On the computer, choose “' + name + '”.', actions: ['closePairing'] };
     }
     if (!bt.peerCount) {
       return { tone: 'idle', title: 'No computer paired',
-        detail: 'Open pairing, then choose “' + name + '” in the computer’s Bluetooth settings.', actions: ['pair'] };
+        detail: 'Start Discovery, then choose “' + name + '” in the computer’s Bluetooth settings.', actions: ['pair'] };
     }
-    return { tone: 'idle', title: 'No computer connected',
-      detail: 'It reconnects by itself when a paired computer is on and nearby.', actions: ['pair'] };
+    return { tone: 'idle', title: 'Waiting for a computer',
+      detail: 'Bluetooth is on. A paired computer reconnects by itself when it is on and nearby.', actions: ['pair', 'disable'] };
   }
 
   function checkNewToken(next, confirm) {
@@ -135,6 +137,11 @@ var JigLib = (function () {
     return pad2(Math.floor(t / 60)) + ':' + pad2(t % 60) + (day ? ' next day' : '');
   }
 
+  var ACTION_LABELS = {
+    start: 'Start the jiggler', stop: 'Stop the jiggler', pause: 'Pause the jiggler', resume: 'Resume the jiggler',
+    bluetooth_on: 'Turn Bluetooth on', bluetooth_off: 'Turn Bluetooth off', discovery: 'Open Discovery'
+  };
+
   function toMinutes(hhmm) {
     var m = /^(\d{2}):(\d{2})$/.exec(hhmm || '');
     if (!m || +m[1] > 23 || +m[2] > 59) return null;
@@ -162,14 +169,28 @@ var JigLib = (function () {
     return s.remaining === s.times ? runs(s.times) : s.remaining + ' of ' + runs(s.times) + ' left';
   }
 
+  function describeJitter(min) { return min ? '± ' + min + ' min' : ''; }
+
   function scheduleSummary(s) {
-    var line = describeDays(s.days) + ', ' + s.start + ' to ' + scheduleEnd(s.start, s.durationMin);
+    var line = s.kind === 'action'
+      ? describeDays(s.days) + ' at ' + s.start + ': ' + (ACTION_LABELS[s.action] || s.action)
+      : describeDays(s.days) + ', ' + s.start + ' to ' + scheduleEnd(s.start, s.durationMin);
+    if (s.jitterMin) line += ' · ' + describeJitter(s.jitterMin);
     return s.times ? line + ' · ' + describeRepeat(s) : line;
+  }
+
+  // One line about the device clock, from the `time` object of /api/status or /api/time.
+  function clockLine(time) {
+    if (!time || !time.synced) return 'Not set: schedules wait for the time (needs internet, or set it by hand).';
+    var day = time.weekday ? time.weekday.charAt(0).toUpperCase() + time.weekday.slice(1) + ' ' : '';
+    var source = time.source === 'manual' ? 'set by hand' : 'from NTP';
+    return day + time.localTime + ' · ' + time.timezone + ' · ' + source;
   }
 
   return { DAYS: DAYS, DAY_LABELS: DAY_LABELS, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, fmtSince: fmtSince, hex4: hex4,
     connectionView: connectionView, checkNewToken: checkNewToken, minutesUntil: minutesUntil, runForMinutes: runForMinutes,
     stopsAt: stopsAt, describeDays: describeDays, scheduleEnd: scheduleEnd, scheduleSummary: scheduleSummary,
+    ACTION_LABELS: ACTION_LABELS, describeJitter: describeJitter, clockLine: clockLine,
     endFromDuration: endFromDuration, durationFromEnd: durationFromEnd, describeRepeat: describeRepeat };
 })();
 

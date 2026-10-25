@@ -43,12 +43,17 @@ Tool failures are returned as a normal result with `isError: true` and a JSON er
 | `get_network` | – | Network mode and AP settings |
 | `set_network` | `mode`, `apSsid`, `apPassword` (optional) | Change network settings. Needs restart |
 | `restart` | – | Restart the device |
-| `get_schedules` | – | Weekly schedules and the timezone |
-| `set_schedules` | `timezone`, `schedules[]` (`id`, `enabled`, `days`, `start`, `durationMin`) | Replace the schedules (max 8) |
-| `get_bluetooth` | – | Connection, pairing window and paired computers |
-| `start_pairing` | `seconds` (30–600, default 180, optional) | Open a pairing window |
-| `disconnect_bluetooth` | – | Drop the link; the device stays visible but not connectable until `reconnect_bluetooth` |
-| `reconnect_bluetooth` | – | Make the device visible again |
+| `get_schedules` | – | Weekly schedules (windows and actions) |
+| `set_schedules` | `schedules[]` (`id`, `enabled`, `kind`, `action`, `days`, `start`, `durationMin`, `jitterMin`, `times`) | Replace the schedules (max 8) |
+| `get_time` | – | The clock (source, local time), timezone and NTP server |
+| `set_time` | `timezone`, `ntpServer`, `epoch` (all optional) | Change the timezone or NTP server, or set the clock by hand |
+| `get_button` | – | The GPIO of the physical button and the usable pins |
+| `set_button` | `gpio` | Choose the button's GPIO |
+| `get_bluetooth` | – | State (`off`, `waiting`, `discovery`, `connected`), settings, connection and paired computers |
+| `start_pairing` | `seconds` (30–600, optional; default the configured length) | Open Discovery (switches Bluetooth on) |
+| `disable_bluetooth` | – | Switch Bluetooth off: the device is invisible until `enable_bluetooth` |
+| `enable_bluetooth` | – | Switch Bluetooth on |
+| `set_bluetooth_settings` | `discoverySeconds`, `offWhenComputerDisconnects` | Change the Discovery length or what the computer's own Disconnect does |
 | `forget_computer` | `id` | Forget one paired computer |
 
 A tool is only listed when its service is available on the device.

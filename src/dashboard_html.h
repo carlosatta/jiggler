@@ -140,6 +140,8 @@ code{font:.875em ui-monospace,SFMono-Regular,Menlo,monospace}
 /* Schedules */
 #clockNote{margin-bottom:var(--s3)}
 .hint.lead{margin-top:0;margin-bottom:var(--s3)}
+ul.hint.plain{padding-left:1.2rem;list-style:disc}
+ul.hint.plain li{margin:.2rem 0}
 .sched{border:1px solid var(--line);border-radius:10px;padding:var(--s3);margin-bottom:var(--s3);background:var(--surface)}
 .sched-head{display:flex;justify-content:space-between;align-items:center;gap:var(--s3);margin-bottom:var(--s2)}
 .sched-sum{font-weight:650}
@@ -228,9 +230,9 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <div><p class="step-title">Connect to the device</p>
 <p class="step-text">You are here, so WiFi and your token are set.</p></div></li>
 <li class="step" id="stepPair"><span class="num" aria-hidden="true">2</span>
-<div><p class="step-title">Open pairing</p>
-<p class="step-text" id="setupPairText">Pairing is closed, so nobody can connect by accident. Open it for 3 minutes. You can also tap the BOOT button once on the board.</p>
-<div class="actions"><button class="primary" id="setupOpen">Open pairing for 3 minutes</button><button id="setupStop" hidden>Stop pairing</button></div>
+<div><p class="step-title">Start Discovery</p>
+<p class="step-text" id="setupPairText">Discovery is closed, so nobody can pair by accident. Open it for a few minutes. You can also hold the button on the board for 5 to 10 seconds (the LED blinks fast), then let go.</p>
+<div class="actions"><button class="primary" id="setupOpen">Start Discovery</button><button id="setupStop" hidden>Stop Discovery</button></div>
 <p class="msg" id="setupMsg" role="status" aria-live="polite"></p></div></li>
 <li class="step" id="stepChoose"><span class="num" aria-hidden="true">3</span>
 <div><p class="step-title">Choose the device on your computer</p>
@@ -256,6 +258,7 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <h2>Movement</h2>
 <p class="state" id="state">—</p>
 <p class="sub" id="next">&nbsp;</p>
+<p class="note" id="schedNote" hidden></p>
 <div class="runfor" id="runFor">
 <div class="field"><label for="runChoice">Run for</label>
 <select id="runChoice">
@@ -300,20 +303,32 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <section class="view" id="view-computers" aria-labelledby="h-computers" hidden>
 <h1 id="h-computers">Computers</h1>
 <div class="block">
-<h2>Pairing</h2>
+<h2>Bluetooth</h2>
+<p id="btInfo">&nbsp;</p>
+<div class="actions"><button id="btToggle">Turn Bluetooth off</button></div>
+<p class="msg" id="btMsg" role="status" aria-live="polite"></p>
+<p class="hint"><b>Off</b>: the radio is silent, nothing can see or reach the device. <b>Waiting</b>: on; only computers that are already paired can find it and connect. <b>Discovery</b>: open for a few minutes so a new computer can pair. <b>Connected</b>: linked to a computer.</p>
+</div>
+
+<div class="block">
+<h2>Discovery</h2>
 <p id="pairInfo">&nbsp;</p>
 <div class="actions">
-<button class="primary" id="pairOpen">Open pairing for 3 minutes</button>
-<button id="pairClose">Stop pairing</button>
+<button class="primary" id="pairOpen">Start Discovery</button>
+<button id="pairClose">Stop Discovery</button>
 </div>
 <p class="msg" id="pairMsg" role="status" aria-live="polite"></p>
-<p class="hint">Once a computer is paired, the device refuses new pairings, so nobody else can connect. Open the window here, or tap BOOT once on the board (the LED blinks fast). It closes by itself after 3 minutes or as soon as a computer pairs.</p>
+<div class="field"><label for="discSeconds">Discovery lasts (seconds)</label><input id="discSeconds" inputmode="numeric" autocomplete="off"><div class="err" data-err="discoverySeconds"></div></div>
+<label class="inline"><input type="checkbox" id="offOnDisc"> Turn Bluetooth off when the computer itself disconnects</label>
+<p class="hint">30 to 600 seconds. While Discovery is closed, only computers that are already paired can connect, so nobody else can pair. It closes by itself when the time is up or as soon as a computer pairs. To open it from the board, hold the button for 5 to 10 seconds and let go. A computer that ends the connection from its own Bluetooth menu (Disconnect) otherwise reconnects at once; with the box ticked the device switches Bluetooth off instead, until you turn it on again. Some computers also disconnect on their own when they go to sleep, which switches Bluetooth off too.</p>
+<div class="actions"><button id="discSave">Save</button></div>
+<p class="msg" id="discMsg" role="status" aria-live="polite"></p>
 </div>
 
 <div class="block">
 <h2>Paired computers</h2>
 <ul class="list" id="peers"></ul>
-<p class="empty" id="peersEmpty" hidden>No computer paired. Open pairing above, then choose the device in the computer’s Bluetooth settings.</p>
+<p class="empty" id="peersEmpty" hidden>No computer paired. Start Discovery above, then choose the device in the computer’s Bluetooth settings.</p>
 <div class="actions"><button class="danger" id="forgetAll">Forget all</button></div>
 <p class="msg" id="peersMsg" role="status" aria-live="polite"></p>
 <p class="hint">Bluetooth does not tell the device a computer’s name, so they are numbered. To tell them apart: disconnect, see which computer loses the mouse, and rename it here. Up to 3 computers can be paired.</p>
@@ -365,12 +380,11 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <h1 id="h-schedule">Schedule</h1>
 <div class="block">
 <h2>Weekly schedules</h2>
-<p class="hint lead">While a schedule’s window is open the jiggler runs by itself; it stops when the window ends. Stopping or starting it by hand is respected until the next window opens or closes.</p>
-<div class="field"><label for="tzSelect">Timezone</label><select id="tzSelect"></select><div class="err" data-err="timezone"></div></div>
+<p class="hint lead">A <b>window</b> runs the jiggler from a start time to an end time. An <b>action</b> does one thing at one time: start, stop, pause, resume, turn Bluetooth on or off, or open Discovery. Add a random shift and the times move a little every day. Stopping or starting by hand is respected until the next window opens or closes. A window that is open when you save it starts at once.</p>
 <p class="sub" id="clockNote">&nbsp;</p>
 <div id="schedList"></div>
-<p class="empty" id="schedEmpty" hidden>No schedules. Add one to start and stop the jiggler on certain days and hours.</p>
-<div class="actions"><button id="schedAdd">Add schedule</button><button class="primary" id="schedSave">Save schedules</button></div>
+<p class="empty" id="schedEmpty" hidden>No schedules. Add a window to run the jiggler between two times, or an action to do one thing at a time.</p>
+<div class="actions"><button id="schedAdd">Add window</button><button id="schedAddAction">Add action</button><button class="primary" id="schedSave">Save schedules</button></div>
 <p id="schedMsg" class="msg" role="status" aria-live="polite"></p>
 </div>
 
@@ -391,9 +405,29 @@ input[aria-invalid=true]{border-color:var(--bad)}
 </form>
 </div>
 
+<div class="block" id="timeBox">
+<h2>Time</h2>
+<p class="hint lead">Schedules follow this clock. It comes from the internet (NTP); a board with no internet loses the time at every restart and needs it set by hand.</p>
+<p class="note" id="timeNow">&nbsp;</p>
+<div class="field"><label for="tzSelect">Timezone</label><select id="tzSelect"></select><div class="err" data-err="timezone"></div></div>
+<div class="field"><label for="ntpServer">NTP server</label><input id="ntpServer" autocomplete="off" spellcheck="false" placeholder="pool.ntp.org"><div class="err" data-err="ntpServer"></div>
+<p class="hint">A host name such as pool.ntp.org. Leave it empty to stop using the internet for the time.</p></div>
+<div class="actions"><button class="primary" id="timeSave">Save</button><button id="timeSet">Set the time from this browser</button></div>
+<p id="timeMsg" class="msg" role="status" aria-live="polite"></p>
+</div>
+
+<div class="block" id="buttonBox">
+<h2>Button</h2>
+<p class="hint lead">A button on the board (to ground) starts and stops the jiggler. The default is the BOOT button, GPIO 0.</p>
+<div class="field"><label for="btnGpio">GPIO</label><select id="btnGpio"></select><div class="err" data-err="gpio"></div></div>
+<ul class="hint plain"><li><b>Tap</b>: start or stop the jiggler (the LED blinks three times).</li><li><b>Hold 5 to 10 seconds, then let go</b>: open Discovery. The LED blinks fast while you can let go.</li><li><b>Hold 10 to 30 seconds</b>: nothing happens when you let go (the LED is dark).</li><li><b>Hold 30 seconds</b>: switch between home WiFi and own-network mode and restart.</li></ul>
+<div class="actions"><button class="primary" id="btnSave">Save</button></div>
+<p id="btnMsg" class="msg" role="status" aria-live="polite"></p>
+</div>
+
 <div class="block">
 <h2>Network</h2>
-<p class="hint"><b>Auto</b>: connects to your home WiFi and, if it cannot, opens the setup network. <b>Own network</b>: creates a protected WiFi network that serves this dashboard (address 192.168.4.1), for places without WiFi. Holding BOOT for 3 seconds switches between the two. Changes apply after a restart. Schedules need the home WiFi with internet access to know the time.</p>
+<p class="hint"><b>Auto</b>: connects to your home WiFi and, if it cannot, opens the setup network. <b>Own network</b>: creates a protected WiFi network that serves this dashboard (address 192.168.4.1), for places without WiFi. Holding the button for 30 seconds switches between the two. Changes apply after a restart. Without internet the clock has to be set by hand (Time).</p>
 <div class="field"><label for="netMode">Mode</label><select id="netMode"><option value="auto">Auto (home WiFi)</option><option value="ap">Own network</option></select><div class="err" data-err="mode"></div></div>
 <div class="field"><label for="netSsid">Own network name</label><input id="netSsid" autocomplete="off"><div class="err" data-err="apSsid"></div></div>
 <div class="field"><label for="netPass">Own network password</label><input id="netPass" autocomplete="off"><div class="err" data-err="apPassword"></div><p class="hint">Optional, 8 to 63 characters. Leave it empty and one is generated the first time the own network starts.</p></div>
@@ -477,32 +511,34 @@ var JigLib = (function () {
 
   function hex4(n) { return '0x' + ('0000' + n.toString(16).toUpperCase()).slice(-4); }
 
-  // What the Status page says about the Bluetooth link, from /api/status. Pure so the wording is testable.
+  // What the Status page says about Bluetooth, from /api/status: one of four states (off, waiting, discovery,
+  // connected). Pure so the wording is testable.
   function connectionView(bt, device) {
     var name = (device && device.bleName) || 'the device';
     var pairing = bt.pairing || {};
     var timed = pairing.open && pairing.remainingMs !== null && pairing.remainingMs !== undefined;
-    var windowNote = timed ? ' Pairing is open for ' + fmtDuration(pairing.remainingMs) + '.' : '';
+    var state = bt.state || (bt.enabled === false ? 'off' : timed ? 'discovery' : bt.connected ? 'connected' : 'waiting');
+    var note = timed ? ' Discovery is open for ' + fmtDuration(pairing.remainingMs) + '.' : '';
+    if (state === 'off') {
+      return { tone: 'warn', title: 'Bluetooth is off',
+        detail: 'The device is invisible and nothing can connect. Turn Bluetooth on and your paired computers reconnect by themselves.', actions: ['enable'] };
+    }
     if (bt.connected && bt.computer) {
-      var actions = ['disconnect'];
-      if (timed) actions.push('closePairing');
+      var actions = ['disable'];
+      if (timed) actions.unshift('closePairing');
       return { tone: 'ok', title: 'Connected to ' + bt.computer.label,
-        detail: 'For ' + fmtSince(bt.computer.connectedForMs) + ' · ' + name + '.' + windowNote, actions: actions };
+        detail: 'For ' + fmtSince(bt.computer.connectedForMs) + ' · ' + name + '.' + note, actions: actions };
     }
-    if (bt.held) {
-      return { tone: 'warn', title: 'Disconnected',
-        detail: 'Still visible to computers, but nothing can connect until you press Reconnect.', actions: ['reconnect'] };
-    }
-    if (timed) {
-      return { tone: 'open', title: 'Pairing is open',
+    if (state === 'discovery' || timed) {
+      return { tone: 'open', title: 'Discovery is open',
         detail: 'Closes in ' + fmtDuration(pairing.remainingMs) + '. On the computer, choose “' + name + '”.', actions: ['closePairing'] };
     }
     if (!bt.peerCount) {
       return { tone: 'idle', title: 'No computer paired',
-        detail: 'Open pairing, then choose “' + name + '” in the computer’s Bluetooth settings.', actions: ['pair'] };
+        detail: 'Start Discovery, then choose “' + name + '” in the computer’s Bluetooth settings.', actions: ['pair'] };
     }
-    return { tone: 'idle', title: 'No computer connected',
-      detail: 'It reconnects by itself when a paired computer is on and nearby.', actions: ['pair'] };
+    return { tone: 'idle', title: 'Waiting for a computer',
+      detail: 'Bluetooth is on. A paired computer reconnects by itself when it is on and nearby.', actions: ['pair', 'disable'] };
   }
 
   function checkNewToken(next, confirm) {
@@ -574,6 +610,11 @@ var JigLib = (function () {
     return pad2(Math.floor(t / 60)) + ':' + pad2(t % 60) + (day ? ' next day' : '');
   }
 
+  var ACTION_LABELS = {
+    start: 'Start the jiggler', stop: 'Stop the jiggler', pause: 'Pause the jiggler', resume: 'Resume the jiggler',
+    bluetooth_on: 'Turn Bluetooth on', bluetooth_off: 'Turn Bluetooth off', discovery: 'Open Discovery'
+  };
+
   function toMinutes(hhmm) {
     var m = /^(\d{2}):(\d{2})$/.exec(hhmm || '');
     if (!m || +m[1] > 23 || +m[2] > 59) return null;
@@ -601,14 +642,28 @@ var JigLib = (function () {
     return s.remaining === s.times ? runs(s.times) : s.remaining + ' of ' + runs(s.times) + ' left';
   }
 
+  function describeJitter(min) { return min ? '± ' + min + ' min' : ''; }
+
   function scheduleSummary(s) {
-    var line = describeDays(s.days) + ', ' + s.start + ' to ' + scheduleEnd(s.start, s.durationMin);
+    var line = s.kind === 'action'
+      ? describeDays(s.days) + ' at ' + s.start + ': ' + (ACTION_LABELS[s.action] || s.action)
+      : describeDays(s.days) + ', ' + s.start + ' to ' + scheduleEnd(s.start, s.durationMin);
+    if (s.jitterMin) line += ' · ' + describeJitter(s.jitterMin);
     return s.times ? line + ' · ' + describeRepeat(s) : line;
+  }
+
+  // One line about the device clock, from the `time` object of /api/status or /api/time.
+  function clockLine(time) {
+    if (!time || !time.synced) return 'Not set: schedules wait for the time (needs internet, or set it by hand).';
+    var day = time.weekday ? time.weekday.charAt(0).toUpperCase() + time.weekday.slice(1) + ' ' : '';
+    var source = time.source === 'manual' ? 'set by hand' : 'from NTP';
+    return day + time.localTime + ' · ' + time.timezone + ' · ' + source;
   }
 
   return { DAYS: DAYS, DAY_LABELS: DAY_LABELS, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, fmtSince: fmtSince, hex4: hex4,
     connectionView: connectionView, checkNewToken: checkNewToken, minutesUntil: minutesUntil, runForMinutes: runForMinutes,
     stopsAt: stopsAt, describeDays: describeDays, scheduleEnd: scheduleEnd, scheduleSummary: scheduleSummary,
+    ACTION_LABELS: ACTION_LABELS, describeJitter: describeJitter, clockLine: clockLine,
     endFromDuration: endFromDuration, durationFromEnd: durationFromEnd, describeRepeat: describeRepeat };
 })();
 
@@ -810,21 +865,21 @@ var App = (function () {
 
   function fail(r) { return [tr(r.data && r.data.message) || 'That did not work.', 'bad']; }
   var ACTIONS = {
-    disconnect: { label: 'Disconnect', primary: false, run: function () {
-      return App.call('POST', '/api/bluetooth/disconnect').then(function (r) {
-        return r.status === 200 ? ['Disconnected. The device stays visible, but nothing can connect until you press Reconnect.', 'good'] : fail(r);
+    disable: { label: 'Turn Bluetooth off', primary: false, run: function () {
+      return App.call('POST', '/api/bluetooth/disable').then(function (r) {
+        return r.status === 200 ? ['Bluetooth is off. The device is invisible until you turn it on.', 'good'] : fail(r);
       }); } },
-    reconnect: { label: 'Reconnect', primary: true, run: function () {
-      return App.call('POST', '/api/bluetooth/reconnect').then(function (r) {
-        return r.status === 200 ? ['Connectable again: the computer reconnects by itself.', 'good'] : fail(r);
+    enable: { label: 'Turn Bluetooth on', primary: true, run: function () {
+      return App.call('POST', '/api/bluetooth/enable').then(function (r) {
+        return r.status === 200 ? ['Bluetooth is on: paired computers reconnect by themselves.', 'good'] : fail(r);
       }); } },
-    pair: { label: 'Pair a computer', primary: true, run: function () {
+    pair: { label: 'Start Discovery', primary: true, run: function () {
       return App.call('POST', '/api/bluetooth/pairing').then(function (r) {
-        return r.status === 200 ? ['Pairing is open for 3 minutes.', 'good'] : fail(r);
+        return r.status === 200 ? ['Discovery is open.', 'good'] : fail(r);
       }); } },
-    closePairing: { label: 'Stop pairing', primary: false, run: function () {
+    closePairing: { label: 'Stop Discovery', primary: false, run: function () {
       return App.call('DELETE', '/api/bluetooth/pairing').then(function (r) {
-        return r.status === 200 ? ['Pairing stopped.', 'good'] : fail(r);
+        return r.status === 200 ? ['Discovery stopped.', 'good'] : fail(r);
       }); } }
   };
 
@@ -893,9 +948,10 @@ var App = (function () {
     else $('last').textContent = 'never';
     $('wifi').textContent = s.wifiConnected ? 'Connected' : 'Not connected';
     var sc = s.schedule;
-    if (!sc) $('clock').textContent = '—';
-    else if (!sc.timeSynced) $('clock').textContent = 'Not synced (needs internet)';
-    else $('clock').textContent = sc.localTime + ' · ' + sc.timezone + (sc.active ? ' · schedule open' : '');
+    $('clock').textContent = s.time ? JigLib.clockLine(s.time) + (sc && sc.active ? ' · schedule open' : '') : '—';
+    var note = $('schedNote');
+    note.hidden = !(sc && sc.blocked);
+    note.textContent = sc && sc.blocked ? 'A schedule window is open, but no computer is paired yet, so the jiggler cannot start.' : '';
     var running = s.state === 'running', paused = s.state === 'paused', stopped = !running && !paused;
     $('bToggle').textContent = stopped ? 'Start' : 'Stop';
     $('bToggle').className = stopped ? 'primary' : '';
@@ -925,8 +981,8 @@ var App = (function () {
     $('setupOpen').hidden = open;
     $('setupStop').hidden = !open;
     $('setupPairText').textContent = open
-      ? 'Pairing is open: closes in ' + fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It closes by itself as soon as a computer pairs.'
-      : 'Pairing is closed, so nobody can connect by accident. Open it for 3 minutes. You can also tap the BOOT button once on the board.';
+      ? 'Discovery is open: closes in ' + fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It closes by itself as soon as a computer pairs.'
+      : 'Discovery is closed, so nobody can pair by accident. Open it for a few minutes. You can also hold the button on the board for 5 to 10 seconds, then let go.';
   }
   $('setupOpen').onclick = function () {
     $('setupOpen').disabled = true;
@@ -1011,11 +1067,12 @@ var App = (function () {
   $('bMove').onclick = function () { control('POST', '/api/move', undefined, 'Moving now.'); setTimeout(App.poll, 1500); };
 })();
 
-// Computers: pairing window and the list of paired computers (rename, forget).
+// Computers: the Bluetooth state, Discovery (the pairing window) and the list of paired computers (rename, forget).
 (function () {
   'use strict';
   var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
   var peers = [], shown = '', editing = null, lastFetch = 0, busy = false;
+  var settingsShown = '', settingsDirty = false;
 
   function reply(res, okText, id) {
     if (res.status === 200) { say(okText, 'good', id); return true; }
@@ -1023,19 +1080,35 @@ var App = (function () {
     return false;
   }
 
+  var STATE_TEXT = {
+    off: 'Off: the radio is silent. Nothing can see or reach the device.',
+    waiting: 'Waiting: on. Only computers that are already paired can find the device and connect.',
+    discovery: 'Discovery: open, so a new computer can pair.',
+    connected: 'Connected to a computer.'
+  };
+
   function renderPairing(status, elapsed) {
     var bt = status && status.bluetooth;
     if (!bt) return;
     var p = bt.pairing || {};
     var timed = p.open && p.remainingMs != null;
-    var info;
-    if (timed) info = 'Pairing is open: closes in ' + JigLib.fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It also closes as soon as a computer pairs.';
-    else info = 'Pairing is closed: no new computer can connect.';
-    if (bt.held) info += ' The device is disconnected: it stays visible, but nothing can connect until you press Reconnect on Status.';
-    $('pairInfo').textContent = info;
+    var off = bt.state === 'off';
+    $('btInfo').textContent = STATE_TEXT[bt.state] || '';
+    $('btToggle').textContent = off ? 'Turn Bluetooth on' : 'Turn Bluetooth off';
+    $('btToggle').className = off ? 'primary' : '';
+    $('btToggle').disabled = busy;
+    $('pairInfo').textContent = timed
+      ? 'Discovery is open: closes in ' + JigLib.fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It also closes as soon as a computer pairs.'
+      : 'Discovery is closed: no new computer can pair.';
     $('pairOpen').disabled = busy || (p.open && !timed);
-    $('pairOpen').textContent = timed ? 'Restart the 3 minutes' : 'Open pairing for 3 minutes';
+    $('pairOpen').textContent = timed ? 'Restart Discovery' : 'Start Discovery';
     $('pairClose').disabled = busy || !timed;
+    var key = bt.discoverySeconds + '|' + bt.offWhenComputerDisconnects;
+    if (key !== settingsShown && !settingsDirty) {
+      settingsShown = key;
+      $('discSeconds').value = bt.discoverySeconds;
+      $('offOnDisc').checked = !!bt.offWhenComputerDisconnects;
+    }
   }
 
   function peerRow(p) {
@@ -1115,21 +1188,33 @@ var App = (function () {
     onTick: function (s, elapsed) { renderPairing(s, elapsed); }
   });
 
-  $('pairOpen').onclick = function () {
+  function run(method, path, okText, id) {
     busy = true; renderPairing(App.status(), 0);
-    App.call('POST', '/api/bluetooth/pairing').then(function (res) {
-      reply(res, 'Pairing is open. On the computer, choose the device in the Bluetooth list.', 'pairMsg');
-    }).catch(function () {}).then(function () { busy = false; App.poll(); });
+    return App.call(method, path).then(function (res) { reply(res, okText, id); }).catch(function () {}).then(function () { busy = false; App.poll(); });
+  }
+  $('pairOpen').onclick = function () { run('POST', '/api/bluetooth/pairing', 'Discovery is open. On the computer, choose the device in the Bluetooth list.', 'pairMsg'); };
+  $('pairClose').onclick = function () { run('DELETE', '/api/bluetooth/pairing', 'Discovery stopped.', 'pairMsg'); };
+  $('btToggle').onclick = function () {
+    var off = App.status() && App.status().bluetooth && App.status().bluetooth.state === 'off';
+    if (off) run('POST', '/api/bluetooth/enable', 'Bluetooth is on: paired computers reconnect by themselves.', 'btMsg');
+    else run('POST', '/api/bluetooth/disable', 'Bluetooth is off. The device is invisible until you turn it on.', 'btMsg');
   };
-  $('pairClose').onclick = function () {
-    busy = true; renderPairing(App.status(), 0);
-    App.call('DELETE', '/api/bluetooth/pairing').then(function (res) {
-      reply(res, 'Pairing stopped.', 'pairMsg');
-    }).catch(function () {}).then(function () { busy = false; App.poll(); });
+  ['discSeconds', 'offOnDisc'].forEach(function (id) { $(id).addEventListener('input', function () { settingsDirty = true; }); $(id).addEventListener('change', function () { settingsDirty = true; }); });
+  $('discSave').onclick = function () {
+    var root = $('view-computers');
+    root.querySelector('[data-err="discoverySeconds"]').textContent = '';
+    say('', '', 'discMsg');
+    var raw = $('discSeconds').value.trim();
+    if (!/^\d+$/.test(raw)) { root.querySelector('[data-err="discoverySeconds"]').textContent = 'Enter a whole number of seconds from 30 to 600.'; return; }
+    App.call('PUT', '/api/bluetooth/settings', { discoverySeconds: Number(raw), offWhenComputerDisconnects: $('offOnDisc').checked }).then(function (res) {
+      if (res.status === 200) { settingsDirty = false; settingsShown = ''; say('Saved.', 'good', 'discMsg'); App.poll(); return; }
+      var d = res.data;
+      if (!d.field || !App.showError(root, d.field, d.message)) say(tr(d.message) || 'Could not save.', 'bad', 'discMsg');
+    }).catch(function () {});
   };
   App.confirmInline($('forgetAll'), 'Confirm: forget all', function () {
     App.call('DELETE', '/api/bluetooth/peers').then(function (res) {
-      reply(res, 'All computers forgotten. Pairing stays closed: open it to add one.', 'peersMsg');
+      reply(res, 'All computers forgotten. Discovery stays closed: start it to add one.', 'peersMsg');
       load(); App.poll();
     }).catch(function () {});
   });
@@ -1268,34 +1353,41 @@ var App = (function () {
   });
 })();
 
-// Schedule: weekly windows that start and stop the jiggler, and the timezone they are read in.
+// Schedule: weekly windows that start and stop the jiggler, and actions done at one time of day.
 (function () {
   'use strict';
   var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
   var labeled = App.labeled, clearErrors = App.clearErrors, showError = App.showError;
 
-  // ---- Schedules ----
-  var sched = { timezone: 'Europe/Rome', schedules: [] };
+  var sched = { schedules: [] };
   var MAX_SCHEDULES = 8;
+  var ACTIONS = ['start', 'stop', 'pause', 'resume', 'bluetooth_on', 'bluetooth_off', 'discovery'];
 
   function readCard(card) {
     var days = [];
     card.querySelectorAll('.days button').forEach(function (b) { if (b.getAttribute('aria-pressed') === 'true') days.push(b.getAttribute('data-day')); });
+    var kind = card.querySelector('[data-k=kind]').value;
     var start = card.querySelector('[data-k=start]').value;
     var end = card.querySelector('[data-k=end]').value;
     var mode = card.querySelector('[data-k=repeat]').value;
-    var times = mode === 'times' ? Number(card.querySelector('[data-k=times]').value) : null;
-    var remaining = card.querySelector('[data-k=times]').getAttribute('data-remaining');
-    return {
+    var timesInput = card.querySelector('[data-k=times]');
+    var times = mode === 'times' ? Number(timesInput.value) : null;
+    var remaining = timesInput.getAttribute('data-remaining');
+    var jitter = card.querySelector('[data-k=jitter]').value.trim();
+    var out = {
       id: card.querySelector('[data-k=id]').value.trim(),
       enabled: card.querySelector('[data-k=enabled]').checked,
+      kind: kind,
       days: days,
       start: start,
-      durationMin: JigLib.durationFromEnd(start, end),
+      jitterMin: /^\d+$/.test(jitter) ? Number(jitter) : 0,
       times: times,
       // progress is kept while the count is unchanged; a new count starts a fresh run
-      remaining: times && remaining !== null && Number(remaining) <= times && Number(card.querySelector('[data-k=times]').getAttribute('data-times')) === times ? Number(remaining) : times
+      remaining: times && remaining !== null && Number(remaining) <= times && Number(timesInput.getAttribute('data-times')) === times ? Number(remaining) : times
     };
+    if (kind === 'action') out.action = card.querySelector('[data-k=action]').value;
+    else out.durationMin = JigLib.durationFromEnd(start, end);
+    return out;
   }
 
   function readSchedules() {
@@ -1306,11 +1398,16 @@ var App = (function () {
 
   function refreshSummary(card) {
     var s = readCard(card);
+    var isAction = s.kind === 'action';
     var sum = card.querySelector('.sched-sum');
-    var ok = s.durationMin !== null && /^\d{2}:\d{2}$/.test(s.start);
-    sum.textContent = ok ? JigLib.scheduleSummary(s) : JigLib.describeDays(s.days) + ', set a start and an end time';
+    var ok = /^\d{2}:\d{2}$/.test(s.start) && (isAction || s.durationMin !== null);
+    sum.textContent = ok ? JigLib.scheduleSummary(s) : JigLib.describeDays(s.days) + ', set ' + (isAction ? 'a time' : 'a start and an end time');
     sum.className = 'sched-sum' + (s.enabled ? '' : ' off');
     card.querySelector('[data-k=times]').closest('.field').hidden = card.querySelector('[data-k=repeat]').value !== 'times';
+    card.querySelector('[data-k=action]').closest('.field').hidden = !isAction;
+    card.querySelector('[data-k=end]').closest('.field').hidden = isAction;
+    card.querySelector('.when-hint').hidden = isAction;
+    card.querySelector('[data-k=start]').closest('.field').querySelector('label').textContent = isAction ? 'At' : 'Starts at';
   }
 
   function renderSchedules() {
@@ -1328,7 +1425,20 @@ var App = (function () {
       var id = el('input', { autocomplete: 'off', placeholder: 'a-z 0-9 _ -' });
       id.setAttribute('data-k', 'id');
       id.value = sc.id;
-      card.appendChild(labeled('Name', id, 'schedules[' + i + '].id'));
+      var kind = el('select');
+      kind.setAttribute('data-k', 'kind');
+      kind.appendChild(el('option', { value: 'window', text: 'Window' }));
+      kind.appendChild(el('option', { value: 'action', text: 'Action' }));
+      kind.value = sc.kind === 'action' ? 'action' : 'window';
+      kind.addEventListener('change', function () { refreshSummary(card); });
+      card.appendChild(el('div', { class: 'row3' }, [labeled('Name', id, 'schedules[' + i + '].id'), labeled('Type', kind, 'schedules[' + i + '].kind')]));
+
+      var action = el('select');
+      action.setAttribute('data-k', 'action');
+      ACTIONS.forEach(function (a) { action.appendChild(el('option', { value: a, text: JigLib.ACTION_LABELS[a] })); });
+      action.value = sc.action || 'start';
+      action.addEventListener('change', function () { refreshSummary(card); });
+      card.appendChild(labeled('Do', action, 'schedules[' + i + '].action'));
 
       var days = el('div', { class: 'days', role: 'group', 'aria-label': 'Days' });
       JigLib.DAYS.forEach(function (d) {
@@ -1352,10 +1462,17 @@ var App = (function () {
       start.addEventListener('input', function () { refreshSummary(card); });
       var end = el('input', { type: 'time' });
       end.setAttribute('data-k', 'end');
-      end.value = JigLib.endFromDuration(sc.start, sc.durationMin);
+      end.value = sc.durationMin ? JigLib.endFromDuration(sc.start, sc.durationMin) : '17:00';
       end.addEventListener('input', function () { refreshSummary(card); });
       card.appendChild(el('div', { class: 'row3' }, [labeled('Starts at', start, 'schedules[' + i + '].start'), labeled('Ends at', end, 'schedules[' + i + '].durationMin')]));
-      card.appendChild(el('p', { class: 'hint' , text: 'An end time earlier than the start means the next day. The same time means 24 hours.' }));
+      card.appendChild(el('p', { class: 'hint when-hint', text: 'An end time earlier than the start means the next day. The same time means 24 hours.' }));
+
+      var jitter = el('input', { inputmode: 'numeric', autocomplete: 'off', placeholder: '0' });
+      jitter.setAttribute('data-k', 'jitter');
+      jitter.value = sc.jitterMin ? String(sc.jitterMin) : '';
+      jitter.addEventListener('input', function () { refreshSummary(card); });
+      card.appendChild(labeled('Random shift (± minutes, 0 to 120)', jitter, 'schedules[' + i + '].jitterMin'));
+      card.appendChild(el('p', { class: 'hint', text: 'Each time moves by a random amount up to this many minutes earlier or later, chosen afresh every day (a window’s start and end move independently).' }));
 
       var repeat = el('select');
       repeat.setAttribute('data-k', 'repeat');
@@ -1377,45 +1494,38 @@ var App = (function () {
       refreshSummary(card);
     });
     $('schedEmpty').hidden = sched.schedules.length > 0;
-    $('schedAdd').disabled = sched.schedules.length >= MAX_SCHEDULES;
-  }
-
-  function fillTimezones(list) {
-    var sel = $('tzSelect');
-    if (sel.options.length === list.length) return;
-    sel.textContent = '';
-    list.forEach(function (z) { sel.appendChild(el('option', { value: z, text: z.replace('_', ' ') })); });
+    $('schedAdd').disabled = $('schedAddAction').disabled = sched.schedules.length >= MAX_SCHEDULES;
   }
 
   function loadSchedules() {
     App.call('GET', '/api/schedules').then(function (res) {
       if (res.status !== 200) return;
-      sched = { timezone: res.data.timezone, schedules: res.data.schedules };
-      fillTimezones(res.data.timezones);
-      $('tzSelect').value = sched.timezone;
+      sched = { schedules: res.data.schedules };
       renderSchedules();
     }).catch(function () {});
   }
 
-  $('schedAdd').onclick = function () {
+  function add(kind) {
     sched.schedules = readSchedules();
-    sched.timezone = $('tzSelect').value;
-    var n = 1;
-    while (sched.schedules.some(function (x) { return x.id === 'schedule-' + n; })) n++;
-    sched.schedules.push({ id: 'schedule-' + n, enabled: true, days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '09:00', durationMin: 480, times: null, remaining: null });
+    var n = 1, prefix = kind === 'action' ? 'action-' : 'window-';
+    while (sched.schedules.some(function (x) { return x.id === prefix + n; })) n++;
+    var base = { id: prefix + n, enabled: true, kind: kind, days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '09:00', jitterMin: 0, times: null, remaining: null };
+    if (kind === 'action') base.action = 'start'; else base.durationMin = 480;
+    sched.schedules.push(base);
     renderSchedules();
-  };
+  }
+  $('schedAdd').onclick = function () { add('window'); };
+  $('schedAddAction').onclick = function () { add('action'); };
 
   $('schedSave').onclick = function () {
     var root = $('view-schedule');
     clearErrors($('schedList'));
-    root.querySelector('[data-err="timezone"]').textContent = '';
     say('', '', 'schedMsg');
-    App.call('PUT', '/api/schedules', { timezone: $('tzSelect').value, schedules: readSchedules() }).then(function (res) {
+    App.call('PUT', '/api/schedules', { schedules: readSchedules() }).then(function (res) {
       if (res.status === 200) {
-        sched = { timezone: res.data.timezone, schedules: res.data.schedules };
+        sched = { schedules: res.data.schedules };
         renderSchedules();
-        say('Schedules saved. Saving never starts or stops the jiggler by itself; the next window edge does.', 'good', 'schedMsg');
+        say('Schedules saved. A window that is open right now starts the jiggler.', 'good', 'schedMsg');
         App.poll();
         return;
       }
@@ -1426,11 +1536,9 @@ var App = (function () {
   };
 
   function renderClock(s) {
-    var sc = s.schedule;
     var note = $('clockNote');
-    if (!sc) { note.textContent = ''; return; }
-    if (!sc.timeSynced) note.textContent = 'The device clock is not set yet: schedules start working once it has internet access.';
-    else note.textContent = 'Device clock: ' + sc.localTime + (sc.active ? ' · a schedule window is open now.' : '.');
+    if (!s.time) { note.textContent = ''; return; }
+    note.textContent = 'Device clock: ' + JigLib.clockLine(s.time) + (s.schedule && s.schedule.active ? ' · a window is open now.' : '.') + ' Change the timezone or NTP server in System → Time.';
   }
 
   App.view('schedule', {
@@ -1442,7 +1550,7 @@ var App = (function () {
   });
 })();
 
-// Sistema: token, network, Bluetooth identity, device info, restart.
+// System: token, time, button, network, firmware update, device info, restart.
 (function () {
   'use strict';
   var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
@@ -1469,6 +1577,62 @@ var App = (function () {
       if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Could not change the token.', 'bad', 'tokMsg');
     }).catch(function () {});
   });
+
+  // ---- Time ----
+  var timeDirty = false;
+  function renderTimeNow(s) { if (s.time) $('timeNow').textContent = JigLib.clockLine(s.time); }
+  function loadTime() {
+    App.call('GET', '/api/time').then(function (res) {
+      if (res.status !== 200) return;
+      var sel = $('tzSelect');
+      if (sel.options.length !== res.data.timezones.length) {
+        sel.textContent = '';
+        res.data.timezones.forEach(function (z) { sel.appendChild(el('option', { value: z, text: z.replace('_', ' ') })); });
+      }
+      if (!timeDirty) { sel.value = res.data.timezone; $('ntpServer').value = res.data.ntpServer; }
+    }).catch(function () {});
+  }
+  ['tzSelect', 'ntpServer'].forEach(function (id) { $(id).addEventListener('input', function () { timeDirty = true; }); });
+  $('timeSave').onclick = function () {
+    var root = $('timeBox');
+    clearErrors(root);
+    say('', '', 'timeMsg');
+    App.call('PUT', '/api/time', { timezone: $('tzSelect').value, ntpServer: $('ntpServer').value.trim() }).then(function (res) {
+      if (res.status === 200) { timeDirty = false; say('Saved.', 'good', 'timeMsg'); App.poll(); return; }
+      var d = res.data;
+      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Could not save.', 'bad', 'timeMsg');
+    }).catch(function () {});
+  };
+  $('timeSet').onclick = function () {
+    say('', '', 'timeMsg');
+    App.call('POST', '/api/time/set', { epoch: Math.floor(Date.now() / 1000) }).then(function (res) {
+      if (res.status === 200) { say('The device clock now follows this browser’s time. It is lost when the device restarts unless NTP sets it again.', 'good', 'timeMsg'); App.poll(); return; }
+      say(tr(res.data && res.data.message) || 'Could not set the time.', 'bad', 'timeMsg');
+    }).catch(function () {});
+  };
+
+  // ---- Button ----
+  function loadButton() {
+    App.call('GET', '/api/button').then(function (res) {
+      if (res.status !== 200) return;
+      var sel = $('btnGpio');
+      if (sel.options.length !== res.data.gpios.length) {
+        sel.textContent = '';
+        res.data.gpios.forEach(function (g) { sel.appendChild(el('option', { value: String(g), text: 'GPIO ' + g + (g === res.data['default'] ? ' (BOOT button)' : '') })); });
+      }
+      sel.value = String(res.data.gpio);
+    }).catch(function () {});
+  }
+  $('btnSave').onclick = function () {
+    var root = $('buttonBox');
+    clearErrors(root);
+    say('', '', 'btnMsg');
+    App.call('PUT', '/api/button', { gpio: Number($('btnGpio').value) }).then(function (res) {
+      if (res.status === 200) { say('Saved. The button works on that pin now.', 'good', 'btnMsg'); return; }
+      var d = res.data;
+      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Could not save.', 'bad', 'btnMsg');
+    }).catch(function () {});
+  };
 
   // ---- Network ----
   function loadNetwork() {
@@ -1552,8 +1716,8 @@ var App = (function () {
   App.confirmInline($('restartBtn'), 'Confirm: restart', function () { say('', '', 'sysMsg'); App.restartDevice(); });
 
   App.view('system', {
-    load: function () { loadNetwork(); if (App.status()) renderInfo(App.status()); },
-    onStatus: renderInfo
+    load: function () { loadNetwork(); loadTime(); loadButton(); if (App.status()) { renderInfo(App.status()); renderTimeNow(App.status()); } },
+    onStatus: function (s) { renderInfo(s); renderTimeNow(s); }
   });
 })();
 

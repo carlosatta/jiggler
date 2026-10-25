@@ -7,6 +7,8 @@
 #include "appearance.h"
 #include "automation.h"
 #include "bluetooth.h"
+#include "button_settings.h"
+#include "clock_settings.h"
 #include "controller.h"
 #include "network_settings.h"
 #include "schedule.h"
@@ -29,6 +31,8 @@ struct ApiContext {
   AutomationEngine* automations = nullptr;
   BluetoothManager* bluetooth = nullptr;
   ScheduleEngine* schedules = nullptr;
+  ClockStore* clock = nullptr;
+  ButtonStore* button = nullptr;
   TokenVault* tokens = nullptr;
   DeviceInfo info;  // shown in /api/status when its version is set
   std::function<void()> restart;

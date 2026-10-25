@@ -7,21 +7,21 @@
 
   function fail(r) { return [tr(r.data && r.data.message) || 'That did not work.', 'bad']; }
   var ACTIONS = {
-    disconnect: { label: 'Disconnect', primary: false, run: function () {
-      return App.call('POST', '/api/bluetooth/disconnect').then(function (r) {
-        return r.status === 200 ? ['Disconnected. The device stays visible, but nothing can connect until you press Reconnect.', 'good'] : fail(r);
+    disable: { label: 'Turn Bluetooth off', primary: false, run: function () {
+      return App.call('POST', '/api/bluetooth/disable').then(function (r) {
+        return r.status === 200 ? ['Bluetooth is off. The device is invisible until you turn it on.', 'good'] : fail(r);
       }); } },
-    reconnect: { label: 'Reconnect', primary: true, run: function () {
-      return App.call('POST', '/api/bluetooth/reconnect').then(function (r) {
-        return r.status === 200 ? ['Connectable again: the computer reconnects by itself.', 'good'] : fail(r);
+    enable: { label: 'Turn Bluetooth on', primary: true, run: function () {
+      return App.call('POST', '/api/bluetooth/enable').then(function (r) {
+        return r.status === 200 ? ['Bluetooth is on: paired computers reconnect by themselves.', 'good'] : fail(r);
       }); } },
-    pair: { label: 'Pair a computer', primary: true, run: function () {
+    pair: { label: 'Start Discovery', primary: true, run: function () {
       return App.call('POST', '/api/bluetooth/pairing').then(function (r) {
-        return r.status === 200 ? ['Pairing is open for 3 minutes.', 'good'] : fail(r);
+        return r.status === 200 ? ['Discovery is open.', 'good'] : fail(r);
       }); } },
-    closePairing: { label: 'Stop pairing', primary: false, run: function () {
+    closePairing: { label: 'Stop Discovery', primary: false, run: function () {
       return App.call('DELETE', '/api/bluetooth/pairing').then(function (r) {
-        return r.status === 200 ? ['Pairing stopped.', 'good'] : fail(r);
+        return r.status === 200 ? ['Discovery stopped.', 'good'] : fail(r);
       }); } }
   };
 
@@ -90,9 +90,10 @@
     else $('last').textContent = 'never';
     $('wifi').textContent = s.wifiConnected ? 'Connected' : 'Not connected';
     var sc = s.schedule;
-    if (!sc) $('clock').textContent = '—';
-    else if (!sc.timeSynced) $('clock').textContent = 'Not synced (needs internet)';
-    else $('clock').textContent = sc.localTime + ' · ' + sc.timezone + (sc.active ? ' · schedule open' : '');
+    $('clock').textContent = s.time ? JigLib.clockLine(s.time) + (sc && sc.active ? ' · schedule open' : '') : '—';
+    var note = $('schedNote');
+    note.hidden = !(sc && sc.blocked);
+    note.textContent = sc && sc.blocked ? 'A schedule window is open, but no computer is paired yet, so the jiggler cannot start.' : '';
     var running = s.state === 'running', paused = s.state === 'paused', stopped = !running && !paused;
     $('bToggle').textContent = stopped ? 'Start' : 'Stop';
     $('bToggle').className = stopped ? 'primary' : '';
@@ -122,8 +123,8 @@
     $('setupOpen').hidden = open;
     $('setupStop').hidden = !open;
     $('setupPairText').textContent = open
-      ? 'Pairing is open: closes in ' + fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It closes by itself as soon as a computer pairs.'
-      : 'Pairing is closed, so nobody can connect by accident. Open it for 3 minutes. You can also tap the BOOT button once on the board.';
+      ? 'Discovery is open: closes in ' + fmtDuration(Math.max(0, p.remainingMs - elapsed)) + '. It closes by itself as soon as a computer pairs.'
+      : 'Discovery is closed, so nobody can pair by accident. Open it for a few minutes. You can also hold the button on the board for 5 to 10 seconds, then let go.';
   }
   $('setupOpen').onclick = function () {
     $('setupOpen').disabled = true;

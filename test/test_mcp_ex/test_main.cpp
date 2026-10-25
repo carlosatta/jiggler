@@ -37,17 +37,19 @@ struct Env {
   AppearanceStore appearance{blobs};
   ScriptLibrary scripts{blobs};
   AutomationEngine automations{clock, rng, scripts, blobs};
-  ScheduleEngine schedules{clock, controller, blobs};
+  ClockStore clockStore{clock, blobs};
+  ButtonStore buttonStore{blobs};
+  ScheduleEngine schedules{clock, controller, blobs, clockStore};
   struct Link : BleLink {
     std::vector<std::string> bonded{"aa:bb:cc:dd:ee:01"}, connected;
     int disconnects = 0;
-    bool connectable = true, pairingOpen = false;
+    bool enabled = true, pairingOpen = false;
     std::vector<std::string> bondedAddresses() override { return bonded; }
     std::vector<std::string> connectedAddresses() override { return connected; }
     void disconnectAll() override { disconnects++; connected.clear(); }
     bool forgetBond(const std::string& a) override { bonded.clear(); return !a.empty(); }
     void forgetAllBonds() override { bonded.clear(); }
-    void setConnectable(bool on) override { connectable = on; }
+    void setEnabled(bool on) override { enabled = on; }
     void setPairingOpen(bool open) override { pairingOpen = open; }
     bool takePeerDisconnectRequest() override { return false; }
   } link;
@@ -59,8 +61,12 @@ struct Env {
     controller.begin();
     appearance.begin();
     automations.begin();
+    clockStore.begin();
     schedules.begin();
     bluetooth.begin();
+    buttonStore.begin();
+    ctx.clock = &clockStore;
+    ctx.button = &buttonStore;
     ctx.bluetooth = &bluetooth;
     ctx.schedules = &schedules;
     ctx.network = &net;
@@ -110,8 +116,8 @@ void test_tools_list_includes_new_tools() {
                             "get_appearance", "set_appearance", "list_scripts", "save_script",
                             "delete_script", "run_script", "get_automations", "set_automations", "press_key",
                             "type_text", "get_network", "set_network", "restart", "get_bluetooth", "start_pairing",
-                            "disconnect_bluetooth", "reconnect_bluetooth", "forget_computer",
-                            "get_schedules", "set_schedules"};
+                            "disable_bluetooth", "enable_bluetooth", "set_bluetooth_settings", "forget_computer",
+                            "get_schedules", "set_schedules", "get_time", "set_time", "get_button", "set_button"};
   const size_t n = sizeof(expected) / sizeof(expected[0]);
   TEST_ASSERT_EQUAL_UINT32(n, tools.size());
   for (size_t i = 0; i < n; i++) {
@@ -121,11 +127,37 @@ void test_tools_list_includes_new_tools() {
   }
 }
 
+void test_time_tools() {
+  Env e;
+  TEST_ASSERT_EQUAL_STRING("pool.ntp.org", toolText(e.tool("get_time"))["ntpServer"].as<const char*>());
+  McpReply set = e.tool("set_time", "{\"timezone\":\"Asia/Tokyo\",\"ntpServer\":\"time.google.com\"}");
+  TEST_ASSERT_FALSE(isError(set));
+  TEST_ASSERT_EQUAL_STRING("Asia/Tokyo", toolText(set)["timezone"].as<const char*>());
+  TEST_ASSERT_EQUAL_STRING("time.google.com", e.clock.ntp.c_str());
+  TEST_ASSERT_FALSE(isError(e.tool("set_time", "{\"epoch\":1795000000}")));
+  TEST_ASSERT_EQUAL_UINT32(1795000000, e.clock.unix);
+  TEST_ASSERT_TRUE(isError(e.tool("set_time", "{\"epoch\":5}")));
+  TEST_ASSERT_TRUE(isError(e.tool("set_time", "{\"epoch\":\"x\"}")));
+  TEST_ASSERT_TRUE(isError(e.tool("set_time", "{\"timezone\":\"Mars/Olympus\"}")));
+  e.ctx.clock = nullptr;
+  TEST_ASSERT_TRUE(parse(e.tool("get_time").body)["error"].is<JsonObject>());
+}
+
+void test_button_tools() {
+  Env e;
+  TEST_ASSERT_EQUAL_UINT32(0, toolText(e.tool("get_button"))["gpio"].as<uint32_t>());
+  TEST_ASSERT_EQUAL_UINT32(14, toolText(e.tool("set_button", "{\"gpio\":14}"))["gpio"].as<uint32_t>());
+  TEST_ASSERT_TRUE(isError(e.tool("set_button", "{\"gpio\":2}")));
+  TEST_ASSERT_TRUE(isError(e.tool("set_button", "{}")));
+  e.ctx.button = nullptr;
+  TEST_ASSERT_TRUE(parse(e.tool("get_button").body)["error"].is<JsonObject>());
+}
+
 void test_schedule_tools() {
   Env e;
   TEST_ASSERT_FALSE(isError(e.tool("get_schedules")));
   const std::string args =
-      "{\"timezone\":\"Europe/Rome\",\"schedules\":[{\"id\":\"work\",\"enabled\":true,\"days\":[\"mon\",\"tue\"],"
+      "{\"schedules\":[{\"id\":\"work\",\"enabled\":true,\"days\":[\"mon\",\"tue\"],"
       "\"start\":\"09:00\",\"durationMin\":480}]}";
   McpReply set = e.tool("set_schedules", args);
   TEST_ASSERT_FALSE(isError(set));
@@ -307,9 +339,9 @@ void test_bluetooth_tools() {
   TEST_ASSERT_TRUE(isError(e.tool("start_pairing", "{\"seconds\":5}")));
   TEST_ASSERT_TRUE(isError(e.tool("start_pairing", "{\"seconds\":\"x\"}")));
 
-  TEST_ASSERT_TRUE(toolText(e.tool("disconnect_bluetooth"))["held"].as<bool>());
+  TEST_ASSERT_EQUAL_STRING("off", toolText(e.tool("disable_bluetooth"))["state"].as<const char*>());
   TEST_ASSERT_EQUAL_INT(1, e.link.disconnects);
-  TEST_ASSERT_FALSE(toolText(e.tool("reconnect_bluetooth"))["held"].as<bool>());
+  TEST_ASSERT_EQUAL_STRING("waiting", toolText(e.tool("enable_bluetooth"))["state"].as<const char*>());
 
   TEST_ASSERT_TRUE(isError(e.tool("forget_computer", "{}")));
   TEST_ASSERT_TRUE(isError(e.tool("forget_computer", "{\"id\":\"000000000000\"}")));
@@ -341,6 +373,8 @@ int main() {
   RUN_TEST(test_tools_list_includes_new_tools);
   RUN_TEST(test_tools_without_services_are_not_listed);
   RUN_TEST(test_schedule_tools);
+  RUN_TEST(test_time_tools);
+  RUN_TEST(test_button_tools);
   RUN_TEST(test_legacy_mcp_matches_ex_without_services);
   RUN_TEST(test_appearance_tools);
   RUN_TEST(test_script_tools_roundtrip);

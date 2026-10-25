@@ -11,10 +11,10 @@ An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, contro
 ## 2. Pairing and safety
 
 - Pairing is **always closed** by default, also on a brand-new board and after "forget all".
-- The owner opens a 3-minute window (dashboard, API, MCP, or a tap of the BOOT button). It closes by itself after 3 minutes or when a computer pairs, and can be stopped early.
+- The owner opens **Discovery** (dashboard, API, MCP, a schedule action, or holding the button for 5 to 10 seconds). It lasts 180 seconds by default (30 to 600, configurable), closes by itself or when a computer pairs, and can be stopped early.
 - A computer that tries to pair while it is closed is refused.
 - The dashboard shows which computer is connected and since when; computers can be renamed, forgotten, disconnected.
-- **Disconnect** drops the link and leaves the device visible but not connectable until Reconnect (also when the computer ends the connection itself), so the computer does not reconnect.
+- Four Bluetooth states: **Off** (radio silent), **Waiting** (on; only paired computers can find and reach the device, it is not discoverable), **Discovery** (a new computer can pair) and **Connected**. Switching Bluetooth off (dashboard, API, MCP, a schedule action, or the computer's own Disconnect when the setting says so) is stored.
 - Everything except the dashboard page itself requires the API token.
 
 ## 3. Movement
@@ -27,12 +27,13 @@ An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, contro
 ## 4. Running it
 
 - Start/stop/**pause** (for a set time or until resumed; it keeps a timed run's deadline and the schedule's timetable), a test movement, and **timed runs**: 5, 10 or 30 minutes, an hour, until a time of day, or a custom number of minutes.
-- **Weekly schedules** (up to 8): days, start and end time (may cross midnight), forever or a set number of runs, in a chosen timezone; they start and stop the jiggler by the clock. Needs a synced clock.
+- **Weekly schedules** (up to 8): **windows** (days, start and end time, may cross midnight) and **actions** (start, stop, pause, resume, Bluetooth on/off, open Discovery at a time), each with an optional random shift of up to 120 minutes, repeating forever or a set number of times. A window open when saved starts the jiggler. Needs the clock.
+- **Clock**: timezone, NTP server, or set by hand from the browser (lost at restart).
 
 ## 5. Network
 
 - Joins the home WiFi; if it cannot, a setup network (`Jiggler-Setup`) collects the WiFi credentials and the API token. The board restarts once after the first setup.
-- Optional own-network mode (its own protected WiFi with a captive portal) for places without WiFi; the BOOT button (3 s) toggles it.
+- Optional own-network mode (its own protected WiFi with a captive portal) for places without WiFi; the button (30 s) toggles it.
 - The Bluetooth mouse works independently of WiFi.
 
 ## 6. Dashboard
@@ -47,8 +48,8 @@ An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, contro
 
 ## 8. Physical indications
 
-- Status LED: slow blink = no computer, solid = connected (brief flash per movement), fast blink = pairing open, short flash every 3 s = disconnected (not connectable).
-- BOOT button: tap = open pairing, hold 3 s = switch network mode.
+- Status LED: off = one short flash every 3 s, waiting = slow blink, Discovery = fast blink, connected and running = solid (brief off-flash per movement), connected but stopped = two short flashes every 3 s; it also shows what releasing the button would do.
+- Button (BOOT / GPIO 0 by default, configurable): tap = start or stop the jiggler, hold 5 to 10 s and release = open Discovery, hold 30 s = switch network mode.
 - USB power. After the first USB flash, firmware updates go over WiFi (OTA).
 
 ## Not included for now

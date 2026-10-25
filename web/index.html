@@ -45,9 +45,9 @@
 <div><p class="step-title">Connect to the device</p>
 <p class="step-text">You are here, so WiFi and your token are set.</p></div></li>
 <li class="step" id="stepPair"><span class="num" aria-hidden="true">2</span>
-<div><p class="step-title">Open pairing</p>
-<p class="step-text" id="setupPairText">Pairing is closed, so nobody can connect by accident. Open it for 3 minutes. You can also tap the BOOT button once on the board.</p>
-<div class="actions"><button class="primary" id="setupOpen">Open pairing for 3 minutes</button><button id="setupStop" hidden>Stop pairing</button></div>
+<div><p class="step-title">Start Discovery</p>
+<p class="step-text" id="setupPairText">Discovery is closed, so nobody can pair by accident. Open it for a few minutes. You can also hold the button on the board for 5 to 10 seconds (the LED blinks fast), then let go.</p>
+<div class="actions"><button class="primary" id="setupOpen">Start Discovery</button><button id="setupStop" hidden>Stop Discovery</button></div>
 <p class="msg" id="setupMsg" role="status" aria-live="polite"></p></div></li>
 <li class="step" id="stepChoose"><span class="num" aria-hidden="true">3</span>
 <div><p class="step-title">Choose the device on your computer</p>
@@ -73,6 +73,7 @@
 <h2>Movement</h2>
 <p class="state" id="state">—</p>
 <p class="sub" id="next">&nbsp;</p>
+<p class="note" id="schedNote" hidden></p>
 <div class="runfor" id="runFor">
 <div class="field"><label for="runChoice">Run for</label>
 <select id="runChoice">
@@ -117,20 +118,32 @@
 <section class="view" id="view-computers" aria-labelledby="h-computers" hidden>
 <h1 id="h-computers">Computers</h1>
 <div class="block">
-<h2>Pairing</h2>
+<h2>Bluetooth</h2>
+<p id="btInfo">&nbsp;</p>
+<div class="actions"><button id="btToggle">Turn Bluetooth off</button></div>
+<p class="msg" id="btMsg" role="status" aria-live="polite"></p>
+<p class="hint"><b>Off</b>: the radio is silent, nothing can see or reach the device. <b>Waiting</b>: on; only computers that are already paired can find it and connect. <b>Discovery</b>: open for a few minutes so a new computer can pair. <b>Connected</b>: linked to a computer.</p>
+</div>
+
+<div class="block">
+<h2>Discovery</h2>
 <p id="pairInfo">&nbsp;</p>
 <div class="actions">
-<button class="primary" id="pairOpen">Open pairing for 3 minutes</button>
-<button id="pairClose">Stop pairing</button>
+<button class="primary" id="pairOpen">Start Discovery</button>
+<button id="pairClose">Stop Discovery</button>
 </div>
 <p class="msg" id="pairMsg" role="status" aria-live="polite"></p>
-<p class="hint">Once a computer is paired, the device refuses new pairings, so nobody else can connect. Open the window here, or tap BOOT once on the board (the LED blinks fast). It closes by itself after 3 minutes or as soon as a computer pairs.</p>
+<div class="field"><label for="discSeconds">Discovery lasts (seconds)</label><input id="discSeconds" inputmode="numeric" autocomplete="off"><div class="err" data-err="discoverySeconds"></div></div>
+<label class="inline"><input type="checkbox" id="offOnDisc"> Turn Bluetooth off when the computer itself disconnects</label>
+<p class="hint">30 to 600 seconds. While Discovery is closed, only computers that are already paired can connect, so nobody else can pair. It closes by itself when the time is up or as soon as a computer pairs. To open it from the board, hold the button for 5 to 10 seconds and let go. A computer that ends the connection from its own Bluetooth menu (Disconnect) otherwise reconnects at once; with the box ticked the device switches Bluetooth off instead, until you turn it on again. Some computers also disconnect on their own when they go to sleep, which switches Bluetooth off too.</p>
+<div class="actions"><button id="discSave">Save</button></div>
+<p class="msg" id="discMsg" role="status" aria-live="polite"></p>
 </div>
 
 <div class="block">
 <h2>Paired computers</h2>
 <ul class="list" id="peers"></ul>
-<p class="empty" id="peersEmpty" hidden>No computer paired. Open pairing above, then choose the device in the computer’s Bluetooth settings.</p>
+<p class="empty" id="peersEmpty" hidden>No computer paired. Start Discovery above, then choose the device in the computer’s Bluetooth settings.</p>
 <div class="actions"><button class="danger" id="forgetAll">Forget all</button></div>
 <p class="msg" id="peersMsg" role="status" aria-live="polite"></p>
 <p class="hint">Bluetooth does not tell the device a computer’s name, so they are numbered. To tell them apart: disconnect, see which computer loses the mouse, and rename it here. Up to 3 computers can be paired.</p>
@@ -182,12 +195,11 @@
 <h1 id="h-schedule">Schedule</h1>
 <div class="block">
 <h2>Weekly schedules</h2>
-<p class="hint lead">While a schedule’s window is open the jiggler runs by itself; it stops when the window ends. Stopping or starting it by hand is respected until the next window opens or closes.</p>
-<div class="field"><label for="tzSelect">Timezone</label><select id="tzSelect"></select><div class="err" data-err="timezone"></div></div>
+<p class="hint lead">A <b>window</b> runs the jiggler from a start time to an end time. An <b>action</b> does one thing at one time: start, stop, pause, resume, turn Bluetooth on or off, or open Discovery. Add a random shift and the times move a little every day. Stopping or starting by hand is respected until the next window opens or closes. A window that is open when you save it starts at once.</p>
 <p class="sub" id="clockNote">&nbsp;</p>
 <div id="schedList"></div>
-<p class="empty" id="schedEmpty" hidden>No schedules. Add one to start and stop the jiggler on certain days and hours.</p>
-<div class="actions"><button id="schedAdd">Add schedule</button><button class="primary" id="schedSave">Save schedules</button></div>
+<p class="empty" id="schedEmpty" hidden>No schedules. Add a window to run the jiggler between two times, or an action to do one thing at a time.</p>
+<div class="actions"><button id="schedAdd">Add window</button><button id="schedAddAction">Add action</button><button class="primary" id="schedSave">Save schedules</button></div>
 <p id="schedMsg" class="msg" role="status" aria-live="polite"></p>
 </div>
 
@@ -208,9 +220,29 @@
 </form>
 </div>
 
+<div class="block" id="timeBox">
+<h2>Time</h2>
+<p class="hint lead">Schedules follow this clock. It comes from the internet (NTP); a board with no internet loses the time at every restart and needs it set by hand.</p>
+<p class="note" id="timeNow">&nbsp;</p>
+<div class="field"><label for="tzSelect">Timezone</label><select id="tzSelect"></select><div class="err" data-err="timezone"></div></div>
+<div class="field"><label for="ntpServer">NTP server</label><input id="ntpServer" autocomplete="off" spellcheck="false" placeholder="pool.ntp.org"><div class="err" data-err="ntpServer"></div>
+<p class="hint">A host name such as pool.ntp.org. Leave it empty to stop using the internet for the time.</p></div>
+<div class="actions"><button class="primary" id="timeSave">Save</button><button id="timeSet">Set the time from this browser</button></div>
+<p id="timeMsg" class="msg" role="status" aria-live="polite"></p>
+</div>
+
+<div class="block" id="buttonBox">
+<h2>Button</h2>
+<p class="hint lead">A button on the board (to ground) starts and stops the jiggler. The default is the BOOT button, GPIO 0.</p>
+<div class="field"><label for="btnGpio">GPIO</label><select id="btnGpio"></select><div class="err" data-err="gpio"></div></div>
+<ul class="hint plain"><li><b>Tap</b>: start or stop the jiggler (the LED blinks three times).</li><li><b>Hold 5 to 10 seconds, then let go</b>: open Discovery. The LED blinks fast while you can let go.</li><li><b>Hold 10 to 30 seconds</b>: nothing happens when you let go (the LED is dark).</li><li><b>Hold 30 seconds</b>: switch between home WiFi and own-network mode and restart.</li></ul>
+<div class="actions"><button class="primary" id="btnSave">Save</button></div>
+<p id="btnMsg" class="msg" role="status" aria-live="polite"></p>
+</div>
+
 <div class="block">
 <h2>Network</h2>
-<p class="hint"><b>Auto</b>: connects to your home WiFi and, if it cannot, opens the setup network. <b>Own network</b>: creates a protected WiFi network that serves this dashboard (address 192.168.4.1), for places without WiFi. Holding BOOT for 3 seconds switches between the two. Changes apply after a restart. Schedules need the home WiFi with internet access to know the time.</p>
+<p class="hint"><b>Auto</b>: connects to your home WiFi and, if it cannot, opens the setup network. <b>Own network</b>: creates a protected WiFi network that serves this dashboard (address 192.168.4.1), for places without WiFi. Holding the button for 30 seconds switches between the two. Changes apply after a restart. Without internet the clock has to be set by hand (Time).</p>
 <div class="field"><label for="netMode">Mode</label><select id="netMode"><option value="auto">Auto (home WiFi)</option><option value="ap">Own network</option></select><div class="err" data-err="mode"></div></div>
 <div class="field"><label for="netSsid">Own network name</label><input id="netSsid" autocomplete="off"><div class="err" data-err="apSsid"></div></div>
 <div class="field"><label for="netPass">Own network password</label><input id="netPass" autocomplete="off"><div class="err" data-err="apPassword"></div><p class="hint">Optional, 8 to 63 characters. Leave it empty and one is generated the first time the own network starts.</p></div>

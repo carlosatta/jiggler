@@ -43,52 +43,53 @@ test('tr turns a server message into a sentence', () => {
 });
 
 const bt = (over) => Object.assign({
-  connected: false, held: false, peerCount: 1, computer: null,
+  state: 'waiting', enabled: true, connected: false, peerCount: 1, computer: null,
   pairing: { open: false, remainingMs: null }
 }, over);
 const device = { bleName: 'MX Master 3S' };
 
-test('connection view: connected names the computer and offers disconnect', () => {
-  const v = JigLib.connectionView(bt({ connected: true, computer: { label: 'Computer 2', connectedForMs: 12 * 60000 } }), device);
+test('connection view: connected names the computer and offers to turn Bluetooth off', () => {
+  const v = JigLib.connectionView(bt({ state: 'connected', connected: true, computer: { label: 'Computer 2', connectedForMs: 12 * 60000 } }), device);
   assert.equal(v.tone, 'ok');
   assert.equal(v.title, 'Connected to Computer 2');
   assert.match(v.detail, /For 12 minutes/);
-  assert.deepEqual(v.actions, ['disconnect']);
+  assert.deepEqual(v.actions, ['disable']);
 });
 
-test('connection view: disconnected stays until reconnect', () => {
-  const v = JigLib.connectionView(bt({ held: true, }), device);
-  assert.equal(v.title, 'Disconnected');
-  assert.match(v.detail, /until you press Reconnect/);
-  assert.match(v.detail, /visible/i);
-  assert.deepEqual(v.actions, ['reconnect']);
+test('connection view: off says nothing can connect and offers to turn it on', () => {
+  const v = JigLib.connectionView(bt({ state: 'off', enabled: false }), device);
+  assert.equal(v.tone, 'warn');
+  assert.equal(v.title, 'Bluetooth is off');
+  assert.match(v.detail, /invisible/);
+  assert.deepEqual(v.actions, ['enable']);
 });
 
-test('connection view: a timed window shows the countdown and can be stopped', () => {
-  const v = JigLib.connectionView(bt({ pairing: { open: true, remainingMs: 92000 } }), device);
-  assert.equal(v.title, 'Pairing is open');
+test('connection view: Discovery shows the countdown and can be stopped', () => {
+  const v = JigLib.connectionView(bt({ state: 'discovery', pairing: { open: true, remainingMs: 92000 } }), device);
+  assert.equal(v.title, 'Discovery is open');
   assert.match(v.detail, /1:32/);
   assert.deepEqual(v.actions, ['closePairing']);
 });
 
-test('connection view: paired but not connected offers to pair another computer', () => {
+test('connection view: waiting with paired computers offers Discovery or turning Bluetooth off', () => {
   const v = JigLib.connectionView(bt(), device);
   assert.equal(v.tone, 'idle');
-  assert.equal(v.title, 'No computer connected');
-  assert.deepEqual(v.actions, ['pair']);
+  assert.equal(v.title, 'Waiting for a computer');
+  assert.deepEqual(v.actions, ['pair', 'disable']);
 });
 
-test('connection view: connected while a window is open keeps disconnect and offers to stop pairing', () => {
+test('connection view: connected while Discovery is open can stop Discovery or turn Bluetooth off', () => {
   const v = JigLib.connectionView(
-    bt({ connected: true, computer: { label: 'Computer 1', connectedForMs: 1000 }, pairing: { open: true, remainingMs: 30000 } }), device);
-  assert.deepEqual(v.actions, ['disconnect', 'closePairing']);
+    bt({ state: 'discovery', connected: true, computer: { label: 'Computer 1', connectedForMs: 1000 }, pairing: { open: true, remainingMs: 30000 } }), device);
+  assert.deepEqual(v.actions, ['closePairing', 'disable']);
+  assert.match(v.detail, /Discovery is open/);
 });
 
-test('connection view: no computer paired and pairing closed says so and offers to pair', () => {
+test('connection view: nothing paired says so and offers Discovery', () => {
   const v = JigLib.connectionView(bt({ peerCount: 0 }), device);
   assert.equal(v.tone, 'idle');
   assert.equal(v.title, 'No computer paired');
-  assert.match(v.detail, /Open pairing/);
+  assert.match(v.detail, /Start Discovery/);
   assert.deepEqual(v.actions, ['pair']);
 });
 
@@ -195,4 +196,22 @@ test('scheduleSummary includes the repeat information', () => {
     'Mon, 09:00 to 10:00 · 1 of 2 runs left');
   assert.equal(JigLib.scheduleSummary({ days: ['mon'], start: '09:00', durationMin: 60, enabled: true, times: null }),
     'Mon, 09:00 to 10:00');
+});
+
+test('scheduleSummary describes actions and the random shift', () => {
+  assert.equal(JigLib.scheduleSummary({ kind: 'action', action: 'pause', days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '12:30' }),
+    'Mon–Fri at 12:30: Pause the jiggler');
+  assert.equal(JigLib.scheduleSummary({ kind: 'action', action: 'bluetooth_off', days: ['sat', 'sun'], start: '22:00', jitterMin: 10 }),
+    'Sat, Sun at 22:00: Turn Bluetooth off · ± 10 min');
+  assert.equal(JigLib.scheduleSummary({ kind: 'window', days: ['mon'], start: '09:00', durationMin: 480, jitterMin: 15 }),
+    'Mon, 09:00 to 17:00 · ± 15 min');
+  assert.equal(JigLib.describeJitter(0), '');
+  for (const a of ['start', 'stop', 'pause', 'resume', 'bluetooth_on', 'bluetooth_off', 'discovery']) assert.ok(JigLib.ACTION_LABELS[a], a);
+});
+
+test('clockLine says where the time comes from, or that it is not set', () => {
+  assert.equal(JigLib.clockLine({ synced: true, localTime: '09:05', weekday: 'wed', timezone: 'Europe/Rome', source: 'ntp' }), 'Wed 09:05 · Europe/Rome · from NTP');
+  assert.equal(JigLib.clockLine({ synced: true, localTime: '09:05', weekday: 'wed', timezone: 'UTC', source: 'manual' }), 'Wed 09:05 · UTC · set by hand');
+  assert.match(JigLib.clockLine({ synced: false }), /Not set/);
+  assert.match(JigLib.clockLine(undefined), /Not set/);
 });

@@ -10,7 +10,7 @@ The Bluetooth side works without WiFi: the movement task runs on its own core an
 4. When it connects, **the board restarts once** (the portal leaves port 80 busy for a while, so a clean start is the reliable way to bring up the dashboard). It then joins your WiFi and starts the web server. Reach it at **`http://jiggler.local/`** (mDNS) or by IP (shown on the serial monitor and your router).
 5. Credentials and token persist across restarts. If the saved network cannot be joined at boot, the setup portal starts again.
 
-Time (for `lastMoveAt`) comes from NTP (`pool.ntp.org`, `time.google.com`) once WiFi is up.
+Time comes from NTP (`pool.ntp.org` by default; change it in **System → Time**) once WiFi is up. With no internet you can set the clock by hand there; it is lost at every restart.
 
 ## AP mode (no home WiFi)
 
@@ -19,7 +19,7 @@ Time (for `lastMoveAt`) comes from NTP (`pool.ntp.org`, `time.google.com`) once 
 - SSID defaults to **`Jiggler`**. The password is optional: leave the field empty in **System → Network** and one is generated the first time the own network starts, **saved and printed on the serial monitor**.
 - A DNS captive portal redirects every hostname to the dashboard at the AP address.
 - If no token is stored, the AP password is also used as the API token.
-- Switch mode via the dashboard (the "Network" card), `PUT /api/network`, the `set_network` MCP tool, or by **holding the BOOT button (GPIO 0) for 3 seconds**, which toggles `auto`↔`ap` and restarts. Changes made through the API apply after a restart.
+- Switch mode via the dashboard (the "Network" card), `PUT /api/network`, the `set_network` MCP tool, or by **holding the button (BOOT, GPIO 0, by default) for 30 seconds**, which toggles `auto`↔`ap` and restarts. Changes made through the API apply after a restart.
 
 ## The token
 
@@ -40,7 +40,14 @@ Treat the token and the AP password as secrets: `GET /api/network` returns the A
 
 GPIO 2 (the on-board LED on most `esp32dev` boards):
 
-- Blinking slowly (1 Hz): no computer connected.
-- Solid: connected. It goes off briefly (80 ms) right after each movement.
-- Blinking fast: **pairing is open**.
-- A short flash every 3 seconds: the device is **disconnected** (visible, but not connectable) after a Disconnect.
+- **Bluetooth off**: one short flash every 3 seconds.
+- **Waiting**: blinking slowly (1 Hz).
+- **Discovery** open: blinking fast.
+- **Connected and the jiggler running**: solid, off briefly (80 ms) right after each movement.
+- **Connected but the jiggler stopped or paused**: two short flashes every 3 seconds.
+
+While you hold the button the LED tells you what letting go would do: blinking fast from 5 to 10 seconds (Discovery opens), dark from 10 to 30 seconds (nothing happens), solid at 30 seconds (the network mode switches). A tap blinks three times.
+
+## The button
+
+By default the BOOT button (GPIO 0); pick another pin in **System → Button** (a button wired between the pin and ground). **Tap**: start or stop the jiggler. **Hold 5 to 10 seconds and let go**: open Discovery. **Hold 30 seconds**: switch between home WiFi and own-network mode, then restart.

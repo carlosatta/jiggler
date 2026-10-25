@@ -39,13 +39,13 @@ Browse to **`http://jiggler.local/`** from a device on the same network (or use 
 A board with no paired computer shows **Set up your Jiggler**:
 
 <p align="center">
-  <img src="images/setup-1-welcome.png" alt="Set up your Jiggler: open pairing" width="260">
-  <img src="images/setup-2-pairing.png" alt="Pairing is open, waiting for a computer" width="260">
+  <img src="images/setup-1-welcome.png" alt="Set up your Jiggler: start Discovery" width="260">
+  <img src="images/setup-2-pairing.png" alt="Discovery is open, waiting for a computer" width="260">
   <img src="images/setup-3-paired.png" alt="Connected: ready to start" width="260">
 </p>
 
-1. Press **Open pairing for 3 minutes**. (Or tap the **BOOT** button once on the board; the LED blinks fast while pairing is open.)
-2. On the computer, open the Bluetooth settings and choose **Bluetooth Mouse** (the name you will see; you can change it later in **System → Appearance**). The page updates by itself as soon as it connects, and pairing closes.
+1. Press **Start Discovery**. (Or hold the **BOOT** button for 5 to 10 seconds and let go; the LED blinks fast while Discovery is open.)
+2. On the computer, open the Bluetooth settings and choose **Bluetooth Mouse** (the name you will see; you can change it later in **System → Appearance**). The page updates by itself as soon as it connects, and Discovery closes.
 3. Press **Start**.
 
 The jiggler **cannot run until a computer is paired**, so nothing moves before this step is done.
@@ -54,7 +54,7 @@ The jiggler **cannot run until a computer is paired**, so nothing moves before t
 
 - **Run for** lets you start it for 5, 10 or 30 minutes, an hour, until a time of day, or until you stop it.
 - **Schedule** runs it automatically on a weekly timetable ([schedules](schedules.md)).
-- **Computers** shows what is paired, lets you disconnect, rename, forget and pair another ([Bluetooth](bluetooth.md)).
+- **Computers** shows what is paired, lets you turn Bluetooth off and on, rename, forget and pair another ([Bluetooth](bluetooth.md)).
 
 Add the page to your phone's home screen from the browser menu for a full-screen shortcut.
 
@@ -73,7 +73,7 @@ Your token, WiFi, pairings and schedules are kept. A file that is not a valid ES
 
 ## No WiFi at home?
 
-Switch the board to **own network** mode: it creates a protected WiFi network that serves the dashboard at `192.168.4.1`. Hold the **BOOT** button for 3 seconds to switch between the two modes (the board restarts), or change it in **System → Network**. See [Network](network.md). Schedules need the internet for the time, so they do nothing in this mode.
+Switch the board to **own network** mode: it creates a protected WiFi network that serves the dashboard at `192.168.4.1`. Hold the **BOOT** button for 30 seconds to switch between the two modes (the board restarts), or change it in **System → Network**. See [Network](network.md). Schedules need the time, which a board with no internet only has if you set it by hand in **System → Time** (it is lost at every restart).
 
 ## Troubleshooting
 
@@ -87,8 +87,8 @@ Switch the board to **own network** mode: it creates a protected WiFi network th
 
 **The dashboard says "Device not reachable".** The board restarted, lost WiFi, or lost power. The page retries by itself.
 
-**Pairing fails, or the device is not in the list.** Open pairing first (it is closed by default, on purpose), then choose the device on the computer within 3 minutes. If the computer paired before and has since forgotten the device, forget the computer under **Computers** too and pair again. Only up to 3 computers can be paired.
+**Pairing fails, or the device is not in the list.** Start Discovery first (it is closed by default, on purpose), then choose the device on the computer before it closes. While Discovery is closed the device does not show up in other computers' lists at all. If the computer paired before and has since forgotten the device, forget the computer under **Computers** too and pair again. Only up to 3 computers can be paired.
 
-**It connected, then disconnected after I pressed Disconnect.** That is intended: the device stays visible but accepts no connection, so the computer does not reconnect. Press **Reconnect** on the dashboard, then the computer reconnects by itself.
+**It connected, then Bluetooth switched itself off.** Pressing Disconnect in the computer's own Bluetooth menu (or the computer going to sleep) switches Bluetooth off, so the computer does not reconnect behind your back. Press **Turn Bluetooth on** on the dashboard, or untick the setting under **Computers → Discovery**.
 
 **Back to a clean slate.** `pio run -e esp32 -t erase`, then flash again. This removes WiFi, token, pairings and schedules.

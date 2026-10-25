@@ -1,31 +1,38 @@
-// Schedule: weekly windows that start and stop the jiggler, and the timezone they are read in.
+// Schedule: weekly windows that start and stop the jiggler, and actions done at one time of day.
 (function () {
   'use strict';
   var $ = App.$, el = App.el, say = App.say, tr = JigLib.tr;
   var labeled = App.labeled, clearErrors = App.clearErrors, showError = App.showError;
 
-  // ---- Schedules ----
-  var sched = { timezone: 'Europe/Rome', schedules: [] };
+  var sched = { schedules: [] };
   var MAX_SCHEDULES = 8;
+  var ACTIONS = ['start', 'stop', 'pause', 'resume', 'bluetooth_on', 'bluetooth_off', 'discovery'];
 
   function readCard(card) {
     var days = [];
     card.querySelectorAll('.days button').forEach(function (b) { if (b.getAttribute('aria-pressed') === 'true') days.push(b.getAttribute('data-day')); });
+    var kind = card.querySelector('[data-k=kind]').value;
     var start = card.querySelector('[data-k=start]').value;
     var end = card.querySelector('[data-k=end]').value;
     var mode = card.querySelector('[data-k=repeat]').value;
-    var times = mode === 'times' ? Number(card.querySelector('[data-k=times]').value) : null;
-    var remaining = card.querySelector('[data-k=times]').getAttribute('data-remaining');
-    return {
+    var timesInput = card.querySelector('[data-k=times]');
+    var times = mode === 'times' ? Number(timesInput.value) : null;
+    var remaining = timesInput.getAttribute('data-remaining');
+    var jitter = card.querySelector('[data-k=jitter]').value.trim();
+    var out = {
       id: card.querySelector('[data-k=id]').value.trim(),
       enabled: card.querySelector('[data-k=enabled]').checked,
+      kind: kind,
       days: days,
       start: start,
-      durationMin: JigLib.durationFromEnd(start, end),
+      jitterMin: /^\d+$/.test(jitter) ? Number(jitter) : 0,
       times: times,
       // progress is kept while the count is unchanged; a new count starts a fresh run
-      remaining: times && remaining !== null && Number(remaining) <= times && Number(card.querySelector('[data-k=times]').getAttribute('data-times')) === times ? Number(remaining) : times
+      remaining: times && remaining !== null && Number(remaining) <= times && Number(timesInput.getAttribute('data-times')) === times ? Number(remaining) : times
     };
+    if (kind === 'action') out.action = card.querySelector('[data-k=action]').value;
+    else out.durationMin = JigLib.durationFromEnd(start, end);
+    return out;
   }
 
   function readSchedules() {
@@ -36,11 +43,16 @@
 
   function refreshSummary(card) {
     var s = readCard(card);
+    var isAction = s.kind === 'action';
     var sum = card.querySelector('.sched-sum');
-    var ok = s.durationMin !== null && /^\d{2}:\d{2}$/.test(s.start);
-    sum.textContent = ok ? JigLib.scheduleSummary(s) : JigLib.describeDays(s.days) + ', set a start and an end time';
+    var ok = /^\d{2}:\d{2}$/.test(s.start) && (isAction || s.durationMin !== null);
+    sum.textContent = ok ? JigLib.scheduleSummary(s) : JigLib.describeDays(s.days) + ', set ' + (isAction ? 'a time' : 'a start and an end time');
     sum.className = 'sched-sum' + (s.enabled ? '' : ' off');
     card.querySelector('[data-k=times]').closest('.field').hidden = card.querySelector('[data-k=repeat]').value !== 'times';
+    card.querySelector('[data-k=action]').closest('.field').hidden = !isAction;
+    card.querySelector('[data-k=end]').closest('.field').hidden = isAction;
+    card.querySelector('.when-hint').hidden = isAction;
+    card.querySelector('[data-k=start]').closest('.field').querySelector('label').textContent = isAction ? 'At' : 'Starts at';
   }
 
   function renderSchedules() {
@@ -58,7 +70,20 @@
       var id = el('input', { autocomplete: 'off', placeholder: 'a-z 0-9 _ -' });
       id.setAttribute('data-k', 'id');
       id.value = sc.id;
-      card.appendChild(labeled('Name', id, 'schedules[' + i + '].id'));
+      var kind = el('select');
+      kind.setAttribute('data-k', 'kind');
+      kind.appendChild(el('option', { value: 'window', text: 'Window' }));
+      kind.appendChild(el('option', { value: 'action', text: 'Action' }));
+      kind.value = sc.kind === 'action' ? 'action' : 'window';
+      kind.addEventListener('change', function () { refreshSummary(card); });
+      card.appendChild(el('div', { class: 'row3' }, [labeled('Name', id, 'schedules[' + i + '].id'), labeled('Type', kind, 'schedules[' + i + '].kind')]));
+
+      var action = el('select');
+      action.setAttribute('data-k', 'action');
+      ACTIONS.forEach(function (a) { action.appendChild(el('option', { value: a, text: JigLib.ACTION_LABELS[a] })); });
+      action.value = sc.action || 'start';
+      action.addEventListener('change', function () { refreshSummary(card); });
+      card.appendChild(labeled('Do', action, 'schedules[' + i + '].action'));
 
       var days = el('div', { class: 'days', role: 'group', 'aria-label': 'Days' });
       JigLib.DAYS.forEach(function (d) {
@@ -82,10 +107,17 @@
       start.addEventListener('input', function () { refreshSummary(card); });
       var end = el('input', { type: 'time' });
       end.setAttribute('data-k', 'end');
-      end.value = JigLib.endFromDuration(sc.start, sc.durationMin);
+      end.value = sc.durationMin ? JigLib.endFromDuration(sc.start, sc.durationMin) : '17:00';
       end.addEventListener('input', function () { refreshSummary(card); });
       card.appendChild(el('div', { class: 'row3' }, [labeled('Starts at', start, 'schedules[' + i + '].start'), labeled('Ends at', end, 'schedules[' + i + '].durationMin')]));
-      card.appendChild(el('p', { class: 'hint' , text: 'An end time earlier than the start means the next day. The same time means 24 hours.' }));
+      card.appendChild(el('p', { class: 'hint when-hint', text: 'An end time earlier than the start means the next day. The same time means 24 hours.' }));
+
+      var jitter = el('input', { inputmode: 'numeric', autocomplete: 'off', placeholder: '0' });
+      jitter.setAttribute('data-k', 'jitter');
+      jitter.value = sc.jitterMin ? String(sc.jitterMin) : '';
+      jitter.addEventListener('input', function () { refreshSummary(card); });
+      card.appendChild(labeled('Random shift (± minutes, 0 to 120)', jitter, 'schedules[' + i + '].jitterMin'));
+      card.appendChild(el('p', { class: 'hint', text: 'Each time moves by a random amount up to this many minutes earlier or later, chosen afresh every day (a window’s start and end move independently).' }));
 
       var repeat = el('select');
       repeat.setAttribute('data-k', 'repeat');
@@ -107,45 +139,38 @@
       refreshSummary(card);
     });
     $('schedEmpty').hidden = sched.schedules.length > 0;
-    $('schedAdd').disabled = sched.schedules.length >= MAX_SCHEDULES;
-  }
-
-  function fillTimezones(list) {
-    var sel = $('tzSelect');
-    if (sel.options.length === list.length) return;
-    sel.textContent = '';
-    list.forEach(function (z) { sel.appendChild(el('option', { value: z, text: z.replace('_', ' ') })); });
+    $('schedAdd').disabled = $('schedAddAction').disabled = sched.schedules.length >= MAX_SCHEDULES;
   }
 
   function loadSchedules() {
     App.call('GET', '/api/schedules').then(function (res) {
       if (res.status !== 200) return;
-      sched = { timezone: res.data.timezone, schedules: res.data.schedules };
-      fillTimezones(res.data.timezones);
-      $('tzSelect').value = sched.timezone;
+      sched = { schedules: res.data.schedules };
       renderSchedules();
     }).catch(function () {});
   }
 
-  $('schedAdd').onclick = function () {
+  function add(kind) {
     sched.schedules = readSchedules();
-    sched.timezone = $('tzSelect').value;
-    var n = 1;
-    while (sched.schedules.some(function (x) { return x.id === 'schedule-' + n; })) n++;
-    sched.schedules.push({ id: 'schedule-' + n, enabled: true, days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '09:00', durationMin: 480, times: null, remaining: null });
+    var n = 1, prefix = kind === 'action' ? 'action-' : 'window-';
+    while (sched.schedules.some(function (x) { return x.id === prefix + n; })) n++;
+    var base = { id: prefix + n, enabled: true, kind: kind, days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '09:00', jitterMin: 0, times: null, remaining: null };
+    if (kind === 'action') base.action = 'start'; else base.durationMin = 480;
+    sched.schedules.push(base);
     renderSchedules();
-  };
+  }
+  $('schedAdd').onclick = function () { add('window'); };
+  $('schedAddAction').onclick = function () { add('action'); };
 
   $('schedSave').onclick = function () {
     var root = $('view-schedule');
     clearErrors($('schedList'));
-    root.querySelector('[data-err="timezone"]').textContent = '';
     say('', '', 'schedMsg');
-    App.call('PUT', '/api/schedules', { timezone: $('tzSelect').value, schedules: readSchedules() }).then(function (res) {
+    App.call('PUT', '/api/schedules', { schedules: readSchedules() }).then(function (res) {
       if (res.status === 200) {
-        sched = { timezone: res.data.timezone, schedules: res.data.schedules };
+        sched = { schedules: res.data.schedules };
         renderSchedules();
-        say('Schedules saved. Saving never starts or stops the jiggler by itself; the next window edge does.', 'good', 'schedMsg');
+        say('Schedules saved. A window that is open right now starts the jiggler.', 'good', 'schedMsg');
         App.poll();
         return;
       }
@@ -156,11 +181,9 @@
   };
 
   function renderClock(s) {
-    var sc = s.schedule;
     var note = $('clockNote');
-    if (!sc) { note.textContent = ''; return; }
-    if (!sc.timeSynced) note.textContent = 'The device clock is not set yet: schedules start working once it has internet access.';
-    else note.textContent = 'Device clock: ' + sc.localTime + (sc.active ? ' · a schedule window is open now.' : '.');
+    if (!s.time) { note.textContent = ''; return; }
+    note.textContent = 'Device clock: ' + JigLib.clockLine(s.time) + (s.schedule && s.schedule.active ? ' · a window is open now.' : '.') + ' Change the timezone or NTP server in System → Time.';
   }
 
   App.view('schedule', {

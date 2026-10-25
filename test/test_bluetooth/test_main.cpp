@@ -24,7 +24,7 @@ const char* kIdB = "aabbccddee02";
 
 struct FakeBleLink : BleLink {
   std::vector<std::string> bonded, connected;
-  bool connectable = true;  // advertising is always on; this is whether a computer may open a link
+  bool enabled = true;  // the radio: false = silent
   bool pairingOpen = false;
   bool peerRequestedDisconnect = false;
   int disconnects = 0;
@@ -41,7 +41,7 @@ struct FakeBleLink : BleLink {
     return true;
   }
   void forgetAllBonds() override { bonded.clear(); }
-  void setConnectable(bool on) override { connectable = on; }
+  void setEnabled(bool on) override { enabled = on; }
   void setPairingOpen(bool open) override { pairingOpen = open; }
   bool takePeerDisconnectRequest() override {
     const bool b = peerRequestedDisconnect;
@@ -151,13 +151,14 @@ void test_pairing_window_survives_clock_wraparound() {
 
 void test_pairing_seconds_are_bounded() {
   Env e({kA});
-  for (uint32_t bad : {0u, 29u, 601u, 100000u}) {
+  for (uint32_t bad : {29u, 601u, 100000u}) {
     CmdResult r = e.bt.startPairing(bad);
     TEST_ASSERT_FALSE_MESSAGE(r.ok, std::to_string(bad).c_str());
     TEST_ASSERT_EQUAL_STRING("invalid_seconds", r.error.c_str());
   }
   TEST_ASSERT_TRUE(e.bt.startPairing(30).ok);
   TEST_ASSERT_TRUE(e.bt.startPairing(600).ok);
+  TEST_ASSERT_TRUE(e.bt.startPairing(0).ok);  // 0 = the configured length
 }
 
 void test_stop_pairing_closes_the_window() {
@@ -168,28 +169,85 @@ void test_stop_pairing_closes_the_window() {
   TEST_ASSERT_FALSE(e.link.pairingOpen);
 }
 
-void test_disconnect_holds_the_link_until_reconnect() {
+void test_disable_switches_bluetooth_off_until_enabled() {
   Env e({kA});
   e.link.connected = {kA};
-  TEST_ASSERT_TRUE(e.bt.disconnect().ok);
+  TEST_ASSERT_TRUE(e.bt.disable().ok);
   TEST_ASSERT_EQUAL_INT(1, e.link.disconnects);
-  TEST_ASSERT_FALSE(e.link.connectable);
+  TEST_ASSERT_FALSE(e.link.enabled);
   BluetoothStatus s = e.bt.status();
-  TEST_ASSERT_TRUE(s.held);
+  TEST_ASSERT_TRUE(BluetoothState::Off == s.state);
+  TEST_ASSERT_FALSE(s.settings.enabled);
   TEST_ASSERT_FALSE(s.connected);
   e.bt.tick();
-  TEST_ASSERT_FALSE(e.link.connectable);  // stays unconnectable: the computer cannot reconnect behind your back
-  TEST_ASSERT_TRUE(e.bt.reconnect().ok);
-  TEST_ASSERT_TRUE(e.link.connectable);
-  TEST_ASSERT_FALSE(e.bt.status().held);
+  TEST_ASSERT_FALSE(e.link.enabled);  // stays silent: the computer cannot reconnect behind your back
+  TEST_ASSERT_TRUE(e.bt.enable().ok);
+  TEST_ASSERT_TRUE(e.link.enabled);
+  TEST_ASSERT_TRUE(BluetoothState::Waiting == e.bt.status().state);
 }
 
-void test_starting_pairing_releases_a_hold() {
+void test_starting_pairing_switches_bluetooth_on() {
   Env e({kA});
-  e.bt.disconnect();
+  e.bt.disable();
   TEST_ASSERT_TRUE(e.bt.startPairing(60).ok);
-  TEST_ASSERT_TRUE(e.link.connectable);
-  TEST_ASSERT_FALSE(e.bt.status().held);
+  TEST_ASSERT_TRUE(e.link.enabled);
+  TEST_ASSERT_TRUE(e.link.pairingOpen);
+  TEST_ASSERT_TRUE(BluetoothState::Discovery == e.bt.status().state);
+  TEST_ASSERT_TRUE(e.bt.settings().enabled);
+}
+
+void test_state_is_off_waiting_discovery_or_connected() {
+  Env e({kA});
+  TEST_ASSERT_TRUE(BluetoothState::Waiting == e.bt.status().state);
+  e.link.connected = {kA};
+  TEST_ASSERT_TRUE(BluetoothState::Connected == e.bt.status().state);
+  e.bt.startPairing(60);
+  TEST_ASSERT_TRUE(BluetoothState::Discovery == e.bt.status().state);  // a window wins over a link
+  e.bt.stopPairing();
+  e.bt.disable();
+  TEST_ASSERT_TRUE(BluetoothState::Off == e.bt.status().state);
+  TEST_ASSERT_EQUAL_STRING("off", bluetoothStateName(BluetoothState::Off));
+  TEST_ASSERT_EQUAL_STRING("discovery", bluetoothStateName(BluetoothState::Discovery));
+}
+
+void test_discovery_length_is_configurable_and_persists() {
+  Env e({kA});
+  TEST_ASSERT_EQUAL_UINT32(180, e.bt.settings().discoverySeconds);
+  TEST_ASSERT_TRUE(e.bt.updateSettings(300, std::nullopt).ok);
+  e.bt.startPairing(0);
+  TEST_ASSERT_EQUAL_UINT32(300000, *e.bt.status().pairingRemainingMs);
+  TEST_ASSERT_EQUAL_UINT32(60000, [&] { e.bt.startPairing(60); return *e.bt.status().pairingRemainingMs; }());  // an explicit length wins
+  TEST_ASSERT_FALSE(e.bt.updateSettings(29, std::nullopt).ok);
+  TEST_ASSERT_FALSE(e.bt.updateSettings(601, std::nullopt).ok);
+  BluetoothManager again(e.clock, e.link, e.blobs);
+  again.begin();
+  TEST_ASSERT_EQUAL_UINT32(300, again.settings().discoverySeconds);
+}
+
+void test_off_is_remembered_across_a_restart() {
+  Env e({kA});
+  e.bt.disable();
+  BluetoothManager again(e.clock, e.link, e.blobs);
+  e.link.enabled = true;
+  again.begin();
+  TEST_ASSERT_FALSE(again.settings().enabled);
+  TEST_ASSERT_FALSE(e.link.enabled);
+}
+
+void test_settings_report_a_full_storage() {
+  Env e({kA});
+  e.flaky()->failPuts = true;
+  TEST_ASSERT_EQUAL_STRING("storage_error", e.bt.updateSettings(120, std::nullopt).error.c_str());
+  TEST_ASSERT_EQUAL_UINT32(180, e.bt.settings().discoverySeconds);
+}
+
+void test_the_computer_disconnecting_can_be_left_alone() {
+  Env e({kA});
+  TEST_ASSERT_TRUE(e.bt.updateSettings(std::nullopt, false).ok);
+  e.link.peerRequestedDisconnect = true;
+  e.bt.tick();
+  TEST_ASSERT_TRUE(e.link.enabled);
+  TEST_ASSERT_TRUE(BluetoothState::Waiting == e.bt.status().state);
 }
 
 void test_peers_get_stable_default_labels_and_can_be_renamed() {
@@ -280,7 +338,9 @@ void test_bluetooth_routes() {
   TEST_ASSERT_EQUAL_INT(200, g.status);
   JsonDocument d = parse(g.body);
   TEST_ASSERT_FALSE(d["connected"].as<bool>());
-  TEST_ASSERT_FALSE(d["held"].as<bool>());
+  TEST_ASSERT_EQUAL_STRING("waiting", d["state"].as<const char*>());
+  TEST_ASSERT_TRUE(d["enabled"].as<bool>());
+  TEST_ASSERT_EQUAL_UINT32(180, d["discoverySeconds"].as<uint32_t>());
   TEST_ASSERT_FALSE(d["pairing"]["open"].as<bool>());
   TEST_ASSERT_TRUE(g.body.find("\"remainingMs\":null") != std::string::npos);
   TEST_ASSERT_TRUE(g.body.find("\"computer\":null") != std::string::npos);
@@ -301,8 +361,17 @@ void test_bluetooth_routes() {
   for (const char* body : {"{", "{\"seconds\":\"x\"}", "{\"seconds\":1.5}", "[]"})
     TEST_ASSERT_EQUAL_INT_MESSAGE(400, a.call("POST", "/api/bluetooth/pairing", body).status, body);
 
-  TEST_ASSERT_TRUE(parse(a.call("POST", "/api/bluetooth/disconnect").body)["held"].as<bool>());
-  TEST_ASSERT_FALSE(parse(a.call("POST", "/api/bluetooth/reconnect").body)["held"].as<bool>());
+  TEST_ASSERT_EQUAL_STRING("off", parse(a.call("POST", "/api/bluetooth/disable").body)["state"].as<const char*>());
+  TEST_ASSERT_EQUAL_STRING("waiting", parse(a.call("POST", "/api/bluetooth/enable").body)["state"].as<const char*>());
+  HttpResponse set = a.call("PUT", "/api/bluetooth/settings", "{\"discoverySeconds\":240,\"offWhenComputerDisconnects\":false}");
+  TEST_ASSERT_EQUAL_INT(200, set.status);
+  TEST_ASSERT_EQUAL_UINT32(240, parse(set.body)["discoverySeconds"].as<uint32_t>());
+  TEST_ASSERT_FALSE(parse(set.body)["offWhenComputerDisconnects"].as<bool>());
+  TEST_ASSERT_EQUAL_INT(400, a.call("PUT", "/api/bluetooth/settings", "{\"discoverySeconds\":5}").status);
+  TEST_ASSERT_EQUAL_INT(400, a.call("PUT", "/api/bluetooth/settings", "{\"discoverySeconds\":\"x\"}").status);
+  TEST_ASSERT_EQUAL_INT(400, a.call("PUT", "/api/bluetooth/settings", "{\"nope\":1}").status);
+  TEST_ASSERT_EQUAL_INT(200, a.call("PUT", "/api/bluetooth/settings", "{\"enabled\":true,\"state\":\"waiting\"}").status);
+  TEST_ASSERT_EQUAL_INT(405, a.call("GET", "/api/bluetooth/settings").status);
 
   HttpResponse ren = a.call("PUT", std::string("/api/bluetooth/peers/") + kIdA, "{\"label\":\"Studio\"}");
   TEST_ASSERT_EQUAL_INT(200, ren.status);
@@ -317,7 +386,7 @@ void test_bluetooth_routes() {
   TEST_ASSERT_EQUAL_INT(200, a.call("DELETE", "/api/bluetooth/peers").status);
 
   TEST_ASSERT_EQUAL_INT(405, a.call("PUT", "/api/bluetooth").status);
-  TEST_ASSERT_EQUAL_INT(405, a.call("GET", "/api/bluetooth/disconnect").status);
+  TEST_ASSERT_EQUAL_INT(405, a.call("GET", "/api/bluetooth/disable").status);
   TEST_ASSERT_EQUAL_INT(404, a.call("GET", "/api/bluetooth/nope").status);
   a.ctx.bluetooth = nullptr;
   TEST_ASSERT_EQUAL_INT(404, a.call("GET", "/api/bluetooth").status);
@@ -393,12 +462,12 @@ void test_device_info_in_status() {
   TEST_ASSERT_EQUAL_STRING("00:1f:20:fd:3b:76", d["device"]["bleAddress"].as<const char*>());
 }
 
-void test_disconnect_closes_an_open_pairing_window() {
+void test_disable_closes_an_open_pairing_window() {
   Env e({kA});
   TEST_ASSERT_TRUE(e.bt.startPairing(120).ok);
-  TEST_ASSERT_TRUE(e.bt.disconnect().ok);
+  TEST_ASSERT_TRUE(e.bt.disable().ok);
   BluetoothStatus s = e.bt.status();
-  TEST_ASSERT_TRUE(s.held);
+  TEST_ASSERT_TRUE(BluetoothState::Off == s.state);
   TEST_ASSERT_FALSE(s.pairingOpen);
   TEST_ASSERT_FALSE(e.link.pairingOpen);
   TEST_ASSERT_FALSE(s.pairingRemainingMs.has_value());
@@ -508,33 +577,17 @@ void test_stopping_the_window_by_hand_still_works() {
   TEST_ASSERT_FALSE(e.bt.status().pairingOpen);
 }
 
-void test_disconnect_from_the_dashboard_stays_until_reconnect() {
+void test_state_is_in_the_json_without_any_countdown_for_off() {
   Env e({kA});
-  e.link.connected = {kA};
-  e.bt.disconnect();
-  BluetoothStatus s = e.bt.status();
-  TEST_ASSERT_TRUE(s.held);
-  TEST_ASSERT_FALSE(e.link.connectable);
-  e.clock.now = 48u * 3600u * 1000u;
-  e.bt.tick();
-  TEST_ASSERT_TRUE(e.bt.status().held);
-  TEST_ASSERT_FALSE(e.link.connectable);
-  e.bt.reconnect();
-  TEST_ASSERT_FALSE(e.bt.status().held);
-  TEST_ASSERT_TRUE(e.link.connectable);
-}
-
-void test_held_is_in_the_json_without_a_countdown() {
-  Env e({kA});
-  e.bt.disconnect();
+  e.bt.disable();
   JsonDocument d;
   deserializeJson(d, bluetoothToJson(e.bt.status()));
-  TEST_ASSERT_TRUE(d["held"].as<bool>());
-  TEST_ASSERT_FALSE(d.as<JsonObject>().containsKey("heldRemainingMs"));
+  TEST_ASSERT_EQUAL_STRING("off", d["state"].as<const char*>());
+  TEST_ASSERT_FALSE(d["enabled"].as<bool>());
   JsonDocument s;
   deserializeJson(s, bluetoothSummaryJson(e.bt.status()));
-  TEST_ASSERT_TRUE(s["held"].as<bool>());
-  TEST_ASSERT_FALSE(s.as<JsonObject>().containsKey("heldRemainingMs"));
+  TEST_ASSERT_EQUAL_STRING("off", s["state"].as<const char*>());
+  TEST_ASSERT_EQUAL_UINT32(1, s["peerCount"].as<uint32_t>());
 }
 
 void test_the_first_pairing_needs_a_window_like_every_other() {
@@ -561,22 +614,19 @@ void test_pairing_stays_closed_when_every_bond_disappears() {
   TEST_ASSERT_FALSE(e.link.pairingOpen);
 }
 
-void test_the_computer_disconnecting_is_treated_exactly_like_the_dashboard_disconnect() {
+void test_the_computer_disconnecting_switches_bluetooth_off_like_the_dashboard_does() {
   Env e({kA});
   e.link.connected = {kA};
   e.link.peerRequestedDisconnect = true;
   e.link.connected.clear();
   e.bt.tick();
-  BluetoothStatus s = e.bt.status();
-  TEST_ASSERT_TRUE(s.held);
-  TEST_ASSERT_FALSE(e.link.connectable);   // otherwise the computer reconnects at once
-  e.clock.now = 48u * 3600u * 1000u;       // no timer: same as a dashboard Disconnect
+  TEST_ASSERT_TRUE(BluetoothState::Off == e.bt.status().state);
+  TEST_ASSERT_FALSE(e.link.enabled);   // otherwise the computer reconnects at once
+  e.clock.now = 48u * 3600u * 1000u;   // no timer
   e.bt.tick();
-  TEST_ASSERT_TRUE(e.bt.status().held);
-  TEST_ASSERT_FALSE(e.link.connectable);
-  e.bt.reconnect();
-  TEST_ASSERT_FALSE(e.bt.status().held);
-  TEST_ASSERT_TRUE(e.link.connectable);
+  TEST_ASSERT_FALSE(e.link.enabled);
+  e.bt.enable();
+  TEST_ASSERT_TRUE(e.link.enabled);
 }
 
 void test_a_disconnect_during_a_pairing_window_is_not_a_request_to_hide() {
@@ -584,15 +634,15 @@ void test_a_disconnect_during_a_pairing_window_is_not_a_request_to_hide() {
   e.bt.startPairing(kDefaultPairingSec);
   e.link.peerRequestedDisconnect = true;   // the handshake can end links on its own
   e.bt.tick();
-  TEST_ASSERT_FALSE(e.bt.status().held);
-  TEST_ASSERT_TRUE(e.link.connectable);
+  TEST_ASSERT_TRUE(BluetoothState::Discovery == e.bt.status().state);
+  TEST_ASSERT_TRUE(e.link.enabled);
 }
 
 void test_a_disconnect_with_nothing_paired_is_not_a_request_to_hide() {
   Env e;
   e.link.peerRequestedDisconnect = true;
   e.bt.tick();
-  TEST_ASSERT_FALSE(e.bt.status().held);
+  TEST_ASSERT_TRUE(BluetoothState::Waiting == e.bt.status().state);
 }
 
 struct SteppingClock : FakeClock {  // every read of the clock moves it, like real time passing between two reads
@@ -637,8 +687,13 @@ int main() {
   RUN_TEST(test_pairing_window_survives_clock_wraparound);
   RUN_TEST(test_pairing_seconds_are_bounded);
   RUN_TEST(test_stop_pairing_closes_the_window);
-  RUN_TEST(test_disconnect_holds_the_link_until_reconnect);
-  RUN_TEST(test_starting_pairing_releases_a_hold);
+  RUN_TEST(test_disable_switches_bluetooth_off_until_enabled);
+  RUN_TEST(test_state_is_off_waiting_discovery_or_connected);
+  RUN_TEST(test_discovery_length_is_configurable_and_persists);
+  RUN_TEST(test_off_is_remembered_across_a_restart);
+  RUN_TEST(test_settings_report_a_full_storage);
+  RUN_TEST(test_the_computer_disconnecting_can_be_left_alone);
+  RUN_TEST(test_starting_pairing_switches_bluetooth_on);
   RUN_TEST(test_peers_get_stable_default_labels_and_can_be_renamed);
   RUN_TEST(test_rename_validation);
   RUN_TEST(test_forget_one_and_all);
@@ -649,7 +704,7 @@ int main() {
   RUN_TEST(test_status_carries_a_bluetooth_summary);
   RUN_TEST(test_change_token);
   RUN_TEST(test_device_info_in_status);
-  RUN_TEST(test_disconnect_closes_an_open_pairing_window);
+  RUN_TEST(test_disable_closes_an_open_pairing_window);
   RUN_TEST(test_rename_reports_a_full_storage);
   RUN_TEST(test_reading_the_status_never_writes_storage);
   RUN_TEST(test_default_names_are_persisted_by_tick_not_by_status);
@@ -662,11 +717,10 @@ int main() {
   RUN_TEST(test_status_alone_also_notices_the_new_pairing);
   RUN_TEST(test_window_stays_open_when_a_known_computer_reconnects);
   RUN_TEST(test_stopping_the_window_by_hand_still_works);
-  RUN_TEST(test_disconnect_from_the_dashboard_stays_until_reconnect);
-  RUN_TEST(test_held_is_in_the_json_without_a_countdown);
+  RUN_TEST(test_state_is_in_the_json_without_any_countdown_for_off);
   RUN_TEST(test_the_first_pairing_needs_a_window_like_every_other);
   RUN_TEST(test_pairing_stays_closed_when_every_bond_disappears);
-  RUN_TEST(test_the_computer_disconnecting_is_treated_exactly_like_the_dashboard_disconnect);
+  RUN_TEST(test_the_computer_disconnecting_switches_bluetooth_off_like_the_dashboard_does);
   RUN_TEST(test_a_disconnect_during_a_pairing_window_is_not_a_request_to_hide);
   RUN_TEST(test_a_disconnect_with_nothing_paired_is_not_a_request_to_hide);
   RUN_TEST(test_remaining_time_never_underflows_when_the_deadline_passes_between_two_clock_reads);

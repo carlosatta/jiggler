@@ -28,7 +28,7 @@ class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::Bl
   void disconnectAll() override;
   bool forgetBond(const std::string& address) override;
   void forgetAllBonds() override;
-  void setConnectable(bool on) override;
+  void setEnabled(bool on) override;
   void setPairingOpen(bool open) override;
   // While a firmware upload runs the Bluetooth radio stays quiet (no advertising, no link): it shares the antenna
   // with WiFi, and its packets made the upload connection drop.
@@ -48,6 +48,7 @@ class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::Bl
 
  private:
   void refreshConnected();
+  void refreshAdvertising();  // (re)builds the advertisement for the current state and starts it
   void sendMouse(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel);
   void sendKeyboard(uint8_t modifiers, uint8_t usage);
 
@@ -58,7 +59,8 @@ class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::Bl
   };
 
   std::atomic<bool> connected_{false};
-  std::atomic<bool> connectable_{true};
+  std::atomic<bool> enabled_{true};
+  uint16_t appearance_ = 0;
   std::atomic<bool> pairingOpen_{false};
   std::atomic<bool> peerDisconnect_{false};
   std::atomic<bool> quiet_{false};

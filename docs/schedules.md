@@ -14,35 +14,44 @@ The same over the API is `POST /api/start` with `{"minutes": 30}`, and over MCP 
 
 ## Weekly schedules
 
-In the **Schedule** section, a schedule is a window: **on these days, from this time, for this long**. While a window is open the jiggler runs; when it ends the jiggler stops.
+In the **Schedule** section you add up to 8 entries. Each has a name, an on/off switch, the days (Mon to Sun) and one of two types.
 
 <p align="center">
-  <img src="images/schedule.png" alt="Weekly schedules and the timezone" width="260">
+  <img src="images/schedule.png" alt="A window and an action, each with a random shift" width="260">
   <img src="images/schedule-limited.png" alt="A schedule limited to 4 runs, 3 left" width="260">
   <img src="images/desktop-schedule-dark.png" alt="The Schedule section on a desktop, dark theme" width="440">
 </p>
 
-Up to 8 schedules, each with a name, an on/off switch, days (Mon to Sun), a **start time** and an **end time**. An end earlier than the start means the next day (Friday 22:00 to 06:00 ends Saturday morning and belongs to Friday), and the same time means a full 24 hours. Under the hood the window is stored as a start plus a length in minutes (`durationMin`, 1 to 1440).
+**Window: run between two times.** On these days, from a start time to an end time. While a window is open the jiggler runs; it starts when the window opens and stops when it closes. An end earlier than the start means the next day (Friday 22:00 to 06:00 ends Saturday morning and belongs to Friday), and the same time means a full 24 hours. Stored as a start plus `durationMin` (1 to 1440).
 
-**How many times.** *Repeat every week* is **Forever** (the default) or **Limited**: set a number of runs (1 to 999). Each time a window opens counts as one run, and after the last run ends the schedule turns itself off; the dashboard shows "2 of 3 runs left" and, when done, "Finished". Switching it back on starts a fresh run. The count survives a restart. Pick the **timezone** at the top of the section (the list is built in; daylight saving is handled). Several schedules can overlap; the jiggler runs while any enabled window is open.
+**Action: do one thing at a time.** On these days at one time, once: **start**, **stop**, **pause**, **resume**, **turn Bluetooth on**, **turn Bluetooth off** or **open Discovery**. Use it for things like "pause at 12:30 on weekdays" or "turn Bluetooth off at night". An action that is missed (the board was off, or the clock was set past it) is not replayed.
+
+**Random shift.** *Random shift (± minutes)* moves every time of the entry by a random amount up to that many minutes earlier or later, chosen afresh each day: "starts at 09:00 give or take 10 minutes". A window's start and end move independently (the window is never shorter than a minute). The same day always gives the same shift, so a restart in the middle of the day agrees with what it did before. 0 to 120 minutes.
+
+**How many times.** *Repeat every week* is **Forever** (the default) or **Limited**: set a number of runs (1 to 999). Each time a window opens, or an action fires, counts as one run, and after the last one the schedule turns itself off (a window at its end); the dashboard shows "2 of 3 runs left" and, when done, "Finished". Switching it back on starts a fresh run. The count survives a restart.
+
+The times are read in the device's **timezone**, which you pick in **System → Time** (daylight saving is handled). Several entries can overlap; the jiggler runs while any enabled window is open.
 
 ```json
-{ "timezone": "Europe/London",
-  "schedules": [
-    { "id": "workdays", "enabled": true, "days": ["mon","tue","wed","thu","fri"], "start": "09:00", "durationMin": 540 },
-    { "id": "night-job", "enabled": true, "days": ["fri"], "start": "22:00", "durationMin": 480, "times": 4, "remaining": 3 } ] }
+{ "schedules": [
+    { "id": "workdays", "enabled": true, "kind": "window", "days": ["mon","tue","wed","thu","fri"],
+      "start": "09:00", "durationMin": 540, "jitterMin": 10 },
+    { "id": "lunch", "enabled": true, "kind": "action", "action": "pause", "days": ["mon","tue","wed","thu","fri"],
+      "start": "12:30", "jitterMin": 5 },
+    { "id": "night-job", "enabled": true, "kind": "window", "days": ["fri"], "start": "22:00", "durationMin": 480,
+      "times": 4, "remaining": 3 } ] }
 ```
 
-(`id` is the "Name" field in the dashboard: 1 to 24 characters of `a-z 0-9 _ -`. `times` is `null` or absent for "forever"; `remaining` is read back so progress is kept, and omitted means a fresh run.) The API is `GET/PUT /api/schedules` and the MCP tools are `get_schedules` and `set_schedules`.
+(`id` is the "Name" field in the dashboard: 1 to 24 characters of `a-z 0-9 _ -`. `kind` is `window` (the default) or `action`; an action has `action` (`start`, `stop`, `pause`, `resume`, `bluetooth_on`, `bluetooth_off`, `discovery`) instead of `durationMin`. `jitterMin` is 0 when absent. `times` is `null` or absent for "forever"; `remaining` is read back so progress is kept, and omitted means a fresh run.) The API is `GET/PUT /api/schedules` and the MCP tools are `get_schedules` and `set_schedules`.
 
 ### How it behaves
 
-- **Edges, not enforcement.** A schedule starts the jiggler when a window opens and stops it when the last open window closes. If you stop it by hand in the middle of a window it stays stopped until the next window opens; if you start it by hand outside a window it keeps running until you stop it.
-- **After a restart** the schedule is in charge: once the device knows the time, the jiggler matches whether a window is open. With no enabled schedule the jiggler boots running if a computer is paired, as before.
+- **Edges, not enforcement.** A window starts the jiggler when it opens and stops it when the last open window closes. If you stop it by hand in the middle of a window it stays stopped until the next window opens; if you start it by hand outside a window it keeps running until you stop it.
+- **Saving a window that is open right now starts the jiggler.** A window you add or change is looked at afresh when you save: if the time is inside it, the jiggler starts at once (and a limited schedule counts that as a run). Entries you did not touch keep what they were doing, so a jiggler you stopped by hand inside an untouched window stays stopped. Saving never stops a running jiggler that is outside every window.
+- **After a restart** the schedule is in charge: once the device knows the time, the jiggler matches whether a window is open. Actions are not replayed.
 - **A run is counted when its window opens**, even if you stop the jiggler by hand during it. A window already open when the board restarts is not counted twice.
-- **Saving a schedule never starts or stops anything** by itself, including when the device has no clock yet (once it has one, only a window opening or closing acts).
-- **Pause inside a window.** Pausing (from Status, the API or MCP) holds the jiggler for a while; the schedule keeps its timetable. A pause lasts until it ends or until the next window opens (it then resumes) or closes (it then stops).
+- **It needs a computer paired.** The jiggler cannot run with nothing paired. A window that opens before the first pairing starts the jiggler once a computer pairs; meanwhile **Status** says "A schedule window is open, but no computer is paired yet" (`blocked: "no_computer_paired"` in the `schedule` object of the status).
+- **Pause inside a window.** Pausing (from Status, the API, MCP or a schedule action) holds the jiggler for a while; the schedule keeps its timetable. A pause lasts until it ends or until the next window opens (it then resumes) or closes (it then stops).
 - **A window opening takes over a timed run.** If you started "run for 30 minutes" and a window opens meanwhile, the time limit is dropped and the jiggler runs until the window closes.
-- **It needs a computer paired.** The jiggler cannot run with nothing paired; a window that opens before the first pairing starts the jiggler once a computer pairs.
-- **It needs the time.** The device gets it from the internet (SNTP), so it needs your home WiFi with internet access; in own-network mode there is no clock and schedules do nothing. The dashboard says "Not synced" until the clock is known, and the status reports `timeSynced`.
+- **It needs the time.** The device gets it from the internet (NTP) or you set it by hand in **System → Time** ("Set the time from this browser"); it has no battery-backed clock, so a board with no internet loses a hand-set time at every restart. The dashboard says "Not set" until the clock is known.
 - **Daylight-saving changes.** Windows are matched on the local clock time, so a window that spans the hour that repeats (autumn) or is skipped (spring) can run twice or not at all that one night.

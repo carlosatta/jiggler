@@ -1,6 +1,7 @@
 #include "schedule.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 
 namespace jig {
@@ -9,33 +10,7 @@ namespace {
 
 constexpr const char* kBlobKey = "schedules";
 constexpr const char* kDayNames[7] = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"};
-
-struct Zone {
-  const char* name;
-  const char* posix;
-};
-
-const Zone kZones[] = {
-    {"UTC", "UTC0"},
-    {"Europe/London", "GMT0BST,M3.5.0/1,M10.5.0"},
-    {"Europe/Lisbon", "WET0WEST,M3.5.0/1,M10.5.0"},
-    {"Europe/Rome", "CET-1CEST,M3.5.0,M10.5.0/3"},
-    {"Europe/Paris", "CET-1CEST,M3.5.0,M10.5.0/3"},
-    {"Europe/Berlin", "CET-1CEST,M3.5.0,M10.5.0/3"},
-    {"Europe/Madrid", "CET-1CEST,M3.5.0,M10.5.0/3"},
-    {"Europe/Athens", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
-    {"Europe/Moscow", "MSK-3"},
-    {"Asia/Dubai", "<+04>-4"},
-    {"Asia/Kolkata", "IST-5:30"},
-    {"Asia/Singapore", "<+08>-8"},
-    {"Asia/Tokyo", "JST-9"},
-    {"Australia/Sydney", "AEST-10AEDT,M10.1.0,M4.1.0/3"},
-    {"America/New_York", "EST5EDT,M3.2.0,M11.1.0"},
-    {"America/Chicago", "CST6CDT,M3.2.0,M11.1.0"},
-    {"America/Denver", "MST7MDT,M3.2.0,M11.1.0"},
-    {"America/Los_Angeles", "PST8PDT,M3.2.0,M11.1.0"},
-    {"America/Sao_Paulo", "<-03>3"},
-};
+constexpr const char* kActionNames[] = {"start", "stop", "pause", "resume", "bluetooth_on", "bluetooth_off", "discovery"};
 
 bool validId(const std::string& id) {
   if (id.empty() || id.size() > 24) return false;
@@ -69,37 +44,62 @@ CmdResult fail(const char* error, const std::string& field, const std::string& m
 
 }  // namespace
 
-const std::vector<std::string>& timezoneNames() {
-  static const std::vector<std::string> names = [] {
-    std::vector<std::string> v;
-    for (const Zone& z : kZones) v.push_back(z.name);
-    return v;
-  }();
-  return names;
-}
 
-std::optional<std::string> posixTimezone(const std::string& name) {
-  for (const Zone& z : kZones)
-    if (name == z.name) return std::string(z.posix);
+const char* scheduleActionName(ScheduleAction action) { return kActionNames[static_cast<int>(action)]; }
+
+std::optional<ScheduleAction> parseScheduleAction(const std::string& name) {
+  for (size_t i = 0; i < sizeof(kActionNames) / sizeof(kActionNames[0]); ++i)
+    if (name == kActionNames[i]) return static_cast<ScheduleAction>(i);
   return std::nullopt;
 }
 
-bool scheduleWindowContains(const Schedule& s, const LocalTime& now) {
-  const int minute = now.minuteOfDay;
-  if (s.days & (1 << now.weekday)) {
-    const int sinceStart = minute - s.startMinute;
-    if (sinceStart >= 0 && sinceStart < s.durationMin) return true;
+int scheduleJitterOffset(const std::string& id, int64_t day, int slot, int jitterMin) {
+  if (jitterMin <= 0) return 0;
+  uint32_t h = 2166136261u;
+  for (unsigned char c : id) {
+    h ^= c;
+    h *= 16777619u;
   }
-  const int yesterday = (now.weekday + 6) % 7;  // a window that started yesterday and runs past midnight
-  if (s.days & (1 << yesterday)) {
-    const int sinceStart = minute + 1440 - s.startMinute;
-    if (sinceStart >= 0 && sinceStart < s.durationMin) return true;
+  h ^= static_cast<uint32_t>(day);
+  h *= 16777619u;
+  h ^= static_cast<uint32_t>(slot) + 0x9e3779b9u;
+  h *= 16777619u;
+  h ^= h >> 15;
+  h *= 0x2c1b3c6du;
+  h ^= h >> 12;
+  return static_cast<int>(h % static_cast<uint32_t>(2 * jitterMin + 1)) - jitterMin;
+}
+
+bool scheduleWindowContains(const Schedule& s, const LocalTime& now) {
+  if (s.kind != ScheduleKind::Window) return false;
+  // Anchor days: two days back (a 24 h window shifted late), yesterday, today and tomorrow (a start shifted
+  // to before midnight). `rel` is the minute counted from that anchor day's midnight.
+  for (int k = -2; k <= 1; ++k) {
+    const int wd = ((now.weekday + k) % 7 + 7) % 7;
+    if (!(s.days & (1 << wd))) continue;
+    const int64_t anchor = static_cast<int64_t>(now.day) + k;
+    const int start = s.startMinute + scheduleJitterOffset(s.id, anchor, 1, s.jitterMin);
+    int end = s.startMinute + s.durationMin + scheduleJitterOffset(s.id, anchor, 2, s.jitterMin);
+    if (end <= start) end = start + 1;
+    const int rel = now.minuteOfDay - k * 1440;
+    if (rel >= start && rel < end) return true;
+  }
+  return false;
+}
+
+bool scheduleActionDue(const Schedule& s, const LocalTime& now, int64_t fromAbs, int64_t toAbs) {
+  if (s.kind != ScheduleKind::Action) return false;
+  for (int k = -1; k <= 1; ++k) {
+    const int wd = ((now.weekday + k) % 7 + 7) % 7;
+    if (!(s.days & (1 << wd))) continue;
+    const int64_t anchor = static_cast<int64_t>(now.day) + k;
+    const int64_t at = anchor * 1440 + s.startMinute + scheduleJitterOffset(s.id, anchor, 0, s.jitterMin);
+    if (at > fromAbs && at <= toAbs) return true;
   }
   return false;
 }
 
 std::optional<ValidationError> validateSchedules(const ScheduleSettings& settings) {
-  if (!posixTimezone(settings.timezone)) return ValidationError{"timezone", "unknown timezone"};
   if (settings.schedules.size() > kMaxSchedules) return ValidationError{"schedules", "at most 8 schedules"};
   std::vector<std::string> seen;
   for (size_t i = 0; i < settings.schedules.size(); ++i) {
@@ -109,7 +109,9 @@ std::optional<ValidationError> validateSchedules(const ScheduleSettings& setting
     seen.push_back(s.id);
     if (s.days == 0 || (s.days & 0x80)) return ValidationError{at(i, "days"), "pick at least one day"};
     if (s.startMinute >= 1440) return ValidationError{at(i, "start"), "must be a time between 00:00 and 23:59"};
-    if (s.durationMin < 1 || s.durationMin > 1440) return ValidationError{at(i, "durationMin"), "must be between 1 and 1440 minutes"};
+    if (s.kind == ScheduleKind::Window && (s.durationMin < 1 || s.durationMin > 1440))
+      return ValidationError{at(i, "durationMin"), "must be between 1 and 1440 minutes"};
+    if (s.jitterMin > kMaxJitterMin) return ValidationError{at(i, "jitterMin"), "must be between 0 and 120 minutes"};
     if (s.times > kMaxRepeat) return ValidationError{at(i, "times"), "must be between 1 and 999, or empty for no limit"};
     if (s.times > 0 && s.remaining > s.times) return ValidationError{at(i, "remaining"), "cannot be more than times"};
   }
@@ -118,17 +120,19 @@ std::optional<ValidationError> validateSchedules(const ScheduleSettings& setting
 
 std::string schedulesToJson(const ScheduleSettings& settings) {
   JsonDocument doc;
-  doc["timezone"] = settings.timezone;
   JsonArray arr = doc["schedules"].to<JsonArray>();
   for (const Schedule& s : settings.schedules) {
     JsonObject o = arr.add<JsonObject>();
     o["id"] = s.id;
     o["enabled"] = s.enabled;
+    o["kind"] = s.kind == ScheduleKind::Window ? "window" : "action";
     JsonArray days = o["days"].to<JsonArray>();
     for (int d = 0; d < 7; ++d)
       if (s.days & (1 << d)) days.add(kDayNames[d]);
     o["start"] = hhmm(s.startMinute);
-    o["durationMin"] = s.durationMin;
+    if (s.kind == ScheduleKind::Window) o["durationMin"] = s.durationMin;
+    else o["action"] = scheduleActionName(s.action);
+    o["jitterMin"] = s.jitterMin;
     if (s.times) {
       o["times"] = s.times;
       o["remaining"] = s.remaining;
@@ -137,8 +141,8 @@ std::string schedulesToJson(const ScheduleSettings& settings) {
       o["remaining"] = nullptr;
     }
   }
-  JsonArray zones = doc["timezones"].to<JsonArray>();
-  for (const std::string& z : timezoneNames()) zones.add(z);
+  JsonArray actions = doc["actions"].to<JsonArray>();
+  for (const char* a : kActionNames) actions.add(a);
   std::string out;
   serializeJson(doc, out);
   return out;
@@ -156,11 +160,8 @@ bool parseSchedules(const std::string& body, ScheduleSettings& out, ParseError& 
   for (JsonPairConst kv : doc.as<JsonObjectConst>()) {
     const std::string key = kv.key().c_str();
     JsonVariantConst v = kv.value();
-    if (key == "timezones") {
-      continue;  // read-only list that GET adds; ignoring it lets a GET body be sent back unchanged
-    } else if (key == "timezone") {
-      if (!v.is<const char*>()) return parseFail(err, "timezone", "must be a string");
-      parsed.timezone = v.as<std::string>();
+    if (key == "actions" || key == "timezone" || key == "timezones") {
+      continue;  // read-only list that GET adds, and the timezone older versions kept here (it lives in /api/time now)
     } else if (key == "schedules") {
       if (!v.is<JsonArrayConst>()) return parseFail(err, "schedules", "must be an array");
       parsed.schedules.clear();
@@ -168,7 +169,7 @@ bool parseSchedules(const std::string& body, ScheduleSettings& out, ParseError& 
       for (JsonVariantConst item : v.as<JsonArrayConst>()) {
         if (!item.is<JsonObjectConst>()) return parseFail(err, "schedules[" + std::to_string(i) + "]", "must be an object");
         Schedule s;
-        bool hasId = false, hasDays = false, hasStart = false, hasDur = false, hasRemaining = false;
+        bool hasId = false, hasDays = false, hasStart = false, hasDur = false, hasRemaining = false, hasAction = false;
         for (JsonPairConst f : item.as<JsonObjectConst>()) {
           const std::string name = f.key().c_str();
           JsonVariantConst fv = f.value();
@@ -180,6 +181,16 @@ bool parseSchedules(const std::string& body, ScheduleSettings& out, ParseError& 
           } else if (name == "enabled") {
             if (!fv.is<bool>()) return parseFail(err, field, "must be true or false");
             s.enabled = fv.as<bool>();
+          } else if (name == "kind") {
+            const std::string k = fv.is<const char*>() ? fv.as<std::string>() : std::string();
+            if (k == "window") s.kind = ScheduleKind::Window;
+            else if (k == "action") s.kind = ScheduleKind::Action;
+            else return parseFail(err, field, "must be window or action");
+          } else if (name == "action") {
+            const auto a = fv.is<const char*>() ? parseScheduleAction(fv.as<std::string>()) : std::nullopt;
+            if (!a) return parseFail(err, field, "must be start, stop, pause, resume, bluetooth_on, bluetooth_off or discovery");
+            s.action = *a;
+            hasAction = true;
           } else if (name == "days") {
             if (!fv.is<JsonArrayConst>()) return parseFail(err, field, "must be an array of day names");
             s.days = 0;
@@ -207,6 +218,10 @@ bool parseSchedules(const std::string& body, ScheduleSettings& out, ParseError& 
               return parseFail(err, field, "must be an integer between 1 and 1440");
             s.durationMin = static_cast<uint16_t>(fv.as<int64_t>());
             hasDur = true;
+          } else if (name == "jitterMin") {
+            if (!fv.is<int64_t>() || fv.as<int64_t>() < 0 || fv.as<int64_t>() > kMaxJitterMin)
+              return parseFail(err, field, "must be a whole number of minutes from 0 to 120");
+            s.jitterMin = static_cast<uint16_t>(fv.as<int64_t>());
           } else if (name == "times" || name == "remaining") {
             if (fv.isNull()) continue;
             const bool ok = fv.is<int64_t>() && fv.as<int64_t>() >= (name == "times" ? 1 : 0) && fv.as<int64_t>() <= kMaxRepeat;
@@ -221,7 +236,8 @@ bool parseSchedules(const std::string& body, ScheduleSettings& out, ParseError& 
         if (!hasId) return parseFail(err, at(i, "id"), "is required");
         if (!hasDays) return parseFail(err, at(i, "days"), "is required");
         if (!hasStart) return parseFail(err, at(i, "start"), "is required");
-        if (!hasDur) return parseFail(err, at(i, "durationMin"), "is required");
+        if (s.kind == ScheduleKind::Window && !hasDur) return parseFail(err, at(i, "durationMin"), "is required for a window");
+        if (s.kind == ScheduleKind::Action && !hasAction) return parseFail(err, at(i, "action"), "is required for an action");
         parsed.schedules.push_back(s);
         ++i;
       }
@@ -235,24 +251,26 @@ bool parseSchedules(const std::string& body, ScheduleSettings& out, ParseError& 
 
 std::string scheduleStatusToJson(const ScheduleStatus& s) {
   JsonDocument doc;
-  doc["timeSynced"] = s.timeSynced;
-  if (s.timeSynced) {
-    doc["localTime"] = s.localTime;
-    doc["weekday"] = s.weekday;
-  } else {
-    doc["localTime"] = nullptr;
-    doc["weekday"] = nullptr;
-  }
   doc["active"] = s.active;
   doc["enabledCount"] = s.enabledCount;
-  doc["timezone"] = s.timezone;
+  if (s.blocked.empty()) doc["blocked"] = nullptr;
+  else doc["blocked"] = s.blocked;
   std::string out;
   serializeJson(doc, out);
   return out;
 }
 
-ScheduleEngine::ScheduleEngine(Platform& platform, Controller& controller, BlobStore& blobs)
-    : platform_(platform), controller_(controller), blobs_(blobs) {}
+namespace {
+
+bool sameSchedule(const Schedule& a, const Schedule& b) {
+  return a.id == b.id && a.enabled == b.enabled && a.kind == b.kind && a.days == b.days && a.startMinute == b.startMinute &&
+         a.durationMin == b.durationMin && a.action == b.action && a.jitterMin == b.jitterMin && a.times == b.times;
+}
+
+}  // namespace
+
+ScheduleEngine::ScheduleEngine(Platform& platform, Controller& controller, BlobStore& blobs, ClockStore& clock)
+    : platform_(platform), controller_(controller), blobs_(blobs), clock_(clock) {}
 
 void ScheduleEngine::begin() {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -267,6 +285,7 @@ void ScheduleEngine::begin() {
   wasOpen_ = false;
   startPending_ = false;
   unsaved_ = false;
+  lastAbs_.reset();
   open_.assign(settings_.schedules.size(), false);
 }
 
@@ -284,17 +303,19 @@ CmdResult ScheduleEngine::replace(const ScheduleSettings& requested) {
   }
   std::lock_guard<std::mutex> lock(mutex_);
   if (!blobs_.put(kBlobKey, schedulesToJson(next))) return fail("storage_error", "", "could not save the schedules (storage full?)");
+  // An entry the owner did not touch keeps what the engine knew about it; a new or edited one is looked at afresh,
+  // so a window that is open right now opens (and starts the jiggler) at the next tick.
+  open_.resize(settings_.schedules.size(), false);
+  std::vector<bool> carried(next.schedules.size(), false);
+  for (size_t i = 0; i < next.schedules.size(); ++i)
+    for (size_t j = 0; j < settings_.schedules.size(); ++j)
+      if (sameSchedule(next.schedules[i], settings_.schedules[j])) carried[i] = open_[j];
   settings_ = next;
   unsaved_ = false;
-  // Saving must not start or stop anything, or use up a repeat: remember what the clock says now so only later
-  // changes count. (Even with no clock yet: when it arrives, only a window opening or closing acts.)
-  const auto now = platform_.localTime(posixTimezone(settings_.timezone).value_or("UTC0"));
-  first_ = false;
-  open_.assign(settings_.schedules.size(), false);
-  if (now)
-    for (size_t i = 0; i < settings_.schedules.size(); ++i)
-      open_[i] = settings_.schedules[i].enabled && scheduleWindowContains(settings_.schedules[i], *now);
-  wasOpen_ = now ? anyWindowOpenLocked(*now) : false;
+  first_ = false;  // the owner has just looked at the schedules; from here only edges count
+  open_ = carried;
+  wasOpen_ = false;
+  for (size_t i = 0; i < open_.size(); ++i) wasOpen_ = wasOpen_ || (open_[i] && settings_.schedules[i].enabled);
   CmdResult r;
   r.ok = true;
   return r;
@@ -312,6 +333,18 @@ size_t ScheduleEngine::enabledCountLocked() const {
   return static_cast<size_t>(std::count_if(settings_.schedules.begin(), settings_.schedules.end(), [](const Schedule& s) { return s.enabled; }));
 }
 
+void ScheduleEngine::runLocked(ScheduleAction action) {
+  switch (action) {
+    case ScheduleAction::Start: controller_.start(); break;
+    case ScheduleAction::Stop: controller_.stop(); break;
+    case ScheduleAction::Pause: controller_.pause(); break;
+    case ScheduleAction::Resume: controller_.resume(); break;
+    case ScheduleAction::BluetoothOn: if (bluetooth_) bluetooth_->enableBluetooth(); break;
+    case ScheduleAction::BluetoothOff: if (bluetooth_) bluetooth_->disableBluetooth(); break;
+    case ScheduleAction::Discovery: if (bluetooth_) bluetooth_->openDiscovery(); break;
+  }
+}
+
 void ScheduleEngine::tick() {
   std::lock_guard<std::mutex> lock(mutex_);
   open_.resize(settings_.schedules.size(), false);
@@ -319,17 +352,44 @@ void ScheduleEngine::tick() {
   if (enabledCountLocked() == 0) {
     first_ = true;  // the next schedule that gets enabled starts from a clean look at the clock
     wasOpen_ = false;
+    startPending_ = false;
     open_.assign(open_.size(), false);
+    lastAbs_.reset();
     return;
   }
-  const auto now = platform_.localTime(posixTimezone(settings_.timezone).value_or("UTC0"));
-  if (!now) return;
+  const auto now = platform_.localTime(clock_.posixTz());
+  if (!now) {
+    lastAbs_.reset();
+    return;
+  }
+  const int64_t absNow = static_cast<int64_t>(now->day) * 1440 + now->minuteOfDay;
+  // Actions fire when their minute arrives. After a long gap (the clock was set, or the board was busy) nothing is
+  // replayed: five minutes is the most that counts as "just now".
+  const bool canFire = lastAbs_ && absNow > *lastAbs_ && absNow - *lastAbs_ <= 5;
 
+  std::vector<ScheduleAction> due;
   bool open = false, changed = false;
   for (size_t i = 0; i < settings_.schedules.size(); ++i) {
     Schedule& s = settings_.schedules[i];
     if (!s.enabled) {
       open_[i] = false;
+      continue;
+    }
+    if (s.kind == ScheduleKind::Action) {
+      open_[i] = false;
+      if (canFire && scheduleActionDue(s, *now, *lastAbs_, absNow)) {
+        if (s.times > 0) {
+          if (s.remaining == 0) {
+            s.enabled = false;
+            changed = true;
+            continue;
+          }
+          s.remaining--;
+          changed = true;
+          if (s.remaining == 0) s.enabled = false;  // that was the last one
+        }
+        due.push_back(s.action);
+      }
       continue;
     }
     const bool in = scheduleWindowContains(s, *now);
@@ -364,22 +424,19 @@ void ScheduleEngine::tick() {
   } else if (open && startPending_) {
     startPending_ = !controller_.start().ok;
   }
+  for (ScheduleAction a : due) runLocked(a);
   first_ = false;
   wasOpen_ = open;
+  lastAbs_ = absNow;
 }
 
 ScheduleStatus ScheduleEngine::status() const {
   std::lock_guard<std::mutex> lock(mutex_);
   ScheduleStatus s;
-  s.timezone = settings_.timezone;
   s.enabledCount = enabledCountLocked();
-  const auto now = platform_.localTime(posixTimezone(settings_.timezone).value_or("UTC0"));
-  if (now) {
-    s.timeSynced = true;
-    s.localTime = hhmm(now->minuteOfDay);
-    s.weekday = kDayNames[now->weekday % 7];
-    s.active = anyWindowOpenLocked(*now);
-  }
+  const auto now = platform_.localTime(clock_.posixTz());
+  if (now) s.active = anyWindowOpenLocked(*now);
+  if (s.active && startPending_) s.blocked = "no_computer_paired";
   return s;
 }
 

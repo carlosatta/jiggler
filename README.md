@@ -13,11 +13,11 @@ Nothing to install on the computer. It sees an ordinary Bluetooth mouse (a plain
 
 ## Why it is nice to live with
 
-- **Safe by default.** Pairing is *closed* until you open it, for 3 minutes, from the dashboard or with one tap on the board. A stranger in Bluetooth range cannot pair. Everything else sits behind a token.
+- **Safe by default.** Discovery (pairing) is *closed* until you open it, for a few minutes, from the dashboard or by holding the button on the board. While it is closed the device does not even show up in other computers' lists. A stranger in Bluetooth range cannot pair. Everything else sits behind a token.
 - **Guided first setup.** A new board walks you through it: connect, open pairing, pick the device on your computer. You are done in a minute.
-- **You decide when it runs.** Start it for 5, 10 or 30 minutes, until a time of day, or until you stop it. Or set weekly schedules ("Mon-Fri, 09:00 for 8 hours") and forget about it.
+- **You decide when it runs.** Start it for 5, 10 or 30 minutes, until a time of day, or until you stop it, or tap the button on the board. Or set weekly schedules: windows ("Mon-Fri, 09:00 to 17:30") and actions ("pause at 12:30"), with a random shift so the times are never the same.
 - **Always know what it is doing.** The dashboard shows which computer is connected and since when, when the next movement happens, and when a timed run ends.
-- **Disconnect without unplugging.** Drop the link and keep the device from connecting until you press Reconnect, rename computers, forget the ones you no longer use.
+- **Four clear Bluetooth states.** Off, waiting, Discovery, connected; switch Bluetooth off without unplugging, rename computers, forget the ones you no longer use.
 - **Works without internet.** The Bluetooth mouse never depends on WiFi. No WiFi at all? The board can create its own network.
 - **Talk to it.** A built-in [MCP](docs/mcp.md) server lets an assistant answer "is it running?", "keep it on for 30 minutes", or "run it Monday to Friday, 9 to 6".
 
@@ -50,7 +50,7 @@ pio device monitor                  # optional: watch the log at 115200 baud
 Then, in about a minute:
 
 1. **Join `Jiggler-Setup`** (a WiFi network the board opens by itself), pick your WiFi and choose a token. The board restarts.
-2. **Open `http://jiggler.local/`** and enter the token. The page guides you: press *Open pairing* (or tap the BOOT button once on the board).
+2. **Open `http://jiggler.local/`** and enter the token. The page guides you: press *Start Discovery* (or hold the BOOT button for 5 to 10 seconds and let go).
 3. **On the computer**, open the Bluetooth settings and choose *Bluetooth Mouse*.
 
 That is it: press **Start**. The full walkthrough, with screenshots and troubleshooting, is in [Getting started](docs/getting-started.md).
@@ -111,7 +111,7 @@ All logic lives in a hardware-free core that is tested on a laptop; the firmware
 |---|---|
 | [Getting started](docs/getting-started.md) | Flash, first setup, pairing, troubleshooting |
 | [Dashboard tour](docs/dashboard.md) | Every section of the page |
-| [Bluetooth](docs/bluetooth.md) | Pairing policy, disconnecting, which computer is which |
+| [Bluetooth](docs/bluetooth.md) | The four states, Discovery, turning it off, which computer is which |
 | [Schedules and timed runs](docs/schedules.md) | Run for a while, or on a weekly timetable |
 | [Appearance](docs/appearance.md) | How the device introduces itself to computers |
 | [Network and security](docs/network.md) | WiFi, own network, the token, the LED |

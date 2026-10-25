@@ -32,7 +32,7 @@ HttpResponse bluetoothRoute(ApiContext& ctx, const std::string& method, const st
     if (method == "DELETE") return reply(bt->stopPairing());
     if (method != "POST") return json(405, errorJson("method_not_allowed"));
     if (body.size() > kMaxSmallBodyBytes) return json(413, errorJson("payload_too_large"));
-    int64_t seconds = kDefaultPairingSec;
+    int64_t seconds = 0;  // 0 = the configured Discovery length
     if (!body.empty()) {
       JsonDocument doc;
       if (deserializeJson(doc, body) || !doc.is<JsonObject>()) return json(400, errorJson("bad_json", "", "body must be a JSON object"));
@@ -44,9 +44,30 @@ HttpResponse bluetoothRoute(ApiContext& ctx, const std::string& method, const st
     if (seconds < 0 || seconds > 1000000) seconds = 0;  // out of range: let the manager reject it
     return reply(bt->startPairing(static_cast<uint32_t>(seconds)));
   }
-  if (rest == "/disconnect" || rest == "/reconnect") {
+  if (rest == "/enable" || rest == "/disable") {
     if (method != "POST") return json(405, errorJson("method_not_allowed"));
-    return reply(rest == "/disconnect" ? bt->disconnect() : bt->reconnect());
+    return reply(rest == "/enable" ? bt->enable() : bt->disable());
+  }
+  if (rest == "/settings") {
+    if (method != "PUT") return json(405, errorJson("method_not_allowed"));
+    if (body.size() > kMaxSmallBodyBytes) return json(413, errorJson("payload_too_large"));
+    JsonDocument doc;
+    if (deserializeJson(doc, body) || !doc.is<JsonObject>()) return json(400, errorJson("bad_json", "", "body must be a JSON object"));
+    std::optional<uint32_t> seconds;
+    std::optional<bool> offWhen;
+    for (JsonPair kv : doc.as<JsonObject>()) {
+      const std::string key = kv.key().c_str();
+      if (key == "discoverySeconds") {
+        if (!kv.value().is<uint32_t>()) return json(400, errorJson("invalid_seconds", key, "must be a whole number of seconds"));
+        seconds = kv.value().as<uint32_t>();
+      } else if (key == "offWhenComputerDisconnects") {
+        if (!kv.value().is<bool>()) return json(400, errorJson("invalid_setting", key, "must be true or false"));
+        offWhen = kv.value().as<bool>();
+      } else if (key != "enabled" && key != "state") {  // read-only keys a GET body carries
+        return json(400, errorJson("unknown_field", key, "unknown field"));
+      }
+    }
+    return reply(bt->updateSettings(seconds, offWhen));
   }
   if (rest == "/peers") {
     if (method != "DELETE") return json(405, errorJson("method_not_allowed"));
@@ -93,6 +114,7 @@ HttpResponse statusWithExtras(ApiContext& ctx, HttpResponse base) {
   if (base.status != 200 || base.body.empty() || base.body.back() != '}') return base;
   std::string extra;
   if (ctx.bluetooth) extra += ",\"bluetooth\":" + bluetoothSummaryJson(ctx.bluetooth->status());
+  if (ctx.clock) extra += ",\"time\":" + clockStatusToJson(ctx.clock->status());
   if (ctx.schedules) extra += ",\"schedule\":" + scheduleStatusToJson(ctx.schedules->status());
   if (!ctx.info.version.empty()) {
     JsonDocument doc;
@@ -164,6 +186,56 @@ HttpResponse schedulesRoute(ApiContext& ctx, const std::string& method, const st
   return json(200, schedulesToJson(ctx.schedules->settings()));
 }
 
+HttpResponse timeRoute(ApiContext& ctx, const std::string& method, const std::string& path, const std::string& body) {
+  if (!ctx.clock) return json(404, errorJson("not_found"));
+  if (path == "/api/time/set") {
+    if (method != "POST") return json(405, errorJson("method_not_allowed"));
+    if (body.size() > kMaxSmallBodyBytes) return json(413, errorJson("payload_too_large"));
+    JsonDocument doc;
+    if (deserializeJson(doc, body) || !doc.is<JsonObject>()) return json(400, errorJson("bad_json", "", "body must be a JSON object"));
+    if (!doc["epoch"].is<int64_t>() || doc["epoch"].as<int64_t>() < 0 || doc["epoch"].as<int64_t>() > 0xFFFFFFFFLL)
+      return json(400, errorJson("invalid_time", "epoch", "must be a Unix time in seconds"));
+    CmdResult r = ctx.clock->setTime(static_cast<uint32_t>(doc["epoch"].as<int64_t>()));
+    if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
+    return json(200, clockToJson(ctx.clock->settings(), ctx.clock->status()));
+  }
+  if (path != "/api/time") return json(404, errorJson("not_found"));
+  if (method == "GET") return json(200, clockToJson(ctx.clock->settings(), ctx.clock->status()));
+  if (method != "PUT") return json(405, errorJson("method_not_allowed"));
+  if (body.size() > kMaxSmallBodyBytes) return json(413, errorJson("payload_too_large"));
+  ClockSettings settings = ctx.clock->settings();
+  ParseError err;
+  if (!parseClockSettings(body, settings, err)) return json(400, errorJson(err.code, err.field, err.message));
+  CmdResult r = ctx.clock->replace(settings);
+  if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
+  return json(200, clockToJson(ctx.clock->settings(), ctx.clock->status()));
+}
+
+HttpResponse buttonRoute(ApiContext& ctx, const std::string& method, const std::string& body) {
+  if (!ctx.button) return json(404, errorJson("not_found"));
+  if (method == "GET") return json(200, buttonToJson(ctx.button->gpio()));
+  if (method != "PUT") return json(405, errorJson("method_not_allowed"));
+  if (body.size() > kMaxSmallBodyBytes) return json(413, errorJson("payload_too_large"));
+  JsonDocument doc;
+  if (deserializeJson(doc, body) || !doc.is<JsonObject>()) return json(400, errorJson("bad_json", "", "body must be a JSON object"));
+  bool hasGpio = false;
+  int64_t gpio = 0;
+  for (JsonPair kv : doc.as<JsonObject>()) {
+    const std::string key = kv.key().c_str();
+    if (key == "gpio") {
+      if (!kv.value().is<int64_t>()) return json(400, errorJson("invalid_gpio", key, "must be a whole number"));
+      gpio = kv.value().as<int64_t>();
+      hasGpio = true;
+    } else if (key != "default" && key != "gpios") {  // read-only keys a GET body carries
+      return json(400, errorJson("unknown_field", key, "unknown field"));
+    }
+  }
+  if (!hasGpio) return json(400, errorJson("invalid_gpio", "gpio", "is required"));
+  CmdResult r = ctx.button->setGpio(static_cast<int>(gpio < -1 ? -1 : gpio > 1000 ? 1000 : gpio));
+  if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
+  return json(200, buttonToJson(ctx.button->gpio()));
+}
+
 HttpResponse scriptsRoute(ApiContext& ctx, const std::string& method, const std::string& path, const std::string& body) {
   static const std::string kPrefix = "/api/scripts";
   static const std::string kRunSuffix = "/run";
@@ -231,6 +303,8 @@ HttpResponse handleApiEx(ApiContext& ctx, const std::string& method, const std::
   if (path == "/api/appearance") return appearanceRoute(ctx, method, body);
   if (path == "/api/automations") return automationsRoute(ctx, method, body);
   if (path == "/api/schedules") return schedulesRoute(ctx, method, body);
+  if (path == "/api/time" || path == "/api/time/set") return timeRoute(ctx, method, path, body);
+  if (path == "/api/button") return buttonRoute(ctx, method, body);
   if (path == "/api/scripts" || path.rfind("/api/scripts/", 0) == 0) return scriptsRoute(ctx, method, path, body);
   if (path == "/api/restart") {
     if (!ctx.restart) return json(404, errorJson("not_found"));

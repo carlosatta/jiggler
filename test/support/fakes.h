@@ -32,6 +32,17 @@ struct FakeClock : Platform {
   bool paired = true;
   std::optional<LocalTime> local;           // what localTime() reports; nullopt = clock not synced
   mutable std::string lastTz;               // the POSIX TZ string the last localTime() call asked for
+  std::string ntp = "unset";                // what setNtpServer() was last given
+  bool canSetTime = true;
+  const char* source = "ntp";
+  const char* timeSource() const override { return unix ? source : "none"; }
+  void setNtpServer(const std::string& server) override { ntp = server; }
+  bool setUnixTime(uint32_t epoch) override {
+    if (!canSetTime) return false;
+    unix = epoch;
+    source = "manual";
+    return true;
+  }
   uint32_t nowMs() const override { return now; }
   uint32_t unixSeconds() const override { return unix; }
   bool mouseConnected() const override { return mouse; }

@@ -120,6 +120,8 @@ code{font:.875em ui-monospace,SFMono-Regular,Menlo,monospace}
 /* Schedules */
 #clockNote{margin-bottom:var(--s3)}
 .hint.lead{margin-top:0;margin-bottom:var(--s3)}
+ul.hint.plain{padding-left:1.2rem;list-style:disc}
+ul.hint.plain li{margin:.2rem 0}
 .sched{border:1px solid var(--line);border-radius:10px;padding:var(--s3);margin-bottom:var(--s3);background:var(--surface)}
 .sched-head{display:flex;justify-content:space-between;align-items:center;gap:var(--s3);margin-bottom:var(--s2)}
 .sched-sum{font-weight:650}

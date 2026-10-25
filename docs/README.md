@@ -4,7 +4,7 @@
 |---|---|
 | [Getting started](getting-started.md) | Flash the board, first setup, pairing, troubleshooting |
 | [Dashboard tour](dashboard.md) | Every section of the web page |
-| [Bluetooth](bluetooth.md) | Pairing policy, disconnecting, which computer is which |
+| [Bluetooth](bluetooth.md) | The four states, Discovery, turning it off, which computer is which |
 | [Schedules and timed runs](schedules.md) | Run for a while, or on a weekly timetable |
 | [Appearance](appearance.md) | How the device introduces itself to computers |
 | [Network and security](network.md) | WiFi, own network, the token, the LED |
