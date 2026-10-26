@@ -204,7 +204,7 @@ void test_update_config_valid_saves_and_reschedules() {
 
 void test_last_move_unix_null_when_clock_unsynced() {
   Fixture f(10, 10);
-  f.clock.unix = 0;
+  f.clock.unixTime = 0;
   f.clock.now = 10000;
   TEST_ASSERT_TRUE(f.c.tick().has_value());
   f.clock.now = 12000;
@@ -213,7 +213,7 @@ void test_last_move_unix_null_when_clock_unsynced() {
   TEST_ASSERT_EQUAL_UINT32(2000, *s.lastMoveAgoMs);
   TEST_ASSERT_FALSE(s.lastMoveUnix.has_value());
 
-  f.clock.unix = 1760000000;
+  f.clock.unixTime = 1760000000;
   s = f.c.status();
   TEST_ASSERT_TRUE(s.lastMoveUnix.has_value());
   TEST_ASSERT_EQUAL_UINT32(1760000000 - 2, *s.lastMoveUnix);

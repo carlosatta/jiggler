@@ -222,7 +222,7 @@ void test_requests_are_refused_while_busy_or_without_a_clock() {
   TEST_ASSERT_EQUAL_STRING("busy", e.manager.requestCheck().error.c_str());
   TEST_ASSERT_EQUAL_STRING("busy", e.manager.requestInstall().error.c_str());
   e.manager.runPending(e.source, e.installer);
-  e.clock.unix = 0;
+  e.clock.unixTime = 0;
   TEST_ASSERT_EQUAL_STRING("no_clock", e.manager.requestCheck().error.c_str());
   TEST_ASSERT_EQUAL_STRING("no_clock", e.manager.requestInstall().error.c_str());
   TEST_ASSERT_FALSE(e.manager.runPending(e.source, e.installer));  // nothing pending: no work
@@ -341,11 +341,11 @@ void test_the_daily_check_waits_for_its_time_the_clock_and_the_wifi() {
   e.manager.runPending(e.source, e.installer);
   TEST_ASSERT_EQUAL_UINT32(0, e.source.urls.size());               // too early in the day
   e.clock.local = atDay(20003, 3, 0);
-  e.clock.unix = 0;                                                // no clock: secure connections would fail
+  e.clock.unixTime = 0;                                                // no clock: secure connections would fail
   e.manager.tick();
   e.manager.runPending(e.source, e.installer);
   TEST_ASSERT_EQUAL_UINT32(0, e.source.urls.size());
-  e.clock.unix = 1760000000;
+  e.clock.unixTime = 1760000000;
   e.clock.wifi = false;
   e.manager.tick();
   e.manager.runPending(e.source, e.installer);
@@ -547,7 +547,7 @@ void test_update_routes() {
   TEST_ASSERT_EQUAL_INT(405, handleApiEx(ctx, "GET", "/api/updates/check", "").status);
   TEST_ASSERT_EQUAL_INT(413, handleApiEx(ctx, "PUT", "/api/updates", std::string(kMaxSmallBodyBytes + 1, ' ')).status);
 
-  e.clock.unix = 0;
+  e.clock.unixTime = 0;
   TEST_ASSERT_EQUAL_INT(409, handleApiEx(ctx, "POST", "/api/updates/check", "").status);        // no clock
   e.blobs.failPuts = true;
   TEST_ASSERT_EQUAL_INT(507, handleApiEx(ctx, "PUT", "/api/updates", "{\"mode\":\"ignore\"}").status);

@@ -33,8 +33,8 @@ Status Controller::status() const {
   if (hasMoved_) {
     const uint32_t ago = platform_.nowMs() - lastMoveMs_;
     s.lastMoveAgoMs = ago;
-    const uint32_t unix = platform_.unixSeconds();
-    if (unix != 0 && unix >= ago / 1000) s.lastMoveUnix = unix - ago / 1000;
+    const uint32_t nowUnix = platform_.unixSeconds();
+    if (nowUnix != 0 && nowUnix >= ago / 1000) s.lastMoveUnix = nowUnix - ago / 1000;
   }
   s.config = config_;
   return s;

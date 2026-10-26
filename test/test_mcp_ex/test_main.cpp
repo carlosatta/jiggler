@@ -138,7 +138,7 @@ void test_time_tools() {
   TEST_ASSERT_EQUAL_STRING("Asia/Tokyo", toolText(set)["timezone"].as<const char*>());
   TEST_ASSERT_EQUAL_STRING("time.google.com", e.clock.ntp.c_str());
   TEST_ASSERT_FALSE(isError(e.tool("set_time", "{\"epoch\":1795000000}")));
-  TEST_ASSERT_EQUAL_UINT32(1795000000, e.clock.unix);
+  TEST_ASSERT_EQUAL_UINT32(1795000000, e.clock.unixTime);
   TEST_ASSERT_TRUE(isError(e.tool("set_time", "{\"epoch\":5}")));
   TEST_ASSERT_TRUE(isError(e.tool("set_time", "{\"epoch\":\"x\"}")));
   TEST_ASSERT_TRUE(isError(e.tool("set_time", "{\"timezone\":\"Mars/Olympus\"}")));

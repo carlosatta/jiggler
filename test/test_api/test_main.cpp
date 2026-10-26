@@ -64,7 +64,7 @@ void test_status_shape() {
 
 void test_status_after_move_with_unsynced_clock() {
   Api a;
-  a.clock.unix = 0;
+  a.clock.unixTime = 0;
   TEST_ASSERT_TRUE(a.c.moveNow().ok);
   TEST_ASSERT_TRUE(a.c.tick().has_value());
   a.clock.now = 1500;

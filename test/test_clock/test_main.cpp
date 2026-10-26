@@ -94,9 +94,9 @@ void test_ntp_server_validation() {
 
 void test_setting_the_time_by_hand() {
   Env e;
-  e.clock.unix = 0;
+  e.clock.unixTime = 0;
   TEST_ASSERT_TRUE(e.store.setTime(1790000000).ok);
-  TEST_ASSERT_EQUAL_UINT32(1790000000, e.clock.unix);
+  TEST_ASSERT_EQUAL_UINT32(1790000000, e.clock.unixTime);
   TEST_ASSERT_EQUAL_STRING("manual", e.clock.source);
   for (uint32_t bad : {0u, 1000u, 1699999999u, 4102444801u}) {
     CmdResult r = e.store.setTime(bad);
@@ -144,7 +144,7 @@ void test_time_routes() {
 
   HttpResponse set = handleApiEx(e.ctx, "POST", "/api/time/set", "{\"epoch\":1795000000}");
   TEST_ASSERT_EQUAL_INT(200, set.status);
-  TEST_ASSERT_EQUAL_UINT32(1795000000, e.clock.unix);
+  TEST_ASSERT_EQUAL_UINT32(1795000000, e.clock.unixTime);
   TEST_ASSERT_EQUAL_INT(400, handleApiEx(e.ctx, "POST", "/api/time/set", "{\"epoch\":5}").status);
   TEST_ASSERT_EQUAL_INT(400, handleApiEx(e.ctx, "POST", "/api/time/set", "{\"epoch\":\"x\"}").status);
   TEST_ASSERT_EQUAL_INT(400, handleApiEx(e.ctx, "POST", "/api/time/set", "{}").status);

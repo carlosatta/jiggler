@@ -26,7 +26,7 @@ class XorShiftRng : public Rng {
 
 struct FakeClock : Platform {
   uint32_t now = 0;
-  uint32_t unix = 1760000000;
+  uint32_t unixTime = 1760000000;
   bool mouse = true;
   bool wifi = true;
   bool paired = true;
@@ -35,16 +35,16 @@ struct FakeClock : Platform {
   std::string ntp = "unset";                // what setNtpServer() was last given
   bool canSetTime = true;
   const char* source = "ntp";
-  const char* timeSource() const override { return unix ? source : "none"; }
+  const char* timeSource() const override { return unixTime ? source : "none"; }
   void setNtpServer(const std::string& server) override { ntp = server; }
   bool setUnixTime(uint32_t epoch) override {
     if (!canSetTime) return false;
-    unix = epoch;
+    unixTime = epoch;
     source = "manual";
     return true;
   }
   uint32_t nowMs() const override { return now; }
-  uint32_t unixSeconds() const override { return unix; }
+  uint32_t unixSeconds() const override { return unixTime; }
   bool mouseConnected() const override { return mouse; }
   bool wifiConnected() const override { return wifi; }
   bool computerPaired() const override { return paired; }
