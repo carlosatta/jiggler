@@ -7,6 +7,8 @@
 #include <WiFiClientSecure.h>
 #include <mbedtls/sha256.h>
 
+#include <memory>
+
 #include "diag.h"
 
 extern const uint8_t rootca_crt_bundle_start[] asm("_binary_data_cert_x509_crt_bundle_bin_start");
@@ -84,51 +86,91 @@ class GithubSource : public jig::ReleaseSource {
   }
 };
 
+std::string hostOf(const std::string& url) {
+  const size_t start = url.find("://");
+  if (start == std::string::npos) return "?";
+  const size_t from = start + 3, end = url.find('/', from);
+  return url.substr(from, end == std::string::npos ? std::string::npos : end - from);
+}
+
+// One HTTPS connection at a time. A release asset is served through a redirect to another host, and holding two TLS
+// sessions at once would need more memory than the device has to spare.
+struct Connection {
+  std::unique_ptr<WiFiClientSecure> client;
+  std::unique_ptr<HTTPClient> http;
+  void close() {
+    if (http) http->end();
+    http.reset();  // the HTTP client refers to the connection, so it goes first
+    client.reset();
+  }
+  ~Connection() { close(); }
+};
+
+// GET `url`, following up to four redirects. "" = the answer (see `status`) is ready to be read.
+std::string getFollowing(Connection& c, std::string url, int& status) {
+  for (int hop = 0; hop < 5; ++hop) {
+    c.close();
+    c.client = std::make_unique<WiFiClientSecure>();
+    c.http = std::make_unique<HTTPClient>();
+    const std::string err = open(*c.http, *c.client, url, false);
+    if (!err.empty()) return err;
+    static const char* keys[] = {"Location"};
+    c.http->collectHeaders(keys, 1);
+    diagf("Update: GET from %s (heap %u, largest block %u)", hostOf(url).c_str(), static_cast<unsigned>(ESP.getFreeHeap()),
+          static_cast<unsigned>(ESP.getMaxAllocHeap()));
+    status = c.http->GET();
+    if (status != 301 && status != 302 && status != 303 && status != 307 && status != 308) return "";
+    const String location = c.http->header("Location");
+    if (location.isEmpty()) return "the server redirected without saying where";
+    url = location.c_str();
+    if (url.compare(0, 8, "https://") != 0) return "the server redirected to an address that is not secure";
+    diagf("Update: redirected (%d) to %s", status, hostOf(url).c_str());
+  }
+  return "too many redirects";
+}
+
 class HttpsInstaller : public jig::FirmwareInstaller {
  public:
   jig::InstallResult install(const jig::ReleaseInfo& release, const std::function<void(uint32_t, uint32_t)>& progress) override {
     jig::InstallResult out;
+    diagf("Update: installing %s (%u bytes), heap %u", release.version.c_str(), static_cast<unsigned>(release.binSize), static_cast<unsigned>(ESP.getFreeHeap()));
     std::string expected;
     if (!release.sha256Url.empty()) {
-      out.error = fetchChecksum(release.sha256Url, expected);
-      if (!out.error.empty()) return out;
+      const std::string err = fetchChecksum(release.sha256Url, expected);
+      if (!err.empty()) return fail(out, err);
+      diagf("Update: checksum file read");
     }
 
-    WiFiClientSecure client;
-    HTTPClient http;
-    out.error = open(http, client, release.binUrl, true);
-    if (!out.error.empty()) return out;
-    const int code = http.GET();
-    if (code != 200) {
-      out.error = failure(code);
-      http.end();
-      return out;
-    }
-    const int length = http.getSize();
-    if (length <= 0) {
-      out.error = "the server did not say how big the firmware is";
-      http.end();
-      return out;
-    }
+    Connection c;
+    int code = 0;
+    std::string err = getFollowing(c, release.binUrl, code);
+    if (!err.empty()) return fail(out, err);
+    if (code != 200) return fail(out, failure(code));
+    const int length = c.http->getSize();
+    diagf("Update: download answered 200, %d bytes", length);
+    if (length <= 0) return fail(out, "the server did not say how big the firmware is");
     if (Update.isRunning()) Update.abort();
-    if (!Update.begin(static_cast<size_t>(length))) {
-      out.error = std::string("the firmware does not fit: ") + Update.errorString();
-      http.end();
-      return out;
-    }
+    if (!Update.begin(static_cast<size_t>(length))) return fail(out, std::string("the firmware does not fit: ") + Update.errorString());
 
     mbedtls_sha256_context sha;
     mbedtls_sha256_init(&sha);
     mbedtls_sha256_starts_ret(&sha, 0);
-    WiFiClient* stream = http.getStreamPtr();
+    WiFiClient* stream = c.http->getStreamPtr();
     uint8_t buf[1024];
     size_t written = 0;
-    uint32_t lastData = millis(), lastLog = 0;
+    uint32_t lastData = millis(), lastLog = 0, started = millis();
+    std::string stop;
     while (written < static_cast<size_t>(length)) {
       const int avail = stream->available();
       if (avail <= 0) {
-        if (!stream->connected() && stream->available() <= 0) break;
-        if (millis() - lastData > kStallMs) break;
+        if (!stream->connected()) {
+          stop = "the connection closed";
+          break;
+        }
+        if (millis() - lastData > kStallMs) {
+          stop = "nothing arrived for " + std::to_string(kStallMs / 1000) + " seconds";
+          break;
+        }
         delay(5);
         continue;
       }
@@ -137,45 +179,46 @@ class HttpsInstaller : public jig::FirmwareInstaller {
       lastData = millis();
       mbedtls_sha256_update_ret(&sha, buf, static_cast<size_t>(n));
       if (Update.write(buf, static_cast<size_t>(n)) != static_cast<size_t>(n)) {
-        out.error = std::string("writing the firmware failed: ") + Update.errorString();
+        stop = std::string("writing the firmware failed: ") + Update.errorString();
         break;
       }
       written += static_cast<size_t>(n);
       progress(static_cast<uint32_t>(written), static_cast<uint32_t>(length));
-      if (written - lastLog >= 262144) {
+      if (written - lastLog >= 131072) {
         lastLog = written;
-        diagf("Update: %u of %d bytes", static_cast<unsigned>(written), length);
+        diagf("Update: %u of %d bytes (%u s, heap %u)", static_cast<unsigned>(written), length, static_cast<unsigned>((millis() - started) / 1000),
+              static_cast<unsigned>(ESP.getFreeHeap()));
       }
     }
-    http.end();
     uint8_t digest[32];
     mbedtls_sha256_finish_ret(&sha, digest);
     mbedtls_sha256_free(&sha);
+    diagf("Update: download ended after %u of %d bytes in %u s%s%s", static_cast<unsigned>(written), length, static_cast<unsigned>((millis() - started) / 1000),
+          stop.empty() ? "" : ": ", stop.c_str());
+    c.close();
 
-    if (!out.error.empty()) {
+    if (!stop.empty() || written != static_cast<size_t>(length)) {
       Update.abort();
-      return out;
-    }
-    if (written != static_cast<size_t>(length)) {
-      Update.abort();
-      out.error = "the download was cut short; nothing was installed";
-      return out;
+      return fail(out, stop.empty() ? "the download was cut short; nothing was installed" : stop + "; nothing was installed");
     }
     if (!expected.empty() && hex(digest) != expected) {
       Update.abort();
-      out.error = "the downloaded firmware does not match its checksum; nothing was installed";
-      return out;
+      return fail(out, "the downloaded firmware does not match its checksum; nothing was installed");
     }
-    if (!Update.end(true)) {
-      out.error = std::string("the firmware was refused: ") + Update.errorString();
-      return out;
-    }
-    diagf("Update: %u bytes written%s, restarting", static_cast<unsigned>(written), expected.empty() ? "" : ", checksum ok");
+    if (!Update.end(true)) return fail(out, std::string("the firmware was refused: ") + Update.errorString());
+    diagf("Update: image written%s, restarting", expected.empty() ? "" : " and checksum ok");
     out.ok = true;
     return out;
   }
 
  private:
+  static jig::InstallResult fail(jig::InstallResult& out, const std::string& message) {
+    diagf("Update failed: %s", message.c_str());
+    out.ok = false;
+    out.error = message;
+    return out;
+  }
+
   static std::string hex(const uint8_t* d) {
     static const char* digits = "0123456789abcdef";
     std::string s;
@@ -188,23 +231,19 @@ class HttpsInstaller : public jig::FirmwareInstaller {
 
   // The checksum file holds the hash first ("<64 hex>  jiggler-esp32.bin", as sha256sum prints it).
   static std::string fetchChecksum(const std::string& url, std::string& hashOut) {
-    WiFiClientSecure client;
-    HTTPClient http;
-    std::string err = open(http, client, url, true);
+    Connection c;
+    int code = 0;
+    const std::string err = getFollowing(c, url, code);
     if (!err.empty()) return err;
-    const int code = http.GET();
-    if (code != 200) {
-      http.end();
-      return "the checksum file could not be fetched: " + failure(code);
-    }
-    String body = http.getString();
-    http.end();
+    if (code != 200) return "the checksum file could not be fetched: " + failure(code);
+    String body = c.http->getString();
+    c.close();
     body.trim();
     if (body.length() < 64) return "the checksum file is not valid";
     hashOut = body.substring(0, 64).c_str();
-    for (char& c : hashOut) {
-      c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-      if (!isxdigit(static_cast<unsigned char>(c))) return "the checksum file is not valid";
+    for (char& ch : hashOut) {
+      ch = static_cast<char>(tolower(static_cast<unsigned char>(ch)));
+      if (!isxdigit(static_cast<unsigned char>(ch))) return "the checksum file is not valid";
     }
     return "";
   }

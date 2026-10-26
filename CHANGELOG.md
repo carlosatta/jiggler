@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.2
+
+- **The update download uses one secure connection at a time.** GitHub serves a release file through a redirect to another host; the first connection is now closed before the second opens, so the download needs less memory, and every step (which host, how many bytes, how long, why it stopped) is written to the event log (`GET /api/log`), including the reason when an install fails. A failure is also reported on the dashboard.
+- The repository moved to a new GitHub repository with the same address (`carlosatta/jiggler`) and a clean history; releases start again from v0.7.2.
+
 ## 0.7.1
 
 - **The daily look has a time.** In Firmware updates, **Look for updates at** (default 03:00, on the device's clock and timezone) says when the device checks for a new release and, in automatic mode, installs it, so it can be a quiet hour. `checkTime` in `GET/PUT /api/updates` and in `set_updates`. A board that was off at that time looks about ten minutes after it is back; a failed look is retried every hour.
