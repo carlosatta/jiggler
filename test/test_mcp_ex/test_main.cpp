@@ -39,6 +39,7 @@ struct Env {
   AutomationEngine automations{clock, rng, scripts, blobs};
   ClockStore clockStore{clock, blobs};
   ButtonStore buttonStore{blobs};
+  UpdateManager updates{clock, blobs, "0.6.0"};
   ScheduleEngine schedules{clock, controller, blobs, clockStore};
   struct Link : BleLink {
     std::vector<std::string> bonded{"aa:bb:cc:dd:ee:01"}, connected;
@@ -67,6 +68,8 @@ struct Env {
     buttonStore.begin();
     ctx.clock = &clockStore;
     ctx.button = &buttonStore;
+    updates.begin();
+    ctx.updates = &updates;
     ctx.bluetooth = &bluetooth;
     ctx.schedules = &schedules;
     ctx.network = &net;
@@ -117,7 +120,7 @@ void test_tools_list_includes_new_tools() {
                             "delete_script", "run_script", "get_automations", "set_automations", "press_key",
                             "type_text", "get_network", "set_network", "restart", "get_bluetooth", "start_pairing",
                             "disable_bluetooth", "enable_bluetooth", "set_bluetooth_settings", "forget_computer",
-                            "get_schedules", "set_schedules", "get_time", "set_time", "get_button", "set_button"};
+                            "get_schedules", "set_schedules", "get_time", "set_time", "get_button", "set_button", "get_updates", "set_updates", "check_updates", "install_update"};
   const size_t n = sizeof(expected) / sizeof(expected[0]);
   TEST_ASSERT_EQUAL_UINT32(n, tools.size());
   for (size_t i = 0; i < n; i++) {
@@ -151,6 +154,19 @@ void test_button_tools() {
   TEST_ASSERT_TRUE(isError(e.tool("set_button", "{}")));
   e.ctx.button = nullptr;
   TEST_ASSERT_TRUE(parse(e.tool("get_button").body)["error"].is<JsonObject>());
+}
+
+void test_update_tools() {
+  Env e;
+  TEST_ASSERT_EQUAL_STRING("manual", toolText(e.tool("get_updates"))["mode"].as<const char*>());
+  McpReply set = e.tool("set_updates", "{\"mode\":\"automatic\",\"repoUrl\":\"https://github.com/someone/fork\"}");
+  TEST_ASSERT_FALSE(isError(set));
+  TEST_ASSERT_EQUAL_STRING("automatic", toolText(set)["mode"].as<const char*>());
+  TEST_ASSERT_TRUE(isError(e.tool("set_updates", "{\"mode\":\"never\"}")));
+  TEST_ASSERT_FALSE(isError(e.tool("check_updates")));
+  TEST_ASSERT_TRUE(isError(e.tool("install_update")));   // busy: the check is queued, and nothing is known yet
+  e.ctx.updates = nullptr;
+  TEST_ASSERT_TRUE(parse(e.tool("get_updates").body)["error"].is<JsonObject>());
 }
 
 void test_schedule_tools() {
@@ -375,6 +391,7 @@ int main() {
   RUN_TEST(test_schedule_tools);
   RUN_TEST(test_time_tools);
   RUN_TEST(test_button_tools);
+  RUN_TEST(test_update_tools);
   RUN_TEST(test_legacy_mcp_matches_ex_without_services);
   RUN_TEST(test_appearance_tools);
   RUN_TEST(test_script_tools_roundtrip);

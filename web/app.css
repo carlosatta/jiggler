@@ -180,3 +180,8 @@ input[aria-invalid=true]{border-color:var(--bad)}
 .panel{width:100%;max-width:22rem;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:var(--s5);
   box-shadow:0 2px 4px rgb(0 0 0/.05),0 12px 32px rgb(0 0 0/.12)}
 .panel .field{margin-top:var(--s4)}
+
+a.linkbtn{display:inline-flex;align-items:center;min-height:2.75rem;padding:0 var(--s2);color:var(--accent);font-weight:600;text-decoration:none}
+a.linkbtn:hover{text-decoration:underline}
+.facts a{color:var(--accent);text-decoration:none}
+.facts a:hover{text-decoration:underline}

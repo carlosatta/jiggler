@@ -58,6 +58,8 @@ class Device:
         self.disc_seconds = 180
         self.off_on_disconnect = True
         self.button_gpio = 0
+        self.upd = {"mode": "manual", "repoUrl": "https://github.com/carlosatta/jiggler", "latest": None, "checked_at": None,
+                    "busy_until": None, "kind": None, "error": None}
         self.schedules = [{"id": "workdays", "enabled": True, "kind": "window", "days": ["mon", "tue", "wed", "thu", "fri"], "start": "09:00",
                            "durationMin": 480, "jitterMin": 10, "times": None, "remaining": None},
                           {"id": "lunch", "enabled": True, "kind": "action", "action": "pause", "days": ["mon", "tue", "wed", "thu", "fri"],
@@ -148,6 +150,28 @@ class Device:
                                  "connected": connected and p is self.peers[0]})
         return out
 
+    def update_json(self):
+        u = self.upd
+        now = time.time()
+        if u["busy_until"] and now >= u["busy_until"]:
+            if u["kind"] == "check":
+                u["latest"] = {"version": "0.7.0", "tag": "v0.7.0", "pageUrl": u["repoUrl"] + "/releases/tag/v0.7.0", "sizeBytes": 1520000}
+                u["checked_at"] = now
+            u["busy_until"] = None
+            if u["kind"] == "install":
+                u["kind"] = "restarting"
+            elif u["kind"] == "check":
+                u["kind"] = None
+        state = "checking" if u["kind"] == "check" else "installing" if u["kind"] == "install" else "restarting" if u["kind"] == "restarting" else "idle"
+        progress = 0
+        if state == "installing" and u["busy_until"]:
+            progress = max(0, min(99, int(100 - (u["busy_until"] - now) / 4.0 * 100)))
+        elif state == "restarting":
+            progress = 100
+        return {"mode": u["mode"], "repoUrl": u["repoUrl"], "defaultRepoUrl": "https://github.com/carlosatta/jiggler", "current": "0.6.0",
+                "state": state, "progress": progress, "checkedAgoMs": int((now - u["checked_at"]) * 1000) if u["checked_at"] else None,
+                "latest": u["latest"], "available": bool(u["latest"]) and u["latest"]["version"] != "0.6.0", "blocked": False, "error": u["error"]}
+
     def time_json(self):
         wd = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"][time.localtime().tm_wday]
         return {"synced": self.time_source != "none", "source": self.time_source, "timezone": self.tz,
@@ -166,6 +190,7 @@ class Device:
                 "msToNextMove": int((self.next_move_at - now) * 1000) if self.state == "running" else None,
                 "stopsInMs": int((self.stop_at - now) * 1000) if self.state in ("running", "paused") and self.stop_at else None,
                 "resumesInMs": int((self.resume_at - now) * 1000) if self.state == "paused" and self.resume_at else None,
+                "update": {"mode": self.upd["mode"], "available": self.update_json()["available"], "version": (self.upd["latest"] or {}).get("version"), "state": self.update_json()["state"]},
                 "time": self.time_json(),
                 "schedule": {"active": False, "enabledCount": sum(1 for s in self.schedules if s["enabled"]), "blocked": None},
                 "moveCount": self.moves, "lastMoveAgoMs": int((now - self.last_move) * 1000), "lastMoveAt": int(self.last_move),
@@ -330,6 +355,30 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/time/set" and method == "POST":
             d.time_source = "manual"
             return self.send(200, {"timezone": d.tz, "ntpServer": d.ntp, "status": d.time_json()})
+        if path == "/api/updates" and method in ("GET", "PUT"):
+            if method == "PUT":
+                b = body or {}
+                if "mode" in b:
+                    if b["mode"] not in ("manual", "automatic", "ignore"):
+                        return self.err(400, "invalid_mode", "mode", "must be manual, automatic or ignore")
+                    d.upd["mode"] = b["mode"]
+                if "repoUrl" in b:
+                    url = b["repoUrl"] or "https://github.com/carlosatta/jiggler"
+                    if not url.startswith("https://github.com/") or url.count("/") < 4:
+                        return self.err(400, "invalid_repo_url", "repoUrl", "must be a GitHub repository address like https://github.com/owner/repo")
+                    d.upd["repoUrl"] = url.rstrip("/")
+                    d.upd["latest"] = None; d.upd["checked_at"] = None
+            return self.send(200, d.update_json())
+        if path == "/api/updates/check" and method == "POST":
+            if d.update_json()["state"] != "idle":
+                return self.err(409, "busy", "", "an update check or install is already running")
+            d.upd["kind"] = "check"; d.upd["busy_until"] = time.time() + 2.5; d.upd["error"] = None
+            return self.send(202, d.update_json())
+        if path == "/api/updates/install" and method == "POST":
+            if not d.update_json()["available"]:
+                return self.err(409, "no_update", "", "there is no newer version to install: check for updates first")
+            d.upd["kind"] = "install"; d.upd["busy_until"] = time.time() + 4
+            return self.send(202, d.update_json())
         if path == "/api/button":
             gpios = [0, 4, 5, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33]
             if method == "PUT":

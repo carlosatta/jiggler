@@ -200,6 +200,11 @@ input[aria-invalid=true]{border-color:var(--bad)}
 .panel{width:100%;max-width:22rem;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:var(--s5);
   box-shadow:0 2px 4px rgb(0 0 0/.05),0 12px 32px rgb(0 0 0/.12)}
 .panel .field{margin-top:var(--s4)}
+
+a.linkbtn{display:inline-flex;align-items:center;min-height:2.75rem;padding:0 var(--s2);color:var(--accent);font-weight:600;text-decoration:none}
+a.linkbtn:hover{text-decoration:underline}
+.facts a{color:var(--accent);text-decoration:none}
+.facts a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
@@ -259,6 +264,7 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <p class="state" id="state">—</p>
 <p class="sub" id="next">&nbsp;</p>
 <p class="note" id="schedNote" hidden></p>
+<p class="note" id="updNote" hidden></p>
 <div class="runfor" id="runFor">
 <div class="field"><label for="runChoice">Run for</label>
 <select id="runChoice">
@@ -435,8 +441,25 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <p id="netMsg" class="msg" role="status" aria-live="polite"></p>
 </div>
 
+<div class="block" id="updBox">
+<h2>Firmware updates</h2>
+<p class="note" id="updVersion">&nbsp;</p>
+<p id="updInfo">&nbsp;</p>
+<progress id="updProgress" max="100" value="0" hidden aria-label="Download progress"></progress>
+<div class="actions"><button id="updCheck">Check for updates</button><button class="primary" id="updInstall" hidden>Install</button><a class="linkbtn" id="updNotes" href="#" target="_blank" rel="noopener" hidden>Release notes</a></div>
+<p id="updMsg" class="msg" role="status" aria-live="polite"></p>
+<div class="field"><label for="updMode">When a new version is released</label>
+<select id="updMode"><option value="manual">Tell me, and I install it</option><option value="automatic">Install it automatically</option><option value="ignore">Ignore it</option></select>
+<div class="err" data-err="mode"></div></div>
+<p class="hint" id="updModeHint"></p>
+<div class="field"><label for="updRepo">Repository to get releases from</label><input id="updRepo" autocomplete="off" spellcheck="false" placeholder="https://github.com/owner/repo"><div class="err" data-err="repoUrl"></div></div>
+<p class="hint">A GitHub repository address. The device downloads the firmware file <code>jiggler-esp32.bin</code> of its latest release over HTTPS, checks the connection’s certificate, and checks the file against its <code>.sha256</code> when the release has one. Only install firmware from a repository you trust: whoever controls it controls this device. The clock must be set (System → Time).</p>
+<div class="actions"><button class="primary" id="updSave">Save</button><button id="updReset">Use the default</button></div>
+<p id="updSaveMsg" class="msg" role="status" aria-live="polite"></p>
+</div>
+
 <div class="block" id="fwBox">
-<h2>Firmware update</h2>
+<h2>Install from a file</h2>
 <p class="hint lead">Replace the firmware over WiFi with a file built from this project. Your token, WiFi, pairings and schedules are kept.</p>
 <div class="field"><label for="fwFile">Firmware file (.bin)</label><input id="fwFile" type="file" accept=".bin"><div class="err" id="e_fwFile"></div></div>
 <progress id="fwProgress" max="100" value="0" hidden aria-label="Upload progress"></progress>
@@ -451,6 +474,7 @@ input[aria-invalid=true]{border-color:var(--bad)}
 <div><dt>Version</dt><dd id="infoVersion">—</dd></div>
 <div><dt>Bluetooth name</dt><dd id="infoName">—</dd></div>
 <div><dt>Bluetooth address</dt><dd id="infoAddress">—</dd></div>
+<div><dt>Source code</dt><dd><a id="infoRepo" href="https://github.com/carlosatta/jiggler" target="_blank" rel="noopener">github.com/carlosatta/jiggler</a></dd></div>
 </dl>
 <div class="actions"><button id="restartBtn">Restart</button></div>
 <p id="sysMsg" class="msg" role="status" aria-live="polite"></p>
@@ -660,10 +684,30 @@ var JigLib = (function () {
     return day + time.localTime + ' · ' + time.timezone + ' · ' + source;
   }
 
+  // What the Firmware card says, from GET /api/updates. Pure so the wording is testable.
+  function describeUpdate(u) {
+    var latest = u.latest && u.latest.version;
+    if (u.state === 'checking') return { text: 'Looking for a new version…', tone: 'busy', canInstall: false, working: true };
+    if (u.state === 'installing') return { text: 'Downloading ' + (latest || 'the new version') + ': ' + (u.progress || 0) + '%. Do not unplug the device.', tone: 'busy', canInstall: false, working: true };
+    if (u.state === 'restarting') return { text: 'Installed. The device is restarting…', tone: 'good', canInstall: false, working: true };
+    var checked = u.checkedAgoMs === null || u.checkedAgoMs === undefined ? null : fmtAgo(u.checkedAgoMs);
+    var lead;
+    if (u.available && u.blocked) lead = 'Version ' + latest + ' is available, but the last attempt to install it did not take effect. You can try again, or install it from a file.';
+    else if (u.available) lead = 'Version ' + latest + ' is available.';
+    else if (checked !== null && latest) lead = 'You are up to date (' + u.current + '), checked ' + checked + '.';
+    else if (checked !== null) lead = 'Checked ' + checked + '.';
+    else lead = u.mode === 'ignore' ? 'Updates are ignored: the device does not look for them by itself.' : 'Not checked yet. The device looks by itself about every day.';
+    if (u.error) lead += ' ' + tr(u.error);
+    return { text: lead, tone: u.error ? 'bad' : u.available ? 'ok' : 'idle', canInstall: !!u.available, working: false };
+  }
+
+  // The address people see for a repository: "github.com/owner/repo".
+  function repoLabel(url) { return String(url || '').replace(/^https?:\/\//, ''); }
+
   return { DAYS: DAYS, DAY_LABELS: DAY_LABELS, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, fmtSince: fmtSince, hex4: hex4,
     connectionView: connectionView, checkNewToken: checkNewToken, minutesUntil: minutesUntil, runForMinutes: runForMinutes,
     stopsAt: stopsAt, describeDays: describeDays, scheduleEnd: scheduleEnd, scheduleSummary: scheduleSummary,
-    ACTION_LABELS: ACTION_LABELS, describeJitter: describeJitter, clockLine: clockLine,
+    ACTION_LABELS: ACTION_LABELS, describeJitter: describeJitter, clockLine: clockLine, describeUpdate: describeUpdate, repoLabel: repoLabel,
     endFromDuration: endFromDuration, durationFromEnd: durationFromEnd, describeRepeat: describeRepeat };
 })();
 
@@ -949,6 +993,10 @@ var App = (function () {
     $('wifi').textContent = s.wifiConnected ? 'Connected' : 'Not connected';
     var sc = s.schedule;
     $('clock').textContent = s.time ? JigLib.clockLine(s.time) + (sc && sc.active ? ' · schedule open' : '') : '—';
+    var un = $('updNote');
+    var upd = s.update;
+    un.hidden = !(upd && upd.available && upd.mode !== 'ignore');
+    if (!un.hidden) { un.textContent = ''; un.appendChild(document.createTextNode('Version ' + upd.version + ' is available. ')); var a = document.createElement('a'); a.href = '#system'; a.textContent = 'Open System to install it.'; un.appendChild(a); }
     var note = $('schedNote');
     note.hidden = !(sc && sc.blocked);
     note.textContent = sc && sc.blocked ? 'A schedule window is open, but no computer is paired yet, so the jiggler cannot start.' : '';
@@ -1706,6 +1754,77 @@ var App = (function () {
     uploadFirmware(file);
   });
 
+  // ---- Firmware updates from the repository ----
+  var upd = null, updTimer = null, updDirty = false, restartWatching = false;
+  var MODE_HINTS = {
+    manual: 'The device looks about once a day and tells you here and on Status. You press Install.',
+    automatic: 'The device looks about once a day and installs a new version by itself, then restarts (the jiggler and Bluetooth are off for a short while). A version that did not take effect is not retried automatically.',
+    ignore: 'The device never looks by itself. You can still press Check for updates.'
+  };
+  function renderUpdates() {
+    if (!upd) return;
+    var d = JigLib.describeUpdate(upd);
+    $('updVersion').textContent = 'Running version ' + upd.current + '.';
+    $('updInfo').textContent = d.text;
+    $('updProgress').hidden = upd.state !== 'installing';
+    $('updProgress').value = upd.progress || 0;
+    $('updCheck').disabled = d.working;
+    $('updInstall').hidden = !d.canInstall;
+    $('updInstall').disabled = d.working;
+    $('updInstall').textContent = upd.latest ? 'Install ' + upd.latest.version : 'Install';
+    var notes = $('updNotes');
+    notes.hidden = !(upd.latest && upd.latest.pageUrl);
+    if (!notes.hidden) notes.href = upd.latest.pageUrl;
+    if (!updDirty) {
+      $('updMode').value = upd.mode;
+      $('updRepo').value = upd.repoUrl;
+    }
+    $('updModeHint').textContent = MODE_HINTS[$('updMode').value] || '';
+    var repoLink = $('infoRepo');
+    repoLink.href = upd.repoUrl;
+    repoLink.textContent = JigLib.repoLabel(upd.repoUrl);
+    if (upd.state === 'restarting' && !restartWatching) { restartWatching = true; App.waitForDevice(); }
+    clearTimeout(updTimer);
+    if (d.working && !$('view-system').hidden) updTimer = setTimeout(loadUpdates, 1500);
+  }
+  function loadUpdates() {
+    App.call('GET', '/api/updates').then(function (res) {
+      if (res.status !== 200) return;
+      upd = res.data;
+      renderUpdates();
+    }).catch(function () {});
+  }
+  ['updMode', 'updRepo'].forEach(function (id) {
+    $(id).addEventListener('input', function () { updDirty = true; $('updModeHint').textContent = MODE_HINTS[$('updMode').value] || ''; });
+  });
+  $('updCheck').onclick = function () {
+    say('', '', 'updMsg');
+    App.call('POST', '/api/updates/check').then(function (res) {
+      if (res.status === 202) { upd = res.data; renderUpdates(); updTimer = setTimeout(loadUpdates, 800); return; }
+      say(tr(res.data && res.data.message) || 'Could not start the check.', 'bad', 'updMsg');
+    }).catch(function () {});
+  };
+  App.confirmInline($('updInstall'), 'Confirm: install and restart', function () {
+    say('', '', 'updMsg');
+    App.call('POST', '/api/updates/install').then(function (res) {
+      if (res.status === 202) { upd = res.data; renderUpdates(); updTimer = setTimeout(loadUpdates, 800); return; }
+      say(tr(res.data && res.data.message) || 'Could not start the install.', 'bad', 'updMsg');
+    }).catch(function () {});
+  });
+  function saveUpdates(repoOverride) {
+    var root = $('updBox');
+    clearErrors(root);
+    say('', '', 'updSaveMsg');
+    var body = { mode: $('updMode').value, repoUrl: repoOverride !== undefined ? repoOverride : $('updRepo').value.trim() };
+    App.call('PUT', '/api/updates', body).then(function (res) {
+      if (res.status === 200) { updDirty = false; upd = res.data; renderUpdates(); say('Saved.', 'good', 'updSaveMsg'); App.poll(); return; }
+      var d = res.data;
+      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Could not save.', 'bad', 'updSaveMsg');
+    }).catch(function () {});
+  }
+  $('updSave').onclick = function () { saveUpdates(); };
+  $('updReset').onclick = function () { saveUpdates(''); };
+
   // ---- Device info and restart ----
   function renderInfo(s) {
     if (!s.device) return;
@@ -1716,7 +1835,7 @@ var App = (function () {
   App.confirmInline($('restartBtn'), 'Confirm: restart', function () { say('', '', 'sysMsg'); App.restartDevice(); });
 
   App.view('system', {
-    load: function () { loadNetwork(); loadTime(); loadButton(); if (App.status()) { renderInfo(App.status()); renderTimeNow(App.status()); } },
+    load: function () { loadNetwork(); loadTime(); loadButton(); loadUpdates(); if (App.status()) { renderInfo(App.status()); renderTimeNow(App.status()); } },
     onStatus: function (s) { renderInfo(s); renderTimeNow(s); }
   });
 })();

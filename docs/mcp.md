@@ -47,6 +47,10 @@ Tool failures are returned as a normal result with `isError: true` and a JSON er
 | `set_schedules` | `schedules[]` (`id`, `enabled`, `kind`, `action`, `days`, `start`, `durationMin`, `jitterMin`, `times`) | Replace the schedules (max 8) |
 | `get_time` | – | The clock (source, local time), timezone and NTP server |
 | `set_time` | `timezone`, `ntpServer`, `epoch` (all optional) | Change the timezone or NTP server, or set the clock by hand |
+| `get_updates` | – | Running version, the latest release found, the mode and the repository |
+| `set_updates` | `mode` (`manual`, `automatic`, `ignore`), `repoUrl` | Choose what happens when a release appears and where to look |
+| `check_updates` | – | Look for a newer release now |
+| `install_update` | – | Install the newer release found; the device restarts |
 | `get_button` | – | The GPIO of the physical button and the usable pins |
 | `set_button` | `gpio` | Choose the button's GPIO |
 | `get_bluetooth` | – | State (`off`, `waiting`, `discovery`, `connected`), settings, connection and paired computers |

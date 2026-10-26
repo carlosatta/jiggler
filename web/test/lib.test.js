@@ -215,3 +215,40 @@ test('clockLine says where the time comes from, or that it is not set', () => {
   assert.match(JigLib.clockLine({ synced: false }), /Not set/);
   assert.match(JigLib.clockLine(undefined), /Not set/);
 });
+
+const upd = (over) => Object.assign({
+  mode: 'manual', repoUrl: 'https://github.com/carlosatta/jiggler', current: '0.6.0', state: 'idle', progress: 0,
+  checkedAgoMs: null, latest: null, available: false, blocked: false, error: null
+}, over);
+
+test('describeUpdate: never checked, up to date, available, blocked', () => {
+  assert.match(JigLib.describeUpdate(upd()).text, /Not checked yet/);
+  assert.match(JigLib.describeUpdate(upd({ mode: 'ignore' })).text, /ignored/);
+  const same = JigLib.describeUpdate(upd({ checkedAgoMs: 185000, latest: { version: '0.6.0' } }));
+  assert.match(same.text, /up to date \(0\.6\.0\), checked 3 minutes ago/);
+  assert.equal(same.canInstall, false);
+  const avail = JigLib.describeUpdate(upd({ checkedAgoMs: 1000, latest: { version: '0.7.0' }, available: true }));
+  assert.equal(avail.text, 'Version 0.7.0 is available.');
+  assert.equal(avail.canInstall, true);
+  assert.equal(avail.tone, 'ok');
+  const blocked = JigLib.describeUpdate(upd({ latest: { version: '0.7.0' }, available: true, blocked: true, checkedAgoMs: 1000 }));
+  assert.match(blocked.text, /did not take effect/);
+  assert.equal(blocked.canInstall, true);
+});
+
+test('describeUpdate: busy states and errors', () => {
+  assert.match(JigLib.describeUpdate(upd({ state: 'checking' })).text, /Looking/);
+  const inst = JigLib.describeUpdate(upd({ state: 'installing', progress: 42, latest: { version: '0.7.0' }, available: true }));
+  assert.match(inst.text, /Downloading 0\.7\.0: 42%/);
+  assert.equal(inst.canInstall, false);
+  assert.equal(inst.working, true);
+  assert.match(JigLib.describeUpdate(upd({ state: 'restarting' })).text, /restarting/);
+  const err = JigLib.describeUpdate(upd({ error: 'no published release was found there' }));
+  assert.equal(err.tone, 'bad');
+  assert.match(err.text, /No published release was found there\.$/);
+});
+
+test('repoLabel drops the scheme', () => {
+  assert.equal(JigLib.repoLabel('https://github.com/carlosatta/jiggler'), 'github.com/carlosatta/jiggler');
+  assert.equal(JigLib.repoLabel(''), '');
+});

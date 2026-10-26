@@ -74,6 +74,7 @@
 <p class="state" id="state">—</p>
 <p class="sub" id="next">&nbsp;</p>
 <p class="note" id="schedNote" hidden></p>
+<p class="note" id="updNote" hidden></p>
 <div class="runfor" id="runFor">
 <div class="field"><label for="runChoice">Run for</label>
 <select id="runChoice">
@@ -250,8 +251,25 @@
 <p id="netMsg" class="msg" role="status" aria-live="polite"></p>
 </div>
 
+<div class="block" id="updBox">
+<h2>Firmware updates</h2>
+<p class="note" id="updVersion">&nbsp;</p>
+<p id="updInfo">&nbsp;</p>
+<progress id="updProgress" max="100" value="0" hidden aria-label="Download progress"></progress>
+<div class="actions"><button id="updCheck">Check for updates</button><button class="primary" id="updInstall" hidden>Install</button><a class="linkbtn" id="updNotes" href="#" target="_blank" rel="noopener" hidden>Release notes</a></div>
+<p id="updMsg" class="msg" role="status" aria-live="polite"></p>
+<div class="field"><label for="updMode">When a new version is released</label>
+<select id="updMode"><option value="manual">Tell me, and I install it</option><option value="automatic">Install it automatically</option><option value="ignore">Ignore it</option></select>
+<div class="err" data-err="mode"></div></div>
+<p class="hint" id="updModeHint"></p>
+<div class="field"><label for="updRepo">Repository to get releases from</label><input id="updRepo" autocomplete="off" spellcheck="false" placeholder="https://github.com/owner/repo"><div class="err" data-err="repoUrl"></div></div>
+<p class="hint">A GitHub repository address. The device downloads the firmware file <code>jiggler-esp32.bin</code> of its latest release over HTTPS, checks the connection’s certificate, and checks the file against its <code>.sha256</code> when the release has one. Only install firmware from a repository you trust: whoever controls it controls this device. The clock must be set (System → Time).</p>
+<div class="actions"><button class="primary" id="updSave">Save</button><button id="updReset">Use the default</button></div>
+<p id="updSaveMsg" class="msg" role="status" aria-live="polite"></p>
+</div>
+
 <div class="block" id="fwBox">
-<h2>Firmware update</h2>
+<h2>Install from a file</h2>
 <p class="hint lead">Replace the firmware over WiFi with a file built from this project. Your token, WiFi, pairings and schedules are kept.</p>
 <div class="field"><label for="fwFile">Firmware file (.bin)</label><input id="fwFile" type="file" accept=".bin"><div class="err" id="e_fwFile"></div></div>
 <progress id="fwProgress" max="100" value="0" hidden aria-label="Upload progress"></progress>
@@ -266,6 +284,7 @@
 <div><dt>Version</dt><dd id="infoVersion">—</dd></div>
 <div><dt>Bluetooth name</dt><dd id="infoName">—</dd></div>
 <div><dt>Bluetooth address</dt><dd id="infoAddress">—</dd></div>
+<div><dt>Source code</dt><dd><a id="infoRepo" href="https://github.com/carlosatta/jiggler" target="_blank" rel="noopener">github.com/carlosatta/jiggler</a></dd></div>
 </dl>
 <div class="actions"><button id="restartBtn">Restart</button></div>
 <p id="sysMsg" class="msg" role="status" aria-live="polite"></p>

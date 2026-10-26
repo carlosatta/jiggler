@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0
+
+- **Firmware updates from GitHub releases.** System → **Firmware updates** looks at the latest release of a repository (default `https://github.com/carlosatta/jiggler`) about once a day. You choose what happens when a new version appears: **tell me and I install it** (default), **install it automatically**, or **ignore it**; you can also press **Check for updates** whenever you like. The repository is a setting (use your own fork, or **Use the default**). Status shows a note when a version is available. `GET/PUT /api/updates`, `POST /api/updates/check|install`, MCP `get_updates` / `set_updates` / `check_updates` / `install_update`, and `update` in the status.
+  - The download is over HTTPS, verified against the standard public certificate authorities (a 55 KB list embedded in the firmware, `tools/make_cert_bundle.py`), and checked against the release's `.sha256`. It needs the clock to be set. A version that was installed but did not take effect is not retried automatically.
+  - Releases are built by `.github/workflows/release.yml`, which attaches `jiggler-esp32.bin` and its checksum when you publish a release whose tag matches `JIG_VERSION`. The firmware file upload remains, as **Install from a file**.
+  - **Only follow a repository you trust**: whoever can publish a release there controls what runs on the device.
+- **About** now has a **Source code** link to the repository page.
+- The firmware grew by about 230 KB (HTTPS) and now uses about 90% of an update slot.
+- `GET /api/log` also records why the device last restarted (power, crash, brownout...) and the update steps.
+- Fixed the dashboard test that forbade any `https://` text: links to GitHub are allowed, outside resources are still not.
 ## 0.6.0
 
 - **Four clear Bluetooth states.** **Off** (the radio is silent: invisible, nothing can connect), **Waiting** (on; only computers that are already paired can find and reach the device), **Discovery** (a window is open so a new computer can pair) and **Connected**. Status, Computers, the LED, the API (`state`) and MCP all use them. "Disconnect" and "Reconnect" are gone: **Turn Bluetooth off / on** (`POST /api/bluetooth/disable|enable`, MCP `disable_bluetooth` / `enable_bluetooth`; the choice is stored). The computer's own Disconnect also switches Bluetooth off by default (`offWhenComputerDisconnects`, untick it on Computers); a computer that disconnects when it goes to sleep does the same, so untick it if your computer does not reconnect after waking. `held` and `heldRemainingMs` are removed from the API.

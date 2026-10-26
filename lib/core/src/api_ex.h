@@ -14,6 +14,7 @@
 #include "network_settings.h"
 #include "schedule.h"
 #include "script.h"
+#include "update_manager.h"
 
 namespace jig {
 
@@ -35,6 +36,7 @@ struct ApiContext {
   ClockStore* clock = nullptr;
   ButtonStore* button = nullptr;
   EventLog* log = nullptr;
+  UpdateManager* updates = nullptr;
   std::function<uint32_t()> nowMs;  // the device clock in ms, for the event log
   TokenVault* tokens = nullptr;
   DeviceInfo info;  // shown in /api/status when its version is set

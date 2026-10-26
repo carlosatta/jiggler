@@ -19,6 +19,8 @@
 #include "nvs_network_store.h"
 #include "schedule.h"
 #include "token_store.h"
+#include "update_manager.h"
+#include "update_task.h"
 #include "wifi_setup.h"
 
 namespace {
@@ -43,6 +45,7 @@ jig::Controller controller(platform, rng, store);
 jig::ClockStore clockStore(platform, blobs);
 jig::ButtonStore buttonStore(blobs);
 jig::ScheduleEngine schedules(platform, controller, blobs, clockStore);
+jig::UpdateManager updates(platform, blobs, JIG_VERSION);
 jig::EventLog eventLog;
 jig::ApiContext api{controller};
 
@@ -97,6 +100,7 @@ void setup() {
   bluetooth.begin();
   controller.begin();
   clockStore.begin();
+  updates.begin();
   schedules.begin();
   schedules.setBluetooth(&bluetooth);
   startMovementTask(controller, ble, platform);  // from here on the mouse works without WiFi
@@ -107,12 +111,19 @@ void setup() {
   api.clock = &clockStore;
   api.button = &buttonStore;
   api.log = &eventLog;
+  api.updates = &updates;
+  updates.setInstallActive([](bool active) { ble.setQuiet(active); });
+  startUpdateTask(updates, scheduleRestart);
   api.nowMs = [] { return static_cast<uint32_t>(millis()); };
   api.tokens = &tokens;
   api.info = {JIG_VERSION, ble.name(), ble.address()};
   api.restart = scheduleRestart;
   api.updateActive = [](bool active) { ble.setQuiet(active); };
   diagf("jiggler %s started, BLE address %s", JIG_VERSION, NimBLEDevice::getAddress().toString().c_str());
+  static const char* const kReasons[] = {"unknown", "power on", "external reset", "software restart", "PANIC (crash)", "interrupt watchdog",
+                                         "task watchdog", "other watchdog", "deep sleep", "BROWNOUT (power dip)", "SDIO", "USB", "JTAG"};
+  const unsigned reason = static_cast<unsigned>(esp_reset_reason());
+  diagf("last restart: %s", reason < sizeof(kReasons) / sizeof(kReasons[0]) ? kReasons[reason] : "other");
   wifi.begin();
 }
 

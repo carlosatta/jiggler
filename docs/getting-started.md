@@ -60,10 +60,26 @@ Add the page to your phone's home screen from the browser menu for a full-screen
 
 ## Updating the firmware later (no cable)
 
-Once the board has been flashed over USB with a build that has OTA (0.5.0 or later), you can update it over WiFi:
+Once the board has been flashed over USB with a build that has OTA (0.5.0 or later), you can update it over WiFi. There are three ways.
 
-- **From the dashboard:** System → **Firmware update**, choose `.pio/build/esp32/firmware.bin`, **Upload and restart**. The page shows the progress and reconnects when the board is back.
-- **From a terminal:**
+<p align="center">
+  <img src="images/system-updates.png" alt="System, Firmware updates: a new version is available" width="260">
+</p>
+
+**1. From the project's releases (GitHub).** In **System → Firmware updates** the device looks at the latest release of a repository (by default [carlosatta/jiggler](https://github.com/carlosatta/jiggler)), about once a day, and you choose what it does when a new version appears:
+
+| Setting | What happens |
+|---|---|
+| **Tell me, and I install it** (default) | The dashboard says "Version X is available" (also on Status). You press **Install**. |
+| **Install it automatically** | The device downloads and installs the new version by itself, then restarts (the jiggler and Bluetooth are off for a minute or so). |
+| **Ignore it** | It never looks by itself. **Check for updates** still works whenever you press it. |
+
+The **repository** is a field you can change (for example to your own fork); **Use the default** puts the project's repository back. The same settings are in `GET/PUT /api/updates` and the `get_updates` / `set_updates` tools. Needs: the board online, and its **clock set** (System → Time), because the secure connection checks certificate dates. The download is over HTTPS with the certificate verified against the standard list of public certificate authorities, and is checked against the release's `.sha256` file. **Only follow a repository you trust**: whoever can publish a release there can change what runs on your device. The firmware file must be named `jiggler-esp32.bin` (releases of this project have it).
+
+If an installed version does not start, the board falls back to the previous one; an automatic update never retries a version that did not take effect.
+
+**2. From a file, in the dashboard:** System → **Install from a file**, choose `.pio/build/esp32/firmware.bin`, **Upload and restart**. The page shows the progress and reconnects when the board is back.
+**3. From a terminal:**
   ```sh
   pio run -e esp32
   curl -H "Authorization: Bearer $TOKEN" -F firmware=@.pio/build/esp32/firmware.bin http://jiggler.local/api/update

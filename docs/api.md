@@ -128,7 +128,20 @@ See [schedules.md](schedules.md). `GET /api/status` also carries `"schedule": {a
 |---|---|---|
 | GET | `/api/log` | `{"uptimeMs", "events":[{"agoMs","message"}]}`: the last 80 events, oldest first (Bluetooth links and pairing decisions, advertising, the button, a heartbeat every 5 minutes). Useful when no USB cable is attached |
 
-## Firmware update
+## Firmware updates from releases
+
+`GET /api/status` also carries `"update": {mode, available, version, state}`. The device looks at the latest release of a GitHub repository for an asset named `jiggler-esp32.bin` (and optionally `jiggler-esp32.bin.sha256`).
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/updates` | `{"mode","repoUrl","defaultRepoUrl","current","state","progress","checkedAgoMs","latest":{"version","tag","pageUrl","sizeBytes"},"available","blocked","error"}`; `state` is `idle`, `checking`, `installing` or `restarting` |
+| PUT | `/api/updates` | `{"mode":"manual\|automatic\|ignore","repoUrl":"https://github.com/owner/repo"}` (both optional; an empty `repoUrl` means the default). `400 invalid_mode` / `invalid_repo_url` |
+| POST | `/api/updates/check` | Look for a newer release now (answers `202`; poll `GET /api/updates`). `409 busy` / `no_clock` |
+| POST | `/api/updates/install` | Install the newer release found (`202`; the device downloads it and restarts). `409 no_update` / `busy` / `no_clock` |
+
+`blocked` is true when that version was installed earlier but the device is still running something else; automatic mode then does not try again. This is separate from `POST /api/update` (singular) below, which uploads a file.
+
+## Firmware update from a file
 
 | Method | Path | Description |
 |---|---|---|

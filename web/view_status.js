@@ -91,6 +91,10 @@
     $('wifi').textContent = s.wifiConnected ? 'Connected' : 'Not connected';
     var sc = s.schedule;
     $('clock').textContent = s.time ? JigLib.clockLine(s.time) + (sc && sc.active ? ' · schedule open' : '') : '—';
+    var un = $('updNote');
+    var upd = s.update;
+    un.hidden = !(upd && upd.available && upd.mode !== 'ignore');
+    if (!un.hidden) { un.textContent = ''; un.appendChild(document.createTextNode('Version ' + upd.version + ' is available. ')); var a = document.createElement('a'); a.href = '#system'; a.textContent = 'Open System to install it.'; un.appendChild(a); }
     var note = $('schedNote');
     note.hidden = !(sc && sc.blocked);
     note.textContent = sc && sc.blocked ? 'A schedule window is open, but no computer is paired yet, so the jiggler cannot start.' : '';

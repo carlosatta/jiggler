@@ -20,7 +20,7 @@ The first thing you see: **which computer is connected and since when**, and wha
 - **Movement.** *Running*, *Paused* or *Stopped*, the time to the next movement, and, for a timed run, when it will stop.
 - **Run for** (shown while stopped): *until I stop it*, 5, 10 or 30 minutes, 1 hour, *until a time of day*, or a custom number of minutes (1 to 1440). **Start** applies it; **Move now** makes one movement immediately.
 - **Pause** (shown while running): *15 minutes, 30 minutes, 1 hour, 2 hours*, or *until I resume*. While paused the cursor does not move and the card says when it resumes by itself; **Resume** ends it at once and **Stop** stops everything. A time limit set with **Run for** keeps counting during a pause, and a schedule keeps its own timetable: a pause lasts until it ends or until the next window opens or closes. Use it when you sit down to work, or step away, without losing your schedule.
-- **Facts.** Last movement, movements made, the device clock (where it comes from and its timezone) and WiFi. If a schedule window is open but no computer is paired, a note says why the jiggler has not started.
+- **Facts.** Last movement, movements made, the device clock (where it comes from and its timezone) and WiFi. If a schedule window is open but no computer is paired, a note says why the jiggler has not started. When a newer firmware version exists (and updates are not ignored), a note says so and links to System.
 
 On a new board, Status shows the guided **Set up your Jiggler** card until a computer is paired ([Getting started](getting-started.md)). The jiggler cannot start before that.
 
@@ -65,8 +65,8 @@ Weekly entries, in the device's timezone (set in System → Time). A **window** 
 - **Button.** Which GPIO the physical button uses (default BOOT, GPIO 0) and what each press does.
 - **Network.** *Auto* (your home WiFi, with the setup network as a fallback) or *Own network* (the board creates a protected WiFi network). The own-network password is optional: leave it empty and one is generated the first time. See [Network](network.md).
 - **Appearance.** The name the device shows over Bluetooth: a neutral "Bluetooth Mouse" by default, a name of your own, or a real mouse model. Changing it restarts the device and needs each computer to pair again. See [Appearance](appearance.md).
-- **Firmware update.** Upload a `.bin` to update the device over WiFi; see [Getting started](getting-started.md#updating-the-firmware-later-no-cable).
-- **About this device.** Firmware version, Bluetooth name and address, and **Restart**.
+- **Firmware updates.** The running version, whether a newer release exists, **Check for updates** and **Install**; and the choice of what happens when a release appears (**tell me**, **install automatically**, **ignore**) and which repository to look at. **Install from a file** uploads a `.bin` instead. See [Getting started](getting-started.md#updating-the-firmware-later-no-cable).
+- **About this device.** Firmware version, Bluetooth name and address, a **Source code** link to the repository page, and **Restart**.
 
 ## When something goes wrong
 

@@ -70,6 +70,10 @@ const Route kPageRoutes[] = {
     {"GET", "/api/schedules", ""},
     {"PUT", "/api/schedules", "{\"schedules\":[]}"},
     {"GET", "/api/button", ""},
+    {"GET", "/api/updates", ""},
+    {"PUT", "/api/updates", "{\"mode\":\"manual\"}"},
+    {"POST", "/api/updates/check", ""},
+    {"POST", "/api/updates/install", ""},
     {"PUT", "/api/button", "{\"gpio\":0}"},
     {"GET", "/api/time", ""},
     {"PUT", "/api/time", "{\"timezone\":\"Europe/Rome\"}"},
@@ -146,6 +150,9 @@ void test_dashboard_only_references_real_routes() {
   buttonStore.begin();
   ctx.clock = &clockStore;
   ctx.button = &buttonStore;
+  jig::UpdateManager updateManager(clock, blobs, "0.6.0");
+  updateManager.begin();
+  ctx.updates = &updateManager;
   ctx.tokens = &tokens;
   ctx.network = &net;
   ctx.appearance = &appearance;
@@ -156,7 +163,9 @@ void test_dashboard_only_references_real_routes() {
   for (const Route& r : kPageRoutes) {
     HttpResponse res = handleApiEx(ctx, r.method, r.path, r.body);
     const std::string what = std::string(r.method) + " " + r.path;
-    TEST_ASSERT_TRUE_MESSAGE(res.status != 404 && res.status != 405 && res.status < 400, what.c_str());
+    // Installing an update answers 409 here: nothing newer has been found. The route exists, which is all that matters.
+    const bool noUpdateYet = std::string(r.path) == "/api/updates/install" && res.status == 409;
+    TEST_ASSERT_TRUE_MESSAGE(res.status != 404 && res.status != 405 && (res.status < 400 || noUpdateYet), what.c_str());
   }
   TEST_ASSERT_EQUAL_INT(1, restarts);
 }
@@ -165,7 +174,11 @@ void test_dashboard_is_self_contained_html() {
   const std::string html = kDashboardHtml;
   TEST_ASSERT_TRUE(html.find("<!doctype html>") == 0);
   TEST_ASSERT_TRUE(html.find("http://") == std::string::npos);
-  TEST_ASSERT_TRUE(html.find("https://") == std::string::npos);
+  // No outside resources. Links to the project's repository on GitHub (the About card, the update field) are plain
+  // text for people, not something the page loads.
+  std::string external = html;
+  for (size_t at; (at = external.find("https://github.com/")) != std::string::npos;) external.erase(at, 19);
+  TEST_ASSERT_TRUE(external.find("https://") == std::string::npos);
   TEST_ASSERT_TRUE(html.find("Authorization") != std::string::npos);
   TEST_ASSERT_TRUE(html.find("localStorage") != std::string::npos);
 }

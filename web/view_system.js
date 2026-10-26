@@ -154,6 +154,77 @@
     uploadFirmware(file);
   });
 
+  // ---- Firmware updates from the repository ----
+  var upd = null, updTimer = null, updDirty = false, restartWatching = false;
+  var MODE_HINTS = {
+    manual: 'The device looks about once a day and tells you here and on Status. You press Install.',
+    automatic: 'The device looks about once a day and installs a new version by itself, then restarts (the jiggler and Bluetooth are off for a short while). A version that did not take effect is not retried automatically.',
+    ignore: 'The device never looks by itself. You can still press Check for updates.'
+  };
+  function renderUpdates() {
+    if (!upd) return;
+    var d = JigLib.describeUpdate(upd);
+    $('updVersion').textContent = 'Running version ' + upd.current + '.';
+    $('updInfo').textContent = d.text;
+    $('updProgress').hidden = upd.state !== 'installing';
+    $('updProgress').value = upd.progress || 0;
+    $('updCheck').disabled = d.working;
+    $('updInstall').hidden = !d.canInstall;
+    $('updInstall').disabled = d.working;
+    $('updInstall').textContent = upd.latest ? 'Install ' + upd.latest.version : 'Install';
+    var notes = $('updNotes');
+    notes.hidden = !(upd.latest && upd.latest.pageUrl);
+    if (!notes.hidden) notes.href = upd.latest.pageUrl;
+    if (!updDirty) {
+      $('updMode').value = upd.mode;
+      $('updRepo').value = upd.repoUrl;
+    }
+    $('updModeHint').textContent = MODE_HINTS[$('updMode').value] || '';
+    var repoLink = $('infoRepo');
+    repoLink.href = upd.repoUrl;
+    repoLink.textContent = JigLib.repoLabel(upd.repoUrl);
+    if (upd.state === 'restarting' && !restartWatching) { restartWatching = true; App.waitForDevice(); }
+    clearTimeout(updTimer);
+    if (d.working && !$('view-system').hidden) updTimer = setTimeout(loadUpdates, 1500);
+  }
+  function loadUpdates() {
+    App.call('GET', '/api/updates').then(function (res) {
+      if (res.status !== 200) return;
+      upd = res.data;
+      renderUpdates();
+    }).catch(function () {});
+  }
+  ['updMode', 'updRepo'].forEach(function (id) {
+    $(id).addEventListener('input', function () { updDirty = true; $('updModeHint').textContent = MODE_HINTS[$('updMode').value] || ''; });
+  });
+  $('updCheck').onclick = function () {
+    say('', '', 'updMsg');
+    App.call('POST', '/api/updates/check').then(function (res) {
+      if (res.status === 202) { upd = res.data; renderUpdates(); updTimer = setTimeout(loadUpdates, 800); return; }
+      say(tr(res.data && res.data.message) || 'Could not start the check.', 'bad', 'updMsg');
+    }).catch(function () {});
+  };
+  App.confirmInline($('updInstall'), 'Confirm: install and restart', function () {
+    say('', '', 'updMsg');
+    App.call('POST', '/api/updates/install').then(function (res) {
+      if (res.status === 202) { upd = res.data; renderUpdates(); updTimer = setTimeout(loadUpdates, 800); return; }
+      say(tr(res.data && res.data.message) || 'Could not start the install.', 'bad', 'updMsg');
+    }).catch(function () {});
+  });
+  function saveUpdates(repoOverride) {
+    var root = $('updBox');
+    clearErrors(root);
+    say('', '', 'updSaveMsg');
+    var body = { mode: $('updMode').value, repoUrl: repoOverride !== undefined ? repoOverride : $('updRepo').value.trim() };
+    App.call('PUT', '/api/updates', body).then(function (res) {
+      if (res.status === 200) { updDirty = false; upd = res.data; renderUpdates(); say('Saved.', 'good', 'updSaveMsg'); App.poll(); return; }
+      var d = res.data;
+      if (!d.field || !showError(root, d.field, d.message)) say(tr(d.message) || 'Could not save.', 'bad', 'updSaveMsg');
+    }).catch(function () {});
+  }
+  $('updSave').onclick = function () { saveUpdates(); };
+  $('updReset').onclick = function () { saveUpdates(''); };
+
   // ---- Device info and restart ----
   function renderInfo(s) {
     if (!s.device) return;
@@ -164,7 +235,7 @@
   App.confirmInline($('restartBtn'), 'Confirm: restart', function () { say('', '', 'sysMsg'); App.restartDevice(); });
 
   App.view('system', {
-    load: function () { loadNetwork(); loadTime(); loadButton(); if (App.status()) { renderInfo(App.status()); renderTimeNow(App.status()); } },
+    load: function () { loadNetwork(); loadTime(); loadButton(); loadUpdates(); if (App.status()) { renderInfo(App.status()); renderTimeNow(App.status()); } },
     onStatus: function (s) { renderInfo(s); renderTimeNow(s); }
   });
 })();

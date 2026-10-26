@@ -17,7 +17,7 @@ Hardware: a classic `esp32dev` board (ESP32-WROOM), USB cable. Nothing else is n
 | Flash over WiFi (OTA) | `curl -H "Authorization: Bearer $TOKEN" -F firmware=@.pio/build/esp32/firmware.bin http://jiggler.local/api/update` |
 | Serial monitor (115200 baud) | `pio device monitor` |
 
-Suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_schedule`, `test_appearance`, `test_mcp_ex`, `test_clock`, `test_button_settings`, `test_event_log`, plus `test_keyboard`, `test_script` and `test_automation` for the parked modules (see below).
+Suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_schedule`, `test_appearance`, `test_mcp_ex`, `test_clock`, `test_button_settings`, `test_event_log`, `test_update`, plus `test_keyboard`, `test_script` and `test_automation` for the parked modules (see below).
 
 Adjust the upload port to your system (`pio device list`).
 
@@ -42,6 +42,16 @@ test/           host unit tests (Unity) and fakes in test/support/
 spike/          throwaway experiments (not part of the build)
 docs/           documentation; docs/superpowers has design history (Italian)
 ```
+
+## Releasing
+
+Devices follow the latest GitHub release of the repository and install the asset `jiggler-esp32.bin`. To publish a version:
+
+1. Set the version in `platformio.ini` (`-DJIG_VERSION=\"0.7.0\"`), update the changelog, commit and push `main`.
+2. On GitHub, create a release whose tag is `v` plus that version (`v0.7.0`) and publish it (not a draft, not a pre-release: devices ignore those).
+3. The workflow `.github/workflows/release.yml` checks that the tag matches `JIG_VERSION`, runs the host tests, builds the firmware and attaches `jiggler-esp32.bin` and `jiggler-esp32.bin.sha256` to the release. The tag must match, or it fails and nothing is attached.
+
+A device compares the tag with its own version (numbers, `major.minor.patch`; tags with suffixes such as `-rc1` are not versions and are ignored). The code is in `lib/core/src/update_manager.*` (host-tested in `test_update`) and `src/update_task.cpp` (HTTPS download, SHA-256, `Update`). HTTPS verifies the server against `data/cert/x509_crt_bundle.bin`, the public root certificates, embedded in the firmware (about 55 KB). To refresh it, download Mozilla's list (`https://curl.se/ca/cacert.pem`) and run `python3 tools/make_cert_bundle.py cacert.pem`.
 
 ## Parked modules
 

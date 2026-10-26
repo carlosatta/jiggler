@@ -187,10 +187,30 @@ var JigLib = (function () {
     return day + time.localTime + ' · ' + time.timezone + ' · ' + source;
   }
 
+  // What the Firmware card says, from GET /api/updates. Pure so the wording is testable.
+  function describeUpdate(u) {
+    var latest = u.latest && u.latest.version;
+    if (u.state === 'checking') return { text: 'Looking for a new version…', tone: 'busy', canInstall: false, working: true };
+    if (u.state === 'installing') return { text: 'Downloading ' + (latest || 'the new version') + ': ' + (u.progress || 0) + '%. Do not unplug the device.', tone: 'busy', canInstall: false, working: true };
+    if (u.state === 'restarting') return { text: 'Installed. The device is restarting…', tone: 'good', canInstall: false, working: true };
+    var checked = u.checkedAgoMs === null || u.checkedAgoMs === undefined ? null : fmtAgo(u.checkedAgoMs);
+    var lead;
+    if (u.available && u.blocked) lead = 'Version ' + latest + ' is available, but the last attempt to install it did not take effect. You can try again, or install it from a file.';
+    else if (u.available) lead = 'Version ' + latest + ' is available.';
+    else if (checked !== null && latest) lead = 'You are up to date (' + u.current + '), checked ' + checked + '.';
+    else if (checked !== null) lead = 'Checked ' + checked + '.';
+    else lead = u.mode === 'ignore' ? 'Updates are ignored: the device does not look for them by itself.' : 'Not checked yet. The device looks by itself about every day.';
+    if (u.error) lead += ' ' + tr(u.error);
+    return { text: lead, tone: u.error ? 'bad' : u.available ? 'ok' : 'idle', canInstall: !!u.available, working: false };
+  }
+
+  // The address people see for a repository: "github.com/owner/repo".
+  function repoLabel(url) { return String(url || '').replace(/^https?:\/\//, ''); }
+
   return { DAYS: DAYS, DAY_LABELS: DAY_LABELS, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, fmtSince: fmtSince, hex4: hex4,
     connectionView: connectionView, checkNewToken: checkNewToken, minutesUntil: minutesUntil, runForMinutes: runForMinutes,
     stopsAt: stopsAt, describeDays: describeDays, scheduleEnd: scheduleEnd, scheduleSummary: scheduleSummary,
-    ACTION_LABELS: ACTION_LABELS, describeJitter: describeJitter, clockLine: clockLine,
+    ACTION_LABELS: ACTION_LABELS, describeJitter: describeJitter, clockLine: clockLine, describeUpdate: describeUpdate, repoLabel: repoLabel,
     endFromDuration: endFromDuration, durationFromEnd: durationFromEnd, describeRepeat: describeRepeat };
 })();
 

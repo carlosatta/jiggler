@@ -104,6 +104,7 @@ bool hasBluetooth(const ApiContext& c) { return c.bluetooth != nullptr; }
 bool hasSchedules(const ApiContext& c) { return c.schedules != nullptr; }
 bool hasClock(const ApiContext& c) { return c.clock != nullptr; }
 bool hasButton(const ApiContext& c) { return c.button != nullptr; }
+bool hasUpdates(const ApiContext& c) { return c.updates != nullptr; }
 
 const ExtTool kExtTools[] = {
     {"get_appearance", hasAppearance}, {"set_appearance", hasAppearance},
@@ -116,6 +117,7 @@ const ExtTool kExtTools[] = {
     {"get_schedules", hasSchedules}, {"set_schedules", hasSchedules},
     {"get_time", hasClock},          {"set_time", hasClock},
     {"get_button", hasButton},       {"set_button", hasButton},
+    {"get_updates", hasUpdates},     {"set_updates", hasUpdates},    {"check_updates", hasUpdates}, {"install_update", hasUpdates},
 };
 
 const ExtTool* findExtTool(const ApiContext& ctx, const std::string& name) {
@@ -217,6 +219,20 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
       addProp(p, "timezone", "string", "Timezone name, e.g. Europe/Rome, America/New_York, UTC (see get_time for the list).");
       addProp(p, "ntpServer", "string", "NTP server host name, e.g. pool.ntp.org; empty to stop using NTP.");
       addNumberProp(p, "epoch", "integer", 1700000000, 4102444800, "Set the clock to this Unix time in seconds.");
+    } else if (name == "get_updates") {
+      addTool(tools, t.name, "Get the firmware update state: the running version, the latest release found, the mode (manual, automatic, ignore) and the repository it looks at.", &schema);
+      schema["properties"].to<JsonObject>();
+    } else if (name == "set_updates") {
+      addTool(tools, t.name, "Choose how updates are handled and where they come from. manual: it looks for releases and tells you; automatic: it also installs them; ignore: it never looks by itself.", &schema);
+      JsonObject p = schema["properties"].to<JsonObject>();
+      addProp(p, "mode", "string", "manual, automatic or ignore.");
+      addProp(p, "repoUrl", "string", "A GitHub repository address, https://github.com/owner/repo; empty for the project's own repository.");
+    } else if (name == "check_updates") {
+      addTool(tools, t.name, "Look for a newer release now (takes a few seconds; read the result with get_updates).", &schema);
+      schema["properties"].to<JsonObject>();
+    } else if (name == "install_update") {
+      addTool(tools, t.name, "Install the newer release found by check_updates. The device downloads it, then restarts.", &schema);
+      schema["properties"].to<JsonObject>();
     } else if (name == "get_button") {
       addTool(tools, t.name, "Get which GPIO the physical button is wired to (default 0, the BOOT button) and the pins that can be used. A tap starts or stops the jiggler, a 5 to 10 s hold opens Discovery, a 30 s hold switches the network mode.", &schema);
       schema["properties"].to<JsonObject>();
@@ -328,6 +344,10 @@ ToolOutput callExtTool(ApiContext& ctx, const std::string& name, JsonVariantCons
     if (!settings.as<JsonObject>().isNull() && settings.size() > 0) last = viaRoute(ctx, "PUT", "/api/time", serialize(settings));
     return last;
   }
+  if (name == "get_updates") return viaRoute(ctx, "GET", "/api/updates");
+  if (name == "set_updates") return viaRoute(ctx, "PUT", "/api/updates", args.isNull() ? "{}" : serialize(args));
+  if (name == "check_updates") return viaRoute(ctx, "POST", "/api/updates/check");
+  if (name == "install_update") return viaRoute(ctx, "POST", "/api/updates/install");
   if (name == "get_button") return viaRoute(ctx, "GET", "/api/button");
   if (name == "set_button") return viaRoute(ctx, "PUT", "/api/button", args.isNull() ? "{}" : serialize(args));
   if (name == "get_network") return viaRoute(ctx, "GET", "/api/network");

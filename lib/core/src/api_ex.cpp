@@ -9,7 +9,7 @@ HttpResponse json(int status, std::string body) { return {status, std::move(body
 int statusForCmdError(const std::string& error) {
   if (error == "not_found") return 404;
   if (error == "read_only") return 403;
-  if (error == "limit_reached" || error == "mouse_not_connected" || error == "busy") return 409;
+  if (error == "limit_reached" || error == "mouse_not_connected" || error == "busy" || error == "no_clock" || error == "no_update") return 409;
   if (error == "storage_error") return 507;
   return 400;
 }
@@ -114,6 +114,7 @@ HttpResponse statusWithExtras(ApiContext& ctx, HttpResponse base) {
   if (base.status != 200 || base.body.empty() || base.body.back() != '}') return base;
   std::string extra;
   if (ctx.bluetooth) extra += ",\"bluetooth\":" + bluetoothSummaryJson(ctx.bluetooth->status());
+  if (ctx.updates) extra += ",\"update\":" + ctx.updates->summaryJson();
   if (ctx.clock) extra += ",\"time\":" + clockStatusToJson(ctx.clock->status());
   if (ctx.schedules) extra += ",\"schedule\":" + scheduleStatusToJson(ctx.schedules->status());
   if (!ctx.info.version.empty()) {
@@ -236,6 +237,42 @@ HttpResponse buttonRoute(ApiContext& ctx, const std::string& method, const std::
   return json(200, buttonToJson(ctx.button->gpio()));
 }
 
+HttpResponse updatesRoute(ApiContext& ctx, const std::string& method, const std::string& path, const std::string& body) {
+  UpdateManager* u = ctx.updates;
+  if (!u) return json(404, errorJson("not_found"));
+  if (path == "/api/updates/check" || path == "/api/updates/install") {
+    if (method != "POST") return json(405, errorJson("method_not_allowed"));
+    const CmdResult r = path == "/api/updates/check" ? u->requestCheck() : u->requestInstall();
+    if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
+    return json(202, u->statusJson());
+  }
+  if (path != "/api/updates") return json(404, errorJson("not_found"));
+  if (method == "GET") return json(200, u->statusJson());
+  if (method != "PUT") return json(405, errorJson("method_not_allowed"));
+  if (body.size() > kMaxSmallBodyBytes) return json(413, errorJson("payload_too_large"));
+  JsonDocument doc;
+  if (deserializeJson(doc, body) || !doc.is<JsonObject>()) return json(400, errorJson("bad_json", "", "body must be a JSON object"));
+  std::optional<UpdateMode> mode;
+  std::optional<std::string> repo;
+  for (JsonPair kv : doc.as<JsonObject>()) {
+    const std::string key = kv.key().c_str();
+    if (key == "mode") {
+      const auto m = kv.value().is<const char*>() ? parseUpdateMode(kv.value().as<std::string>()) : std::nullopt;
+      if (!m) return json(400, errorJson("invalid_mode", key, "must be manual, automatic or ignore"));
+      mode = m;
+    } else if (key == "repoUrl") {
+      if (!kv.value().is<const char*>()) return json(400, errorJson("invalid_repo_url", key, "must be a string"));
+      repo = kv.value().as<std::string>();
+    } else if (key != "defaultRepoUrl" && key != "current" && key != "state" && key != "progress" && key != "checkedAgoMs" && key != "latest" &&
+               key != "available" && key != "blocked" && key != "error") {  // read-only keys a GET body carries
+      return json(400, errorJson("unknown_field", key, "unknown field"));
+    }
+  }
+  const CmdResult r = u->updateSettings(mode, repo);
+  if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
+  return json(200, u->statusJson());
+}
+
 HttpResponse scriptsRoute(ApiContext& ctx, const std::string& method, const std::string& path, const std::string& body) {
   static const std::string kPrefix = "/api/scripts";
   static const std::string kRunSuffix = "/run";
@@ -305,6 +342,7 @@ HttpResponse handleApiEx(ApiContext& ctx, const std::string& method, const std::
   if (path == "/api/schedules") return schedulesRoute(ctx, method, body);
   if (path == "/api/time" || path == "/api/time/set") return timeRoute(ctx, method, path, body);
   if (path == "/api/button") return buttonRoute(ctx, method, body);
+  if (path == "/api/updates" || path == "/api/updates/check" || path == "/api/updates/install") return updatesRoute(ctx, method, path, body);
   if (path == "/api/log") {
     if (!ctx.log) return json(404, errorJson("not_found"));
     if (method != "GET") return json(405, errorJson("method_not_allowed"));
