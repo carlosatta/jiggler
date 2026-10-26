@@ -58,7 +58,7 @@ class GithubSource : public jig::ReleaseSource {
     if (!out.error.empty()) return out;
     http.addHeader("Accept", "application/vnd.github+json");
     const int code = http.GET();
-    diagf("Update: GitHub answered %d (stack left %u)", code, static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr) * 4));
+    diagf("Update: GitHub answered %d (stack left %u)", code, static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     if (code != 200) {
       out.error = failure(code);
       http.end();
@@ -130,9 +130,34 @@ std::string getFollowing(Connection& c, std::string url, int& status) {
   return "too many redirects";
 }
 
+constexpr uint32_t kInstallStack = 20480;  // writing and verifying the image needs far more than a check does
+
 class HttpsInstaller : public jig::FirmwareInstaller {
  public:
+  // Runs on a task of its own, created for the install and gone afterwards, so the big stack is not held all day.
   jig::InstallResult install(const jig::ReleaseInfo& release, const std::function<void(uint32_t, uint32_t)>& progress) override {
+    struct Job {
+      HttpsInstaller* self;
+      const jig::ReleaseInfo* release;
+      const std::function<void(uint32_t, uint32_t)>* progress;
+      jig::InstallResult result;
+      TaskHandle_t waiter;
+    } job{this, &release, &progress, {}, xTaskGetCurrentTaskHandle()};
+    const BaseType_t created = xTaskCreatePinnedToCore(
+        [](void* raw) {
+          Job* j = static_cast<Job*>(raw);
+          j->result = j->self->run(*j->release, *j->progress);
+          xTaskNotifyGive(j->waiter);
+          vTaskDelete(nullptr);
+        },
+        "install", kInstallStack, &job, 1, nullptr, 0);
+    if (created != pdPASS) return fail(job.result, "not enough free memory to start the install; try again in a moment");
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    return job.result;
+  }
+
+ private:
+  jig::InstallResult run(const jig::ReleaseInfo& release, const std::function<void(uint32_t, uint32_t)>& progress) {
     jig::InstallResult out;
     diagf("Update: installing %s (%u bytes), heap %u", release.version.c_str(), static_cast<unsigned>(release.binSize), static_cast<unsigned>(ESP.getFreeHeap()));
     std::string expected = release.sha256;  // from the release information: no extra connections
@@ -207,13 +232,14 @@ class HttpsInstaller : public jig::FirmwareInstaller {
       Update.abort();
       return fail(out, "the downloaded firmware does not match its checksum; nothing was installed");
     }
+    diagf("Update: finishing the image (stack left %u of %u, heap %u)", static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)),
+          static_cast<unsigned>(kInstallStack), static_cast<unsigned>(ESP.getFreeHeap()));
     if (!Update.end(true)) return fail(out, std::string("the firmware was refused: ") + Update.errorString());
-    diagf("Update: image written%s, restarting", expected.empty() ? "" : " and checksum ok");
+    diagf("Update: image written%s, restarting (stack left %u)", expected.empty() ? "" : " and checksum ok", static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     out.ok = true;
     return out;
   }
 
- private:
   static jig::InstallResult fail(jig::InstallResult& out, const std::string& message) {
     diagf("Update failed: %s", message.c_str());
     out.ok = false;
@@ -275,5 +301,5 @@ void taskLoop(void* raw) {
 void startUpdateTask(jig::UpdateManager& manager, void (*restart)()) {
   static TaskArgs args;
   args = {&manager, restart};
-  xTaskCreatePinnedToCore(taskLoop, "update", 12288, &args, 1, nullptr, 0);
+  xTaskCreatePinnedToCore(taskLoop, "update", 10240, &args, 1, nullptr, 0);
 }

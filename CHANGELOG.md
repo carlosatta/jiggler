@@ -2,7 +2,8 @@
 
 ## 0.7.3
 
-- **The update needs two secure connections instead of four.** The release's SHA-256 is taken from the release information itself (GitHub reports each file's `digest`), so the separate `.sha256` file is only fetched when that is missing. Each secure connection splits the device's free memory a little more, and the fourth one could not be opened ("not enough free memory"), which is why installing from the repository stopped half way in 0.7.2.
+- **Installing from the repository now completes.** In 0.7.2 the download stopped half way (or crashed near the end) because the device did not have enough free memory for the secure connections. Three changes: the Bluetooth stack is shut down for the download (it holds most of the spare memory) and the device restarts afterwards, whether the install worked or not (if it failed, the reason is kept and shown on the dashboard after the restart); the release's SHA-256 is taken from the release information (GitHub reports each file's `digest`), so the separate `.sha256` file is only fetched when that is missing, which cuts four secure connections to two; and the install runs on a temporary task with a larger stack. Checked on a board: 0.7.0 → 0.7.2 from this repository's release in 42 seconds.
+- While it installs, the jiggler stops and Bluetooth is off (the Mac sees a disconnect); both come back after the restart.
 
 ## 0.7.2
 

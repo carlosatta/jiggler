@@ -201,6 +201,7 @@ void UpdateManager::begin() {
     if (doc["checkTime"].is<const char*>()) {
       if (const auto m = parseTimeOfDay(doc["checkTime"].as<std::string>())) settings_.checkMinute = *m;
     }
+    error_ = doc["lastError"] | "";
     const std::string attempted = doc["attempted"] | "";
     if (!attempted.empty() && attempted != current_) blockedVersion_ = attempted;  // installed, but it is not what runs
   }
@@ -219,6 +220,7 @@ bool UpdateManager::saveLocked() {
   doc["repoUrl"] = settings_.repoUrl;
   doc["checkTime"] = formatTimeOfDay(settings_.checkMinute);
   doc["attempted"] = blockedVersion_;
+  doc["lastError"] = error_;  // an install that failed restarts the device: the reason has to survive that
   std::string out;
   serializeJson(doc, out);
   return blobs_.put(kBlobKey, out);
@@ -396,7 +398,9 @@ bool UpdateManager::runPending(ReleaseSource& source, FirmwareInstaller& install
     }
     latest_ = info;
     checkedAtMs_ = platform_.nowMs();
+    const bool hadError = !error_.empty();
     error_.clear();
+    if (hadError) saveLocked();
     markCheckedTodayLocked();
     if (settings_.mode == UpdateMode::Automatic && availableLocked() && info.version != blockedVersion_ && info.version != attemptedThisBoot_)
       installRequested_ = true;

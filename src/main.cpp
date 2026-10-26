@@ -112,7 +112,12 @@ void setup() {
   api.button = &buttonStore;
   api.log = &eventLog;
   api.updates = &updates;
-  updates.setInstallActive([](bool active) { ble.setQuiet(active); });
+  // An install needs the memory the Bluetooth stack holds: it is shut down for the download, and the device restarts
+  // afterwards, whether the install worked or not.
+  updates.setInstallActive([](bool active) {
+    if (active) ble.shutdown();
+    else scheduleRestart();
+  });
   startUpdateTask(updates, scheduleRestart);
   api.nowMs = [] { return static_cast<uint32_t>(millis()); };
   api.tokens = &tokens;

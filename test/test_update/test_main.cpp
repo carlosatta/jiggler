@@ -320,6 +320,25 @@ void test_a_failed_install_reports_and_does_not_block() {
   TEST_ASSERT_FALSE(rebooted.status().blocked);        // nothing was installed, so it can be tried again
 }
 
+void test_the_reason_an_install_failed_survives_the_restart() {
+  Env e;
+  e.check();
+  e.installer.result = {false, "the download stopped"};
+  e.manager.requestInstall();
+  e.manager.runPending(e.source, e.installer);
+  UpdateManager rebooted(e.clock, e.blobs, e.clockStore, "0.6.0");  // the device restarts after a failed install
+  rebooted.begin();
+  TEST_ASSERT_EQUAL_STRING("the download stopped", rebooted.status().error.c_str());
+  FakeSource src;
+  src.next = {true, kRelease, ""};
+  rebooted.requestCheck();
+  rebooted.runPending(src, e.installer);                            // a good look clears it, for good
+  TEST_ASSERT_TRUE(rebooted.status().error.empty());
+  UpdateManager again(e.clock, e.blobs, e.clockStore, "0.6.0");
+  again.begin();
+  TEST_ASSERT_TRUE(again.status().error.empty());
+}
+
 void test_manual_mode_never_installs_by_itself() {
   Env e;
   e.manager.updateSettings(UpdateMode::Manual, std::nullopt);
@@ -589,6 +608,7 @@ int main() {
   RUN_TEST(test_after_the_restart_the_attempt_is_forgotten_when_the_new_version_runs);
   RUN_TEST(test_an_image_that_did_not_take_is_marked_blocked);
   RUN_TEST(test_a_failed_install_reports_and_does_not_block);
+  RUN_TEST(test_the_reason_an_install_failed_survives_the_restart);
   RUN_TEST(test_manual_mode_never_installs_by_itself);
   RUN_TEST(test_automatic_mode_installs_what_it_finds);
   RUN_TEST(test_automatic_mode_does_not_retry_a_failed_or_blocked_version);

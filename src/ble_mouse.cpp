@@ -96,6 +96,7 @@ void BleMouse::begin(const jig::ResolvedAppearance& device) {
   hid->startServices();
 
   appearance_ = device.identity.appearance;
+  begun_ = true;
   refreshAdvertising();
 }
 
@@ -153,6 +154,7 @@ void BleMouse::linkDown(uint16_t handle) {
 }
 
 std::vector<std::string> BleMouse::bondedAddresses() {
+  if (!begun_) return {};
   std::vector<std::string> out;
   const int n = NimBLEDevice::getNumBonds();
   for (int i = 0; i < n; ++i) out.push_back(lower(NimBLEDevice::getBondedAddress(i).toString()));
@@ -167,6 +169,7 @@ std::vector<std::string> BleMouse::connectedAddresses() {
 }
 
 void BleMouse::disconnectAll() {
+  if (!begun_) return;
   std::vector<uint16_t> handles;
   {
     std::lock_guard<std::mutex> lock(linksMutex_);
@@ -177,6 +180,7 @@ void BleMouse::disconnectAll() {
 }
 
 bool BleMouse::forgetBond(const std::string& address) {
+  if (!begun_) return false;
   const int n = NimBLEDevice::getNumBonds();
   for (int i = 0; i < n; ++i) {
     const NimBLEAddress bonded = NimBLEDevice::getBondedAddress(i);
@@ -185,11 +189,13 @@ bool BleMouse::forgetBond(const std::string& address) {
   return false;
 }
 
-void BleMouse::forgetAllBonds() { NimBLEDevice::deleteAllBonds(); }
+void BleMouse::forgetAllBonds() {
+  if (begun_) NimBLEDevice::deleteAllBonds();
+}
 
 void BleMouse::setQuiet(bool quiet) {
   quiet_ = quiet;
-  if (quiet) {
+  if (quiet && begun_) {
     NimBLEDevice::stopAdvertising();
     disconnectAll();
   }  // coming back: the 200 ms advertising watchdog (setConnectable) restarts advertising
@@ -199,7 +205,7 @@ void BleMouse::setQuiet(bool quiet) {
 // the device. Waiting: not discoverable and nameless, so only a computer that already knows the device (by its
 // address) reconnects, and nothing shows up for anyone else.
 void BleMouse::refreshAdvertising() {
-  if (quiet_ || !enabled_) return;
+  if (!begun_ || quiet_ || !enabled_) return;
   const bool discoverable = pairingOpen_;
   NimBLEDevice::stopAdvertising();
   NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
@@ -220,7 +226,7 @@ void BleMouse::refreshAdvertising() {
 }
 
 void BleMouse::setEnabled(bool on) {
-  if (quiet_) return;
+  if (!begun_ || quiet_) return;
   const bool changed = enabled_.exchange(on) != on;
   if (changed) diagf("BLE radio %s", on ? "on" : "off");
   if (!on) {
@@ -244,6 +250,7 @@ void BleMouse::setEnabled(bool on) {
 }
 
 void BleMouse::setPairingOpen(bool open) {
+  if (!begun_) return;
   const bool changed = pairingOpen_.exchange(open) != open;
   // Open: "Just Works" (no code). Closed: advertise a display+yes/no capability so a pairing attempt reaches
   // onConfirmPIN, where it is refused before any key is stored. Does not affect already-bonded reconnections.
@@ -279,3 +286,21 @@ void BleMouse::click() {
 void BleMouse::keyDown(uint8_t modifiers, uint8_t usage) { sendKeyboard(modifiers, usage); }
 
 void BleMouse::keyUp() { sendKeyboard(0, 0); }
+
+void BleMouse::shutdown() {
+  if (!begun_) return;
+  pairedBeforeShutdown_ = NimBLEDevice::getNumBonds();
+  quiet_ = true;
+  disconnectAll();
+  NimBLEDevice::stopAdvertising();
+  begun_ = false;
+  {
+    std::lock_guard<std::mutex> lock(linksMutex_);
+    links_.clear();
+    refreshConnected();
+  }
+  mouseInput_ = nullptr;
+  server_ = nullptr;
+  NimBLEDevice::deinit(true);
+  diagf("BLE: shut down to free memory (heap %u, largest block %u)", static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMaxAllocHeap()));
+}

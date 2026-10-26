@@ -20,7 +20,10 @@ class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::Bl
   bool connected() const { return connected_; }
   std::string address() const;
   std::string name() const { return name_; }
-  int pairedCount() const { return NimBLEDevice::getNumBonds(); }
+  int pairedCount() const { return begun_ ? NimBLEDevice::getNumBonds() : pairedBeforeShutdown_; }
+  // Releases the Bluetooth stack's memory before a firmware download (the device restarts afterwards). From here on
+  // every call that would reach the stack does nothing.
+  void shutdown();
 
   // jig::BleLink
   std::vector<std::string> bondedAddresses() override;
@@ -59,6 +62,8 @@ class BleMouse : public jig::MouseSink, public jig::KeyboardSink, public jig::Bl
   };
 
   std::atomic<bool> connected_{false};
+  std::atomic<bool> begun_{false};      // the stack is running
+  int pairedBeforeShutdown_ = 0;
   std::atomic<bool> enabled_{true};
   uint16_t appearance_ = 0;
   std::atomic<bool> pairingOpen_{false};
