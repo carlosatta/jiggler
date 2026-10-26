@@ -227,6 +227,7 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
       JsonObject p = schema["properties"].to<JsonObject>();
       addProp(p, "mode", "string", "manual, automatic or ignore.");
       addProp(p, "repoUrl", "string", "A GitHub repository address, https://github.com/owner/repo; empty for the project's own repository.");
+      addProp(p, "checkTime", "string", "The time of day (device timezone, HH:MM, default 03:00) when it looks for a release and, in automatic mode, installs it.");
     } else if (name == "check_updates") {
       addTool(tools, t.name, "Look for a newer release now (takes a few seconds; read the result with get_updates).", &schema);
       schema["properties"].to<JsonObject>();

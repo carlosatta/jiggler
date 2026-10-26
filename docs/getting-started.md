@@ -66,15 +66,15 @@ Once the board has been flashed over USB with a build that has OTA (0.5.0 or lat
   <img src="images/system-updates.png" alt="System, Firmware updates: a new version is available" width="260">
 </p>
 
-**1. From the project's releases (GitHub).** In **System → Firmware updates** the device looks at the latest release of a repository (by default [carlosatta/jiggler](https://github.com/carlosatta/jiggler)), about once a day, and you choose what it does when a new version appears:
+**1. From the project's releases (GitHub).** In **System → Firmware updates** the device looks at the latest release of a repository (by default [carlosatta/jiggler](https://github.com/carlosatta/jiggler)) once a day, **at a time you choose** (default 03:00, on the device's clock and timezone), and you choose what it does when a new version appears:
 
 | Setting | What happens |
 |---|---|
 | **Tell me, and I install it** (default) | The dashboard says "Version X is available" (also on Status). You press **Install**. |
-| **Install it automatically** | The device downloads and installs the new version by itself, then restarts (the jiggler and Bluetooth are off for a minute or so). |
-| **Ignore it** | It never looks by itself. **Check for updates** still works whenever you press it. |
+| **Install it automatically** | At that time the device downloads and installs the new version by itself, then restarts (the jiggler and Bluetooth are off for a minute or so), so pick a quiet hour. |
+| **Ignore it** | It never looks by itself (the time does not apply). **Check for updates** still works whenever you press it. |
 
-The **repository** is a field you can change (for example to your own fork); **Use the default** puts the project's repository back. The same settings are in `GET/PUT /api/updates` and the `get_updates` / `set_updates` tools. Needs: the board online, and its **clock set** (System → Time), because the secure connection checks certificate dates. The download is over HTTPS with the certificate verified against the standard list of public certificate authorities, and is checked against the release's `.sha256` file. **Only follow a repository you trust**: whoever can publish a release there can change what runs on your device. The firmware file must be named `jiggler-esp32.bin` (releases of this project have it).
+The **repository** is a field you can change (for example to your own fork); **Use the default** puts the project's repository back. The same settings are in `GET/PUT /api/updates` and the `get_updates` / `set_updates` tools. Needs: the board online, and its **clock set** (System → Time), because the secure connection checks certificate dates and the time of day is read on that clock. A board that is off at the chosen time looks as soon as it is back (about ten minutes after boot); a look that fails is retried every hour. The download is over HTTPS with the certificate verified against the standard list of public certificate authorities, and is checked against the release's `.sha256` file. **Only follow a repository you trust**: whoever can publish a release there can change what runs on your device. The firmware file must be named `jiggler-esp32.bin` (releases of this project have it).
 
 If an installed version does not start, the board falls back to the previous one; an automatic update never retries a version that did not take effect.
 

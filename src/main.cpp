@@ -45,7 +45,7 @@ jig::Controller controller(platform, rng, store);
 jig::ClockStore clockStore(platform, blobs);
 jig::ButtonStore buttonStore(blobs);
 jig::ScheduleEngine schedules(platform, controller, blobs, clockStore);
-jig::UpdateManager updates(platform, blobs, JIG_VERSION);
+jig::UpdateManager updates(platform, blobs, clockStore, JIG_VERSION);
 jig::EventLog eventLog;
 jig::ApiContext api{controller};
 

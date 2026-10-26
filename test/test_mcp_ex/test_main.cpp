@@ -39,7 +39,7 @@ struct Env {
   AutomationEngine automations{clock, rng, scripts, blobs};
   ClockStore clockStore{clock, blobs};
   ButtonStore buttonStore{blobs};
-  UpdateManager updates{clock, blobs, "0.6.0"};
+  UpdateManager updates{clock, blobs, clockStore, "0.6.0"};
   ScheduleEngine schedules{clock, controller, blobs, clockStore};
   struct Link : BleLink {
     std::vector<std::string> bonded{"aa:bb:cc:dd:ee:01"}, connected;
@@ -159,9 +159,10 @@ void test_button_tools() {
 void test_update_tools() {
   Env e;
   TEST_ASSERT_EQUAL_STRING("manual", toolText(e.tool("get_updates"))["mode"].as<const char*>());
-  McpReply set = e.tool("set_updates", "{\"mode\":\"automatic\",\"repoUrl\":\"https://github.com/someone/fork\"}");
+  McpReply set = e.tool("set_updates", "{\"mode\":\"automatic\",\"repoUrl\":\"https://github.com/someone/fork\",\"checkTime\":\"02:30\"}");
   TEST_ASSERT_FALSE(isError(set));
   TEST_ASSERT_EQUAL_STRING("automatic", toolText(set)["mode"].as<const char*>());
+  TEST_ASSERT_EQUAL_STRING("02:30", toolText(set)["checkTime"].as<const char*>());
   TEST_ASSERT_TRUE(isError(e.tool("set_updates", "{\"mode\":\"never\"}")));
   TEST_ASSERT_FALSE(isError(e.tool("check_updates")));
   TEST_ASSERT_TRUE(isError(e.tool("install_update")));   // busy: the check is queued, and nothing is known yet

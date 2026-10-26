@@ -71,7 +71,7 @@ const Route kPageRoutes[] = {
     {"PUT", "/api/schedules", "{\"schedules\":[]}"},
     {"GET", "/api/button", ""},
     {"GET", "/api/updates", ""},
-    {"PUT", "/api/updates", "{\"mode\":\"manual\"}"},
+    {"PUT", "/api/updates", "{\"mode\":\"manual\",\"checkTime\":\"03:00\"}"},
     {"POST", "/api/updates/check", ""},
     {"POST", "/api/updates/install", ""},
     {"PUT", "/api/button", "{\"gpio\":0}"},
@@ -150,7 +150,7 @@ void test_dashboard_only_references_real_routes() {
   buttonStore.begin();
   ctx.clock = &clockStore;
   ctx.button = &buttonStore;
-  jig::UpdateManager updateManager(clock, blobs, "0.6.0");
+  jig::UpdateManager updateManager(clock, blobs, clockStore, "0.6.0");
   updateManager.begin();
   ctx.updates = &updateManager;
   ctx.tokens = &tokens;

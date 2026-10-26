@@ -6,6 +6,7 @@
   - The download is over HTTPS, verified against the standard public certificate authorities (a 55 KB list embedded in the firmware, `tools/make_cert_bundle.py`), and checked against the release's `.sha256`. It needs the clock to be set. A version that was installed but did not take effect is not retried automatically.
   - Releases are built by `.github/workflows/release.yml`, which attaches `jiggler-esp32.bin` and its checksum when you publish a release whose tag matches `JIG_VERSION`. The firmware file upload remains, as **Install from a file**.
   - **Only follow a repository you trust**: whoever can publish a release there controls what runs on the device.
+- **The daily look has a time.** In Firmware updates, **Look for updates at** (default 03:00, on the device's clock and timezone) says when the device checks for a new release and, in automatic mode, installs it, so it can be a quiet hour. `checkTime` in `GET/PUT /api/updates` and in `set_updates`. A board that was off at that time looks about ten minutes after it is back; a failed look is retried every hour.
 - **About** now has a **Source code** link to the repository page.
 - The firmware grew by about 230 KB (HTTPS) and now uses about 90% of an update slot.
 - `GET /api/log` also records why the device last restarted (power, crash, brownout...) and the update steps.

@@ -217,12 +217,13 @@ test('clockLine says where the time comes from, or that it is not set', () => {
 });
 
 const upd = (over) => Object.assign({
-  mode: 'manual', repoUrl: 'https://github.com/carlosatta/jiggler', current: '0.6.0', state: 'idle', progress: 0,
+  mode: 'manual', checkTime: '03:00', repoUrl: 'https://github.com/carlosatta/jiggler', current: '0.6.0', state: 'idle', progress: 0,
   checkedAgoMs: null, latest: null, available: false, blocked: false, error: null
 }, over);
 
 test('describeUpdate: never checked, up to date, available, blocked', () => {
-  assert.match(JigLib.describeUpdate(upd()).text, /Not checked yet/);
+  assert.match(JigLib.describeUpdate(upd()).text, /Not checked yet. The device looks by itself every day at 03:00/);
+  assert.match(JigLib.describeUpdate(upd({ checkTime: '22:30' })).text, /every day at 22:30/);
   assert.match(JigLib.describeUpdate(upd({ mode: 'ignore' })).text, /ignored/);
   const same = JigLib.describeUpdate(upd({ checkedAgoMs: 185000, latest: { version: '0.6.0' } }));
   assert.match(same.text, /up to date \(0\.6\.0\), checked 3 minutes ago/);

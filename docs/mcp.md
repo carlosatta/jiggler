@@ -48,7 +48,7 @@ Tool failures are returned as a normal result with `isError: true` and a JSON er
 | `get_time` | – | The clock (source, local time), timezone and NTP server |
 | `set_time` | `timezone`, `ntpServer`, `epoch` (all optional) | Change the timezone or NTP server, or set the clock by hand |
 | `get_updates` | – | Running version, the latest release found, the mode and the repository |
-| `set_updates` | `mode` (`manual`, `automatic`, `ignore`), `repoUrl` | Choose what happens when a release appears and where to look |
+| `set_updates` | `mode` (`manual`, `automatic`, `ignore`), `repoUrl`, `checkTime` (`HH:MM`) | Choose what happens when a release appears, where to look, and at what time of day |
 | `check_updates` | – | Look for a newer release now |
 | `install_update` | – | Install the newer release found; the device restarts |
 | `get_button` | – | The GPIO of the physical button and the usable pins |

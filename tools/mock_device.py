@@ -58,7 +58,7 @@ class Device:
         self.disc_seconds = 180
         self.off_on_disconnect = True
         self.button_gpio = 0
-        self.upd = {"mode": "manual", "repoUrl": "https://github.com/carlosatta/jiggler", "latest": None, "checked_at": None,
+        self.upd = {"mode": "manual", "checkTime": "03:00", "repoUrl": "https://github.com/carlosatta/jiggler", "latest": None, "checked_at": None,
                     "busy_until": None, "kind": None, "error": None}
         self.schedules = [{"id": "workdays", "enabled": True, "kind": "window", "days": ["mon", "tue", "wed", "thu", "fri"], "start": "09:00",
                            "durationMin": 480, "jitterMin": 10, "times": None, "remaining": None},
@@ -168,7 +168,7 @@ class Device:
             progress = max(0, min(99, int(100 - (u["busy_until"] - now) / 4.0 * 100)))
         elif state == "restarting":
             progress = 100
-        return {"mode": u["mode"], "repoUrl": u["repoUrl"], "defaultRepoUrl": "https://github.com/carlosatta/jiggler", "current": "0.6.0",
+        return {"mode": u["mode"], "checkTime": u["checkTime"], "repoUrl": u["repoUrl"], "defaultRepoUrl": "https://github.com/carlosatta/jiggler", "current": "0.6.0",
                 "state": state, "progress": progress, "checkedAgoMs": int((now - u["checked_at"]) * 1000) if u["checked_at"] else None,
                 "latest": u["latest"], "available": bool(u["latest"]) and u["latest"]["version"] != "0.6.0", "blocked": False, "error": u["error"]}
 
@@ -362,6 +362,11 @@ class Handler(BaseHTTPRequestHandler):
                     if b["mode"] not in ("manual", "automatic", "ignore"):
                         return self.err(400, "invalid_mode", "mode", "must be manual, automatic or ignore")
                     d.upd["mode"] = b["mode"]
+                if "checkTime" in b:
+                    t = b["checkTime"]
+                    if not (isinstance(t, str) and len(t) == 5 and t[2] == ":" and t[:2].isdigit() and t[3:].isdigit() and int(t[:2]) < 24 and int(t[3:]) < 60):
+                        return self.err(400, "invalid_time", "checkTime", "must be a time of day like 03:00")
+                    d.upd["checkTime"] = t
                 if "repoUrl" in b:
                     url = b["repoUrl"] or "https://github.com/carlosatta/jiggler"
                     if not url.startswith("https://github.com/") or url.count("/") < 4:

@@ -157,10 +157,15 @@
   // ---- Firmware updates from the repository ----
   var upd = null, updTimer = null, updDirty = false, restartWatching = false;
   var MODE_HINTS = {
-    manual: 'The device looks about once a day and tells you here and on Status. You press Install.',
-    automatic: 'The device looks about once a day and installs a new version by itself, then restarts (the jiggler and Bluetooth are off for a short while). A version that did not take effect is not retried automatically.',
+    manual: 'The device looks once a day, at the time below, and tells you here and on Status. You press Install.',
+    automatic: 'The device looks once a day, at the time below, and installs a new version by itself, then restarts (the jiggler and Bluetooth are off for a short while). A version that did not take effect is not retried automatically.',
     ignore: 'The device never looks by itself. You can still press Check for updates.'
   };
+  function showTimeField() {
+    var off = $('updMode').value === 'ignore';
+    $('updTimeBox').hidden = off;
+    $('updTimeHint').hidden = off;
+  }
   function renderUpdates() {
     if (!upd) return;
     var d = JigLib.describeUpdate(upd);
@@ -178,8 +183,10 @@
     if (!updDirty) {
       $('updMode').value = upd.mode;
       $('updRepo').value = upd.repoUrl;
+      $('updTime').value = upd.checkTime;
     }
     $('updModeHint').textContent = MODE_HINTS[$('updMode').value] || '';
+    showTimeField();
     var repoLink = $('infoRepo');
     repoLink.href = upd.repoUrl;
     repoLink.textContent = JigLib.repoLabel(upd.repoUrl);
@@ -194,8 +201,8 @@
       renderUpdates();
     }).catch(function () {});
   }
-  ['updMode', 'updRepo'].forEach(function (id) {
-    $(id).addEventListener('input', function () { updDirty = true; $('updModeHint').textContent = MODE_HINTS[$('updMode').value] || ''; });
+  ['updMode', 'updRepo', 'updTime'].forEach(function (id) {
+    $(id).addEventListener('input', function () { updDirty = true; $('updModeHint').textContent = MODE_HINTS[$('updMode').value] || ''; showTimeField(); });
   });
   $('updCheck').onclick = function () {
     say('', '', 'updMsg');
@@ -216,6 +223,7 @@
     clearErrors(root);
     say('', '', 'updSaveMsg');
     var body = { mode: $('updMode').value, repoUrl: repoOverride !== undefined ? repoOverride : $('updRepo').value.trim() };
+    if ($('updTime').value) body.checkTime = $('updTime').value;
     App.call('PUT', '/api/updates', body).then(function (res) {
       if (res.status === 200) { updDirty = false; upd = res.data; renderUpdates(); say('Saved.', 'good', 'updSaveMsg'); App.poll(); return; }
       var d = res.data;

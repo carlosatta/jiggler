@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 
 #include <cctype>
+#include <cstdio>
 
 namespace jig {
 
@@ -153,8 +154,23 @@ std::string parseRelease(const std::string& json, ReleaseInfo& out) {
   return "";
 }
 
-UpdateManager::UpdateManager(Platform& platform, BlobStore& blobs, std::string currentVersion)
-    : platform_(platform), blobs_(blobs), current_(std::move(currentVersion)) {}
+std::optional<uint16_t> parseTimeOfDay(const std::string& t) {
+  if (t.size() != 5 || t[2] != ':') return std::nullopt;
+  for (size_t i : {0u, 1u, 3u, 4u})
+    if (!std::isdigit(static_cast<unsigned char>(t[i]))) return std::nullopt;
+  const int h = (t[0] - '0') * 10 + (t[1] - '0'), m = (t[3] - '0') * 10 + (t[4] - '0');
+  if (h > 23 || m > 59) return std::nullopt;
+  return static_cast<uint16_t>(h * 60 + m);
+}
+
+std::string formatTimeOfDay(uint16_t minute) {
+  char buf[8];
+  snprintf(buf, sizeof buf, "%02u:%02u", minute / 60u, minute % 60u);
+  return buf;
+}
+
+UpdateManager::UpdateManager(Platform& platform, BlobStore& blobs, ClockStore& clock, std::string currentVersion)
+    : platform_(platform), blobs_(blobs), clock_(clock), current_(std::move(currentVersion)) {}
 
 void UpdateManager::begin() {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -169,17 +185,26 @@ void UpdateManager::begin() {
     if (doc["repoUrl"].is<const char*>()) {
       if (const auto r = parseRepoUrl(doc["repoUrl"].as<std::string>())) settings_.repoUrl = repoPageUrl(*r);
     }
+    if (doc["checkTime"].is<const char*>()) {
+      if (const auto m = parseTimeOfDay(doc["checkTime"].as<std::string>())) settings_.checkMinute = *m;
+    }
     const std::string attempted = doc["attempted"] | "";
     if (!attempted.empty() && attempted != current_) blockedVersion_ = attempted;  // installed, but it is not what runs
   }
   saveLocked();  // forgets an attempt that worked (attempted == running version)
-  nextCheckAtMs_ = platform_.nowMs() + kFirstUpdateCheckDelayMs;
+  notBeforeMs_ = platform_.nowMs() + kFirstUpdateCheckDelayMs;
+  checkedDay_.reset();
+}
+
+void UpdateManager::markCheckedTodayLocked() {
+  if (const auto now = platform_.localTime(clock_.posixTz())) checkedDay_ = now->day;
 }
 
 bool UpdateManager::saveLocked() {
   JsonDocument doc;
   doc["mode"] = updateModeName(settings_.mode);
   doc["repoUrl"] = settings_.repoUrl;
+  doc["checkTime"] = formatTimeOfDay(settings_.checkMinute);
   doc["attempted"] = blockedVersion_;
   std::string out;
   serializeJson(doc, out);
@@ -213,6 +238,7 @@ std::string UpdateManager::statusJson() {
   JsonDocument doc;
   doc["mode"] = updateModeName(s.settings.mode);
   doc["repoUrl"] = s.settings.repoUrl;
+  doc["checkTime"] = formatTimeOfDay(s.settings.checkMinute);
   doc["defaultRepoUrl"] = kDefaultRepoUrl;
   doc["current"] = s.current;
   doc["state"] = updateStateName(s.state);
@@ -250,7 +276,8 @@ std::string UpdateManager::summaryJson() {
   return out;
 }
 
-CmdResult UpdateManager::updateSettings(std::optional<UpdateMode> mode, std::optional<std::string> repoUrl) {
+CmdResult UpdateManager::updateSettings(std::optional<UpdateMode> mode, std::optional<std::string> repoUrl, std::optional<uint16_t> checkMinute) {
+  if (checkMinute && *checkMinute >= 1440) return fail("invalid_time", "must be a time of day like 03:00", "checkTime");
   std::string normalized;
   if (repoUrl) {
     if (repoUrl->empty()) normalized = kDefaultRepoUrl;
@@ -261,6 +288,7 @@ CmdResult UpdateManager::updateSettings(std::optional<UpdateMode> mode, std::opt
   const UpdateSettings before = settings_;
   if (mode) settings_.mode = *mode;
   if (repoUrl) settings_.repoUrl = normalized;
+  if (checkMinute) settings_.checkMinute = *checkMinute;
   if (!saveLocked()) {
     settings_ = before;
     return fail("storage_error", "could not save the settings (storage full?)");
@@ -270,7 +298,7 @@ CmdResult UpdateManager::updateSettings(std::optional<UpdateMode> mode, std::opt
     checkedAtMs_.reset();
     error_.clear();
   }
-  if (before.mode == UpdateMode::Ignore && settings_.mode != UpdateMode::Ignore) nextCheckAtMs_ = platform_.nowMs() + 60000;
+  if (before.mode == UpdateMode::Ignore && settings_.mode != UpdateMode::Ignore) notBeforeMs_ = platform_.nowMs() + 60000;
   return ok();
 }
 
@@ -295,8 +323,12 @@ void UpdateManager::tick() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (settings_.mode == UpdateMode::Ignore || busyLocked()) return;
   if (!platform_.wifiConnected() || platform_.unixSeconds() == 0) return;
-  if (static_cast<int32_t>(platform_.nowMs() - nextCheckAtMs_) < 0) return;
-  nextCheckAtMs_ = platform_.nowMs() + kUpdateRetryIntervalMs;  // replaced by the real interval when the check ends
+  if (static_cast<int32_t>(platform_.nowMs() - notBeforeMs_) < 0) return;
+  const auto now = platform_.localTime(clock_.posixTz());
+  if (!now) return;
+  if (checkedDay_ && *checkedDay_ == now->day) return;  // today's look is done
+  if (now->minuteOfDay < settings_.checkMinute) return;  // not yet the chosen time
+  notBeforeMs_ = platform_.nowMs() + kUpdateRetryIntervalMs;  // spaces out retries if this check fails
   checkRequested_ = true;
 }
 
@@ -337,7 +369,7 @@ bool UpdateManager::runPending(ReleaseSource& source, FirmwareInstaller& install
     state_ = UpdateState::Idle;
     if (!fetched.ok) {
       error_ = fetched.error;
-      nextCheckAtMs_ = platform_.nowMs() + kUpdateRetryIntervalMs;
+      notBeforeMs_ = platform_.nowMs() + kUpdateRetryIntervalMs;
       return false;
     }
     ReleaseInfo info;
@@ -346,13 +378,13 @@ bool UpdateManager::runPending(ReleaseSource& source, FirmwareInstaller& install
       error_ = messageFor(code);
       latest_.reset();
       checkedAtMs_ = platform_.nowMs();
-      nextCheckAtMs_ = platform_.nowMs() + kUpdateCheckIntervalMs;
+      markCheckedTodayLocked();
       return false;
     }
     latest_ = info;
     checkedAtMs_ = platform_.nowMs();
     error_.clear();
-    nextCheckAtMs_ = platform_.nowMs() + kUpdateCheckIntervalMs;
+    markCheckedTodayLocked();
     if (settings_.mode == UpdateMode::Automatic && availableLocked() && info.version != blockedVersion_ && info.version != attemptedThisBoot_)
       installRequested_ = true;
     return false;
@@ -373,7 +405,7 @@ bool UpdateManager::runPending(ReleaseSource& source, FirmwareInstaller& install
   error_ = result.error;
   blockedVersion_.clear();  // nothing was installed: it is not "tried and failed to take"
   saveLocked();
-  nextCheckAtMs_ = platform_.nowMs() + kUpdateRetryIntervalMs;
+  notBeforeMs_ = platform_.nowMs() + kUpdateRetryIntervalMs;
   if (installActive_) installActive_(false);
   return false;
 }

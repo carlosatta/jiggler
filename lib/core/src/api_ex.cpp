@@ -254,9 +254,14 @@ HttpResponse updatesRoute(ApiContext& ctx, const std::string& method, const std:
   if (deserializeJson(doc, body) || !doc.is<JsonObject>()) return json(400, errorJson("bad_json", "", "body must be a JSON object"));
   std::optional<UpdateMode> mode;
   std::optional<std::string> repo;
+  std::optional<uint16_t> checkMinute;
   for (JsonPair kv : doc.as<JsonObject>()) {
     const std::string key = kv.key().c_str();
-    if (key == "mode") {
+    if (key == "checkTime") {
+      const auto m = kv.value().is<const char*>() ? parseTimeOfDay(kv.value().as<std::string>()) : std::nullopt;
+      if (!m) return json(400, errorJson("invalid_time", key, "must be a time of day like 03:00"));
+      checkMinute = m;
+    } else if (key == "mode") {
       const auto m = kv.value().is<const char*>() ? parseUpdateMode(kv.value().as<std::string>()) : std::nullopt;
       if (!m) return json(400, errorJson("invalid_mode", key, "must be manual, automatic or ignore"));
       mode = m;
@@ -268,7 +273,7 @@ HttpResponse updatesRoute(ApiContext& ctx, const std::string& method, const std:
       return json(400, errorJson("unknown_field", key, "unknown field"));
     }
   }
-  const CmdResult r = u->updateSettings(mode, repo);
+  const CmdResult r = u->updateSettings(mode, repo, checkMinute);
   if (!r.ok) return json(statusForCmdError(r.error), errorJson(r.error, r.field, r.message));
   return json(200, u->statusJson());
 }

@@ -49,11 +49,14 @@ struct FakeInstaller : FirmwareInstaller {
 struct Env {
   FakeClock clock;
   FlakyBlobStore blobs;
+  ClockStore clockStore{clock, blobs};
   FakeSource source;
   FakeInstaller installer;
   UpdateManager manager;
   std::vector<bool> activeCalls;
-  explicit Env(const char* current = "0.6.0") : manager(clock, blobs, current) {
+  explicit Env(const char* current = "0.6.0") : manager(clock, blobs, clockStore, current) {
+    clockStore.begin();
+    clock.local = LocalTime{0, 12 * 60, 20003};  // noon, Monday
     manager.setInstallActive([this](bool on) { activeCalls.push_back(on); });
     manager.begin();
     source.next = {true, kRelease, ""};
@@ -142,7 +145,7 @@ void test_settings_default_persist_and_validate() {
   TEST_ASSERT_TRUE(UpdateMode::Manual == s.settings.mode);
   TEST_ASSERT_EQUAL_STRING(kDefaultRepoUrl, s.settings.repoUrl.c_str());
   TEST_ASSERT_TRUE(e.manager.updateSettings(UpdateMode::Automatic, std::string("https://github.com/someone/fork.git/")).ok);
-  UpdateManager again(e.clock, e.blobs, "0.6.0");
+  UpdateManager again(e.clock, e.blobs, e.clockStore, "0.6.0");
   again.begin();
   TEST_ASSERT_TRUE(UpdateMode::Automatic == again.status().settings.mode);
   TEST_ASSERT_EQUAL_STRING("https://github.com/someone/fork", again.status().settings.repoUrl.c_str());
@@ -243,10 +246,10 @@ void test_after_the_restart_the_attempt_is_forgotten_when_the_new_version_runs()
   e.check();
   e.manager.requestInstall();
   e.manager.runPending(e.source, e.installer);
-  UpdateManager rebooted(e.clock, e.blobs, "0.7.0");  // the new firmware started
+  UpdateManager rebooted(e.clock, e.blobs, e.clockStore, "0.7.0");  // the new firmware started
   rebooted.begin();
   TEST_ASSERT_FALSE(rebooted.status().blocked);
-  UpdateManager again(e.clock, e.blobs, "0.6.0");     // and a later boot of anything else is not blocked either
+  UpdateManager again(e.clock, e.blobs, e.clockStore, "0.6.0");     // and a later boot of anything else is not blocked either
   again.begin();
   FakeSource src;
   src.next = {true, kRelease, ""};
@@ -261,7 +264,7 @@ void test_an_image_that_did_not_take_is_marked_blocked() {
   e.check();
   e.manager.requestInstall();
   e.manager.runPending(e.source, e.installer);
-  UpdateManager stillOld(e.clock, e.blobs, "0.6.0");  // the old firmware is still what runs after the restart
+  UpdateManager stillOld(e.clock, e.blobs, e.clockStore, "0.6.0");  // the old firmware is still what runs after the restart
   stillOld.begin();
   FakeSource src;
   src.next = {true, kRelease, ""};
@@ -289,7 +292,7 @@ void test_a_failed_install_reports_and_does_not_block() {
   TEST_ASSERT_EQUAL_UINT32(2, e.activeCalls.size());
   TEST_ASSERT_TRUE(e.activeCalls[0]);
   TEST_ASSERT_FALSE(e.activeCalls[1]);                 // Bluetooth is back
-  UpdateManager rebooted(e.clock, e.blobs, "0.6.0");
+  UpdateManager rebooted(e.clock, e.blobs, e.clockStore, "0.6.0");
   rebooted.begin();
   e.installer.result = {true, ""};
   FakeSource src;
@@ -328,14 +331,17 @@ void test_automatic_mode_does_not_retry_a_failed_or_blocked_version() {
   TEST_ASSERT_TRUE(e.manager.requestInstall().ok);                 // the owner can still ask for it
 }
 
-void test_the_checks_follow_the_mode_the_clock_and_the_interval() {
-  Env e;
-  e.clock.now = kFirstUpdateCheckDelayMs - 1;
+LocalTime atDay(uint32_t day, int hour, int minute) { return LocalTime{static_cast<uint8_t>((day + 3) % 7), static_cast<uint16_t>(hour * 60 + minute), day}; }
+
+void test_the_daily_check_waits_for_its_time_the_clock_and_the_wifi() {
+  Env e;                                                           // the default time is 03:00
+  e.clock.now = kFirstUpdateCheckDelayMs;                          // the boot settle time has passed
+  e.clock.local = atDay(20003, 2, 59);
   e.manager.tick();
-  TEST_ASSERT_FALSE(e.manager.runPending(e.source, e.installer));
-  TEST_ASSERT_EQUAL_UINT32(0, e.source.urls.size());
-  e.clock.now = kFirstUpdateCheckDelayMs;
-  e.clock.unix = 0;                                               // no clock: secure connections would fail
+  e.manager.runPending(e.source, e.installer);
+  TEST_ASSERT_EQUAL_UINT32(0, e.source.urls.size());               // too early in the day
+  e.clock.local = atDay(20003, 3, 0);
+  e.clock.unix = 0;                                                // no clock: secure connections would fail
   e.manager.tick();
   e.manager.runPending(e.source, e.installer);
   TEST_ASSERT_EQUAL_UINT32(0, e.source.urls.size());
@@ -345,22 +351,86 @@ void test_the_checks_follow_the_mode_the_clock_and_the_interval() {
   e.manager.runPending(e.source, e.installer);
   TEST_ASSERT_EQUAL_UINT32(0, e.source.urls.size());
   e.clock.wifi = true;
+  e.clock.local.reset();                                           // no local time yet
   e.manager.tick();
   e.manager.runPending(e.source, e.installer);
-  TEST_ASSERT_EQUAL_UINT32(1, e.source.urls.size());              // the first automatic check
-  e.clock.now += kUpdateCheckIntervalMs - 1;
+  TEST_ASSERT_EQUAL_UINT32(0, e.source.urls.size());
+  e.clock.local = atDay(20003, 3, 0);
+  e.manager.tick();
+  e.manager.runPending(e.source, e.installer);
+  TEST_ASSERT_EQUAL_UINT32(1, e.source.urls.size());               // the look of the day
+}
+
+void test_it_looks_once_a_day_not_again_until_the_next_day() {
+  Env e;
+  e.clock.now = kFirstUpdateCheckDelayMs;
+  e.clock.local = atDay(20003, 3, 5);
   e.manager.tick();
   e.manager.runPending(e.source, e.installer);
   TEST_ASSERT_EQUAL_UINT32(1, e.source.urls.size());
+  e.clock.now += 5 * kUpdateRetryIntervalMs;                       // hours later, same day
+  e.clock.local = atDay(20003, 15, 0);
+  e.manager.tick();
+  e.manager.runPending(e.source, e.installer);
+  TEST_ASSERT_EQUAL_UINT32(1, e.source.urls.size());
+  e.clock.now += 5 * kUpdateRetryIntervalMs;
+  e.clock.local = atDay(20004, 1, 0);                              // the next day, before the time
+  e.manager.tick();
+  e.manager.runPending(e.source, e.installer);
+  TEST_ASSERT_EQUAL_UINT32(1, e.source.urls.size());
+  e.clock.local = atDay(20004, 3, 0);
+  e.manager.tick();
+  e.manager.runPending(e.source, e.installer);
+  TEST_ASSERT_EQUAL_UINT32(2, e.source.urls.size());
+}
+
+void test_a_board_that_was_off_at_the_chosen_time_looks_when_it_is_up_again() {
+  Env e;
+  e.clock.now = kFirstUpdateCheckDelayMs - 1;
+  e.clock.local = atDay(20003, 17, 0);                             // booted in the afternoon
+  e.manager.tick();
+  e.manager.runPending(e.source, e.installer);
+  TEST_ASSERT_EQUAL_UINT32(0, e.source.urls.size());               // still settling after boot
   e.clock.now += 1;
   e.manager.tick();
   e.manager.runPending(e.source, e.installer);
-  TEST_ASSERT_EQUAL_UINT32(2, e.source.urls.size());              // a day later
+  TEST_ASSERT_EQUAL_UINT32(1, e.source.urls.size());               // today's look is overdue, so it happens now
+}
+
+void test_the_time_is_a_setting_that_persists_and_changes_when_it_looks() {
+  Env e;
+  TEST_ASSERT_EQUAL_UINT16(180, e.manager.status().settings.checkMinute);
+  TEST_ASSERT_TRUE(e.manager.updateSettings(std::nullopt, std::nullopt, 22 * 60 + 30).ok);
+  UpdateManager again(e.clock, e.blobs, e.clockStore, "0.6.0");
+  again.begin();
+  TEST_ASSERT_EQUAL_UINT16(22 * 60 + 30, again.status().settings.checkMinute);
+  JsonDocument d;
+  deserializeJson(d, again.statusJson());
+  TEST_ASSERT_EQUAL_STRING("22:30", d["checkTime"].as<const char*>());
+  CmdResult bad = e.manager.updateSettings(std::nullopt, std::nullopt, 1440);
+  TEST_ASSERT_EQUAL_STRING("invalid_time", bad.error.c_str());
+  e.clock.now = kFirstUpdateCheckDelayMs;
+  e.clock.local = atDay(20003, 21, 0);
+  e.manager.tick();
+  e.manager.runPending(e.source, e.installer);
+  TEST_ASSERT_EQUAL_UINT32(0, e.source.urls.size());               // 22:30 has not come
+  e.clock.local = atDay(20003, 22, 30);
+  e.manager.tick();
+  e.manager.runPending(e.source, e.installer);
+  TEST_ASSERT_EQUAL_UINT32(1, e.source.urls.size());
+}
+
+void test_times_of_day_are_parsed_and_written() {
+  TEST_ASSERT_EQUAL_UINT16(0, *parseTimeOfDay("00:00"));
+  TEST_ASSERT_EQUAL_UINT16(23 * 60 + 59, *parseTimeOfDay("23:59"));
+  for (const char* bad : {"", "3:00", "24:00", "12:60", "12-30", "ab:cd", "12:3", "12:300"}) TEST_ASSERT_FALSE_MESSAGE(parseTimeOfDay(bad).has_value(), bad);
+  TEST_ASSERT_EQUAL_STRING("03:05", formatTimeOfDay(185).c_str());
 }
 
 void test_a_failed_check_is_retried_within_the_hour() {
   Env e;
   e.clock.now = kFirstUpdateCheckDelayMs;
+  e.clock.local = atDay(20003, 4, 0);
   e.source.next = {false, "", "offline"};
   e.manager.tick();
   e.manager.runPending(e.source, e.installer);
@@ -372,19 +442,24 @@ void test_a_failed_check_is_retried_within_the_hour() {
   e.clock.now += 1;
   e.manager.tick();
   e.manager.runPending(e.source, e.installer);
-  TEST_ASSERT_EQUAL_UINT32(2, e.source.urls.size());
+  TEST_ASSERT_EQUAL_UINT32(2, e.source.urls.size());               // a failed look does not use up the day
 }
 
 void test_ignore_mode_never_checks_by_itself_but_check_now_still_works() {
   Env e;
   e.manager.updateSettings(UpdateMode::Ignore, std::nullopt);
   e.clock.now = kFirstUpdateCheckDelayMs * 10;
+  e.clock.local = atDay(20003, 5, 0);
   e.manager.tick();
   e.manager.runPending(e.source, e.installer);
   TEST_ASSERT_EQUAL_UINT32(0, e.source.urls.size());
   e.check();
   TEST_ASSERT_EQUAL_UINT32(1, e.source.urls.size());
-  e.manager.updateSettings(UpdateMode::Manual, std::nullopt);     // turning it back on schedules a check soon
+  e.clock.local = atDay(20004, 5, 0);                              // the next day: ignored all the same
+  e.manager.tick();
+  e.manager.runPending(e.source, e.installer);
+  TEST_ASSERT_EQUAL_UINT32(1, e.source.urls.size());
+  e.manager.updateSettings(UpdateMode::Manual, std::nullopt);     // turning it back on: a look soon, once the time has come
   e.clock.now += 59999;
   e.manager.tick();
   e.manager.runPending(e.source, e.installer);
@@ -393,6 +468,21 @@ void test_ignore_mode_never_checks_by_itself_but_check_now_still_works() {
   e.manager.tick();
   e.manager.runPending(e.source, e.installer);
   TEST_ASSERT_EQUAL_UINT32(2, e.source.urls.size());
+}
+
+void test_automatic_mode_installs_at_the_chosen_time() {
+  Env e;
+  e.manager.updateSettings(UpdateMode::Automatic, std::nullopt, 3 * 60);
+  e.clock.now = kFirstUpdateCheckDelayMs;
+  e.clock.local = atDay(20003, 2, 0);
+  e.manager.tick();
+  e.manager.runPending(e.source, e.installer);
+  TEST_ASSERT_EQUAL_INT(0, e.installer.calls);                     // not at 02:00
+  e.clock.local = atDay(20003, 3, 1);
+  e.manager.tick();
+  e.manager.runPending(e.source, e.installer);                     // the look, which finds 0.7.0
+  TEST_ASSERT_TRUE(e.manager.runPending(e.source, e.installer));   // the install that follows
+  TEST_ASSERT_EQUAL_INT(1, e.installer.calls);
 }
 
 void test_changing_the_repository_forgets_what_was_found_there() {
@@ -445,6 +535,10 @@ void test_update_routes() {
   TEST_ASSERT_EQUAL_STRING("https://github.com/someone/fork", d["repoUrl"].as<const char*>());
   TEST_ASSERT_EQUAL_INT(400, handleApiEx(ctx, "PUT", "/api/updates", "{\"mode\":\"sometimes\"}").status);
   TEST_ASSERT_EQUAL_INT(400, handleApiEx(ctx, "PUT", "/api/updates", "{\"mode\":5}").status);
+  TEST_ASSERT_EQUAL_INT(400, handleApiEx(ctx, "PUT", "/api/updates", "{\"checkTime\":\"25:00\"}").status);
+  TEST_ASSERT_EQUAL_INT(400, handleApiEx(ctx, "PUT", "/api/updates", "{\"checkTime\":3}").status);
+  deserializeJson(d, handleApiEx(ctx, "PUT", "/api/updates", "{\"checkTime\":\"04:15\"}").body);
+  TEST_ASSERT_EQUAL_STRING("04:15", d["checkTime"].as<const char*>());
   TEST_ASSERT_EQUAL_INT(400, handleApiEx(ctx, "PUT", "/api/updates", "{\"repoUrl\":\"http://github.com/a/b\"}").status);
   TEST_ASSERT_EQUAL_INT(400, handleApiEx(ctx, "PUT", "/api/updates", "{\"repoUrl\":7}").status);
   TEST_ASSERT_EQUAL_INT(400, handleApiEx(ctx, "PUT", "/api/updates", "{\"nope\":1}").status);
@@ -479,9 +573,14 @@ int main() {
   RUN_TEST(test_manual_mode_never_installs_by_itself);
   RUN_TEST(test_automatic_mode_installs_what_it_finds);
   RUN_TEST(test_automatic_mode_does_not_retry_a_failed_or_blocked_version);
-  RUN_TEST(test_the_checks_follow_the_mode_the_clock_and_the_interval);
+  RUN_TEST(test_the_daily_check_waits_for_its_time_the_clock_and_the_wifi);
+  RUN_TEST(test_it_looks_once_a_day_not_again_until_the_next_day);
+  RUN_TEST(test_a_board_that_was_off_at_the_chosen_time_looks_when_it_is_up_again);
+  RUN_TEST(test_the_time_is_a_setting_that_persists_and_changes_when_it_looks);
+  RUN_TEST(test_times_of_day_are_parsed_and_written);
   RUN_TEST(test_a_failed_check_is_retried_within_the_hour);
   RUN_TEST(test_ignore_mode_never_checks_by_itself_but_check_now_still_works);
+  RUN_TEST(test_automatic_mode_installs_at_the_chosen_time);
   RUN_TEST(test_changing_the_repository_forgets_what_was_found_there);
   RUN_TEST(test_update_routes);
   return UNITY_END();

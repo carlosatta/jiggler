@@ -452,6 +452,8 @@ a.linkbtn:hover{text-decoration:underline}
 <select id="updMode"><option value="manual">Tell me, and I install it</option><option value="automatic">Install it automatically</option><option value="ignore">Ignore it</option></select>
 <div class="err" data-err="mode"></div></div>
 <p class="hint" id="updModeHint"></p>
+<div class="field" id="updTimeBox"><label for="updTime">Look for updates at</label><input id="updTime" type="time"><div class="err" data-err="checkTime"></div></div>
+<p class="hint" id="updTimeHint">The time of day, on the device’s clock and timezone (System → Time). Pick a quiet hour: with automatic updates the device restarts when it installs.</p>
 <div class="field"><label for="updRepo">Repository to get releases from</label><input id="updRepo" autocomplete="off" spellcheck="false" placeholder="https://github.com/owner/repo"><div class="err" data-err="repoUrl"></div></div>
 <p class="hint">A GitHub repository address. The device downloads the firmware file <code>jiggler-esp32.bin</code> of its latest release over HTTPS, checks the connection’s certificate, and checks the file against its <code>.sha256</code> when the release has one. Only install firmware from a repository you trust: whoever controls it controls this device. The clock must be set (System → Time).</p>
 <div class="actions"><button class="primary" id="updSave">Save</button><button id="updReset">Use the default</button></div>
@@ -696,7 +698,7 @@ var JigLib = (function () {
     else if (u.available) lead = 'Version ' + latest + ' is available.';
     else if (checked !== null && latest) lead = 'You are up to date (' + u.current + '), checked ' + checked + '.';
     else if (checked !== null) lead = 'Checked ' + checked + '.';
-    else lead = u.mode === 'ignore' ? 'Updates are ignored: the device does not look for them by itself.' : 'Not checked yet. The device looks by itself about every day.';
+    else lead = u.mode === 'ignore' ? 'Updates are ignored: the device does not look for them by itself.' : 'Not checked yet. The device looks by itself every day at ' + (u.checkTime || '03:00') + '.';
     if (u.error) lead += ' ' + tr(u.error);
     return { text: lead, tone: u.error ? 'bad' : u.available ? 'ok' : 'idle', canInstall: !!u.available, working: false };
   }
@@ -1757,10 +1759,15 @@ var App = (function () {
   // ---- Firmware updates from the repository ----
   var upd = null, updTimer = null, updDirty = false, restartWatching = false;
   var MODE_HINTS = {
-    manual: 'The device looks about once a day and tells you here and on Status. You press Install.',
-    automatic: 'The device looks about once a day and installs a new version by itself, then restarts (the jiggler and Bluetooth are off for a short while). A version that did not take effect is not retried automatically.',
+    manual: 'The device looks once a day, at the time below, and tells you here and on Status. You press Install.',
+    automatic: 'The device looks once a day, at the time below, and installs a new version by itself, then restarts (the jiggler and Bluetooth are off for a short while). A version that did not take effect is not retried automatically.',
     ignore: 'The device never looks by itself. You can still press Check for updates.'
   };
+  function showTimeField() {
+    var off = $('updMode').value === 'ignore';
+    $('updTimeBox').hidden = off;
+    $('updTimeHint').hidden = off;
+  }
   function renderUpdates() {
     if (!upd) return;
     var d = JigLib.describeUpdate(upd);
@@ -1778,8 +1785,10 @@ var App = (function () {
     if (!updDirty) {
       $('updMode').value = upd.mode;
       $('updRepo').value = upd.repoUrl;
+      $('updTime').value = upd.checkTime;
     }
     $('updModeHint').textContent = MODE_HINTS[$('updMode').value] || '';
+    showTimeField();
     var repoLink = $('infoRepo');
     repoLink.href = upd.repoUrl;
     repoLink.textContent = JigLib.repoLabel(upd.repoUrl);
@@ -1794,8 +1803,8 @@ var App = (function () {
       renderUpdates();
     }).catch(function () {});
   }
-  ['updMode', 'updRepo'].forEach(function (id) {
-    $(id).addEventListener('input', function () { updDirty = true; $('updModeHint').textContent = MODE_HINTS[$('updMode').value] || ''; });
+  ['updMode', 'updRepo', 'updTime'].forEach(function (id) {
+    $(id).addEventListener('input', function () { updDirty = true; $('updModeHint').textContent = MODE_HINTS[$('updMode').value] || ''; showTimeField(); });
   });
   $('updCheck').onclick = function () {
     say('', '', 'updMsg');
@@ -1816,6 +1825,7 @@ var App = (function () {
     clearErrors(root);
     say('', '', 'updSaveMsg');
     var body = { mode: $('updMode').value, repoUrl: repoOverride !== undefined ? repoOverride : $('updRepo').value.trim() };
+    if ($('updTime').value) body.checkTime = $('updTime').value;
     App.call('PUT', '/api/updates', body).then(function (res) {
       if (res.status === 200) { updDirty = false; upd = res.data; renderUpdates(); say('Saved.', 'good', 'updSaveMsg'); App.poll(); return; }
       var d = res.data;

@@ -134,8 +134,8 @@ See [schedules.md](schedules.md). `GET /api/status` also carries `"schedule": {a
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/updates` | `{"mode","repoUrl","defaultRepoUrl","current","state","progress","checkedAgoMs","latest":{"version","tag","pageUrl","sizeBytes"},"available","blocked","error"}`; `state` is `idle`, `checking`, `installing` or `restarting` |
-| PUT | `/api/updates` | `{"mode":"manual\|automatic\|ignore","repoUrl":"https://github.com/owner/repo"}` (both optional; an empty `repoUrl` means the default). `400 invalid_mode` / `invalid_repo_url` |
+| GET | `/api/updates` | `{"mode","checkTime","repoUrl","defaultRepoUrl","current","state","progress","checkedAgoMs","latest":{"version","tag","pageUrl","sizeBytes"},"available","blocked","error"}`; `state` is `idle`, `checking`, `installing` or `restarting` |
+| PUT | `/api/updates` | `{"mode":"manual\|automatic\|ignore","repoUrl":"https://github.com/owner/repo","checkTime":"03:00"}` (all optional; an empty `repoUrl` means the default; `checkTime` is the daily look, and install in automatic mode, in the device's timezone). `400 invalid_mode` / `invalid_repo_url` / `invalid_time` |
 | POST | `/api/updates/check` | Look for a newer release now (answers `202`; poll `GET /api/updates`). `409 busy` / `no_clock` |
 | POST | `/api/updates/install` | Install the newer release found (`202`; the device downloads it and restarts). `409 no_update` / `busy` / `no_clock` |
 

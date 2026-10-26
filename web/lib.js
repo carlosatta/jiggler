@@ -199,7 +199,7 @@ var JigLib = (function () {
     else if (u.available) lead = 'Version ' + latest + ' is available.';
     else if (checked !== null && latest) lead = 'You are up to date (' + u.current + '), checked ' + checked + '.';
     else if (checked !== null) lead = 'Checked ' + checked + '.';
-    else lead = u.mode === 'ignore' ? 'Updates are ignored: the device does not look for them by itself.' : 'Not checked yet. The device looks by itself about every day.';
+    else lead = u.mode === 'ignore' ? 'Updates are ignored: the device does not look for them by itself.' : 'Not checked yet. The device looks by itself every day at ' + (u.checkTime || '03:00') + '.';
     if (u.error) lead += ' ' + tr(u.error);
     return { text: lead, tone: u.error ? 'bad' : u.available ? 'ok' : 'idle', canInstall: !!u.available, working: false };
   }
