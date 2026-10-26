@@ -1,5 +1,7 @@
 #include "ble_mouse.h"
 
+#include "diag.h"
+
 #include <NimBLEHIDDevice.h>
 #include <esp_system.h>
 
@@ -31,8 +33,8 @@ int gapListener(ble_gap_event* event, void*) {
   if (!gBle) return 0;
   if (event->type == BLE_GAP_EVENT_DISCONNECT) gBle->notePeerDisconnect(event->disconnect.reason);
   else if (event->type == BLE_GAP_EVENT_ENC_CHANGE)
-    Serial.printf("BLE encryption change: status %d\n", event->enc_change.status);
-  else if (event->type == BLE_GAP_EVENT_REPEAT_PAIRING) Serial.println("BLE repeat pairing requested by a known computer");
+    diagf("BLE encryption change: status %d", event->enc_change.status);
+  else if (event->type == BLE_GAP_EVENT_REPEAT_PAIRING) diagf("BLE repeat pairing requested by a known computer");
   return 0;
 }
 
@@ -49,7 +51,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
   // Reached only when pairing is closed (see setPairingOpen): the board then claims it can confirm a code, and
   // always says no, so even a known computer that lost its key cannot re-pair without the owner's window.
   bool onConfirmPIN(uint32_t) override {
-    Serial.println("BLE pairing attempt refused before bonding (window closed)");
+    diagf("BLE pairing attempt refused before bonding (window closed)");
     return false;
   }
 
@@ -107,7 +109,7 @@ void BleMouse::linkUp(uint16_t handle, const std::string& peerAddress) {
   links_.push_back(std::move(link));
   refreshConnected();
 
-  Serial.printf("BLE link up (handle %u)\n", static_cast<unsigned>(handle));
+  diagf("BLE link up (handle %u)", static_cast<unsigned>(handle));
 }
 
 // Pairing finished (the identity address is now known). A computer that was not bonded before this link came
@@ -124,10 +126,10 @@ void BleMouse::linkIdentified(uint16_t handle, const std::string& idAddress, boo
       refuse = jig::refuseNewPeer(known, pairingOpen_, l.bondedBefore.size());
     }
   }
-  Serial.printf("BLE identified %s: bonded=%d pairingOpen=%d -> %s\n", idAddress.c_str(), bonded ? 1 : 0, pairingOpen_.load() ? 1 : 0,
+  diagf("BLE identified %s: bonded=%d pairingOpen=%d -> %s", idAddress.c_str(), bonded ? 1 : 0, pairingOpen_.load() ? 1 : 0,
                 refuse ? "REFUSE" : "accept");
   if (!refuse) return;
-  Serial.printf("BLE pairing refused for %s (window closed)\n", idAddress.c_str());
+  diagf("BLE pairing refused for %s (window closed)", idAddress.c_str());
   forgetBond(idAddress);
   if (server_) server_->disconnect(handle);
 }
@@ -135,7 +137,7 @@ void BleMouse::linkIdentified(uint16_t handle, const std::string& idAddress, boo
 // reason is NimBLE's code: 0x200 + the HCI reason. 0x213 = the remote user terminated the connection
 // (the computer's own "Disconnect"); 0x216 = we did; 0x208 = the link timed out (out of range, asleep).
 void BleMouse::notePeerDisconnect(int reason) {
-  Serial.printf("BLE disconnect reason 0x%03x\n", reason);
+  diagf("BLE disconnect reason 0x%03x", reason);
   if (reason == 0x213) peerDisconnect_ = true;
 }
 
@@ -146,7 +148,7 @@ void BleMouse::linkDown(uint16_t handle) {
                  links_.end());
     refreshConnected();
   }
-  Serial.printf("BLE link down (handle %u), advertising %s\n", static_cast<unsigned>(handle), enabled_ ? "on" : "off");
+  diagf("BLE link down (handle %u), advertising %s", static_cast<unsigned>(handle), enabled_ ? "on" : "off");
   if (!quiet_ && enabled_) NimBLEDevice::startAdvertising();
 }
 
@@ -213,12 +215,14 @@ void BleMouse::refreshAdvertising() {
     std::lock_guard<std::mutex> lock(linksMutex_);
     room = links_.empty() || (discoverable && links_.size() < 3);
   }
-  if (room) NimBLEDevice::startAdvertising();
+  const bool started = room && NimBLEDevice::startAdvertising();
+  diagf("BLE advertising %s: %s", discoverable ? "discoverable" : "waiting", room ? (started ? "started" : "START FAILED") : "not started (a link is up)");
 }
 
 void BleMouse::setEnabled(bool on) {
   if (quiet_) return;
   const bool changed = enabled_.exchange(on) != on;
+  if (changed) diagf("BLE radio %s", on ? "on" : "off");
   if (!on) {
     if (changed) NimBLEDevice::stopAdvertising();
     return;
@@ -234,7 +238,7 @@ void BleMouse::setEnabled(bool on) {
   if (changed) {
     refreshAdvertising();
   } else if (idle && !NimBLEDevice::getAdvertising()->isAdvertising()) {
-    Serial.println("BLE advertising was off: restarted");
+    diagf("BLE advertising was off: restarted");
     refreshAdvertising();
   }
 }

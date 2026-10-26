@@ -4,6 +4,8 @@
 #include "arduino_platform.h"
 #include "ble_mouse.h"
 #include "controller.h"
+#include "diag.h"
+#include "event_log.h"
 #include "http_server.h"
 #include "led.h"
 #include "bluetooth.h"
@@ -41,7 +43,18 @@ jig::Controller controller(platform, rng, store);
 jig::ClockStore clockStore(platform, blobs);
 jig::ButtonStore buttonStore(blobs);
 jig::ScheduleEngine schedules(platform, controller, blobs, clockStore);
+jig::EventLog eventLog;
 jig::ApiContext api{controller};
+
+void diagf(const char* fmt, ...) {
+  char line[192];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(line, sizeof line, fmt, args);
+  va_end(args);
+  Serial.println(line);
+  eventLog.add(millis(), line);
+}
 WifiSetup wifi(tokens, networkStore);
 HttpServer http(api, tokens);
 Led led;
@@ -53,6 +66,7 @@ bool confirming = false;
 uint32_t confirmStartMs = 0;
 uint32_t lastBluetoothTick = 0;
 uint32_t lastScheduleTick = 0;
+uint32_t lastAliveLog = 0;
 
 // A tap on the button: start the jiggler, or stop it if it is running or paused.
 void toggleJiggler() {
@@ -62,7 +76,7 @@ void toggleJiggler() {
   r.ok = true;
   if (active) controller.stop();
   else r = controller.start();
-  Serial.printf("Button tap: %s %s\n", active ? "stop" : "start", r.ok ? "done" : r.error.c_str());
+  diagf("Button tap: %s %s", active ? "stop" : "start", r.ok ? "done" : r.error.c_str());
   if (r.ok) {
     confirming = true;
     confirmStartMs = millis();
@@ -92,11 +106,13 @@ void setup() {
   api.schedules = &schedules;
   api.clock = &clockStore;
   api.button = &buttonStore;
+  api.log = &eventLog;
+  api.nowMs = [] { return static_cast<uint32_t>(millis()); };
   api.tokens = &tokens;
   api.info = {JIG_VERSION, ble.name(), ble.address()};
   api.restart = scheduleRestart;
   api.updateActive = [](bool active) { ble.setQuiet(active); };
-  Serial.printf("jiggler %s started, BLE address %s\n", JIG_VERSION, NimBLEDevice::getAddress().toString().c_str());
+  diagf("jiggler %s started, BLE address %s", JIG_VERSION, NimBLEDevice::getAddress().toString().c_str());
   wifi.begin();
 }
 
@@ -106,6 +122,11 @@ void loop() {
     lastBluetoothTick = now;
     bluetooth.tick();
     bluetoothState = bluetooth.status().state;
+  }
+  if (now - lastAliveLog >= 300000) {
+    lastAliveLog = now;
+    diagf("alive: heap %u (lowest %u), Bluetooth %s, link %s", static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
+          jig::bluetoothStateName(bluetoothState), ble.connected() ? "up" : "down");
   }
   if (now - lastScheduleTick >= 1000) {
     lastScheduleTick = now;
@@ -118,7 +139,7 @@ void loop() {
     buttonPin = wantedPin;
     pinMode(buttonPin, INPUT_PULLUP);
     button = jig::ButtonGesture();
-    Serial.printf("Button moved to GPIO %u\n", static_cast<unsigned>(buttonPin));
+    diagf("Button moved to GPIO %u", static_cast<unsigned>(buttonPin));
   }
   switch (button.update(digitalRead(buttonPin) == LOW, now)) {
     case jig::Gesture::Tap:
@@ -126,13 +147,13 @@ void loop() {
       break;
     case jig::Gesture::Pairing:
       bluetooth.startPairing(0);
-      Serial.println("Button held 5-10 s: Discovery open");
+      diagf("Button held 5-10 s: Discovery open");
       break;
     case jig::Gesture::Network: {
       jig::NetworkSettings s = networkStore.load();
       s.mode = s.mode == jig::NetworkMode::Ap ? jig::NetworkMode::Auto : jig::NetworkMode::Ap;
       networkStore.save(s);
-      Serial.printf("Button held 30 s: network mode -> %s, restarting\n", s.mode == jig::NetworkMode::Ap ? "ap" : "auto");
+      diagf("Button held 30 s: network mode -> %s, restarting", s.mode == jig::NetworkMode::Ap ? "ap" : "auto");
       scheduleRestart();
       break;
     }

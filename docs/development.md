@@ -17,7 +17,7 @@ Hardware: a classic `esp32dev` board (ESP32-WROOM), USB cable. Nothing else is n
 | Flash over WiFi (OTA) | `curl -H "Authorization: Bearer $TOKEN" -F firmware=@.pio/build/esp32/firmware.bin http://jiggler.local/api/update` |
 | Serial monitor (115200 baud) | `pio device monitor` |
 
-Suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_schedule`, `test_appearance`, `test_mcp_ex`, `test_clock`, `test_button_settings`, plus `test_keyboard`, `test_script` and `test_automation` for the parked modules (see below).
+Suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_schedule`, `test_appearance`, `test_mcp_ex`, `test_clock`, `test_button_settings`, `test_event_log`, plus `test_keyboard`, `test_script` and `test_automation` for the parked modules (see below).
 
 Adjust the upload port to your system (`pio device list`).
 

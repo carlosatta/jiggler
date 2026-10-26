@@ -11,7 +11,7 @@ An ESP32 (classic `esp32dev`) that keeps a computer awake by acting as a BLE mou
 PlatformIO (`pipx install platformio`; `pio` lives in `~/.local/bin`).
 
 - Host unit tests (no board needed): `pio test -e native`
-- One suite: `pio test -e native -f test_controller` (suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_schedule`, `test_appearance`, `test_keyboard`, `test_script`, `test_automation`, `test_mcp_ex`, `test_clock`, `test_button_settings`)
+- One suite: `pio test -e native -f test_controller` (suites: `test_config`, `test_movement`, `test_controller`, `test_api`, `test_mcp`, `test_identity`, `test_led`, `test_dashboard`, `test_network`, `test_button`, `test_bluetooth`, `test_schedule`, `test_appearance`, `test_keyboard`, `test_script`, `test_automation`, `test_mcp_ex`, `test_clock`, `test_button_settings`, `test_event_log`)
 - Build firmware: `pio run -e esp32`
 - Flash: `pio run -e esp32 -t upload --upload-port /dev/cu.usbserial-0001`
 - Serial monitor: `pio device monitor` (115200 baud)

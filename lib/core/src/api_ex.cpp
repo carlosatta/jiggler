@@ -305,6 +305,11 @@ HttpResponse handleApiEx(ApiContext& ctx, const std::string& method, const std::
   if (path == "/api/schedules") return schedulesRoute(ctx, method, body);
   if (path == "/api/time" || path == "/api/time/set") return timeRoute(ctx, method, path, body);
   if (path == "/api/button") return buttonRoute(ctx, method, body);
+  if (path == "/api/log") {
+    if (!ctx.log) return json(404, errorJson("not_found"));
+    if (method != "GET") return json(405, errorJson("method_not_allowed"));
+    return json(200, ctx.log->toJson(ctx.nowMs ? ctx.nowMs() : 0));
+  }
   if (path == "/api/scripts" || path.rfind("/api/scripts/", 0) == 0) return scriptsRoute(ctx, method, path, body);
   if (path == "/api/restart") {
     if (!ctx.restart) return json(404, errorJson("not_found"));

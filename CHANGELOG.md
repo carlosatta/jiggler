@@ -11,6 +11,7 @@
 - **Schedules redesigned.** Two kinds: a **window** (start to end, runs the jiggler) and an **action** at a time (start, stop, pause, resume, Bluetooth on or off, open Discovery). Every entry can have a **random shift** of up to 120 minutes either way, drawn afresh each day. API: `kind`, `action`, `jitterMin`; `actions` in the GET.
 - **Fix: a schedule saved while its window is open never started.** Saving used to mark an open window as "already open", so the jiggler did not start and the Start button stayed as it was. A window you add or change that is open at that moment now starts the jiggler (an untouched window you stopped by hand stays stopped). When an open window cannot start because no computer is paired, Status says so (`schedule.blocked`).
 - Schedule body limit raised to 4096 bytes.
+- **Event log over WiFi.** `GET /api/log` returns the last 80 things the device did (Bluetooth links, pairing decisions, advertising, the button, a heartbeat every 5 minutes with the free memory), so a connection problem can be diagnosed without a USB cable.
 
 ## 0.5.0
 

@@ -122,6 +122,12 @@ See [schedules.md](schedules.md). `GET /api/status` also carries `"schedule": {a
 | GET | `/api/button` | `{"gpio":0,"default":0,"gpios":[...]}`: the pin of the physical button and the pins that can be used |
 | PUT | `/api/button` | `{"gpio":14}`; applies at once. `400 invalid_gpio` for a pin that is not listed |
 
+## Event log
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/log` | `{"uptimeMs", "events":[{"agoMs","message"}]}`: the last 80 events, oldest first (Bluetooth links and pairing decisions, advertising, the button, a heartbeat every 5 minutes). Useful when no USB cable is attached |
+
 ## Firmware update
 
 | Method | Path | Description |

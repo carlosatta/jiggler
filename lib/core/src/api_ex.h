@@ -10,6 +10,7 @@
 #include "button_settings.h"
 #include "clock_settings.h"
 #include "controller.h"
+#include "event_log.h"
 #include "network_settings.h"
 #include "schedule.h"
 #include "script.h"
@@ -33,6 +34,8 @@ struct ApiContext {
   ScheduleEngine* schedules = nullptr;
   ClockStore* clock = nullptr;
   ButtonStore* button = nullptr;
+  EventLog* log = nullptr;
+  std::function<uint32_t()> nowMs;  // the device clock in ms, for the event log
   TokenVault* tokens = nullptr;
   DeviceInfo info;  // shown in /api/status when its version is set
   std::function<void()> restart;
