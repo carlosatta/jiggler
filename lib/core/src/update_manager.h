@@ -45,7 +45,8 @@ struct ReleaseInfo {
   std::string pageUrl;     // the release page
   std::string binUrl;      // the firmware asset
   uint32_t binSize = 0;
-  std::string sha256Url;   // optional "<asset>.sha256"
+  std::string sha256;      // the file's SHA-256 (64 hex digits) when the release API reports it (its "digest")
+  std::string sha256Url;   // else the optional "<asset>.sha256" file
 };
 // The GitHub "latest release" JSON (or a trimmed copy of it). Returns "" on success, else an error code:
 // bad_release, not_a_release (draft or prerelease), bad_version, no_firmware.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.3
+
+- **The update needs two secure connections instead of four.** The release's SHA-256 is taken from the release information itself (GitHub reports each file's `digest`), so the separate `.sha256` file is only fetched when that is missing. Each secure connection splits the device's free memory a little more, and the fourth one could not be opened ("not enough free memory"), which is why installing from the repository stopped half way in 0.7.2.
+
 ## 0.7.2
 
 - **The update download uses one secure connection at a time.** GitHub serves a release file through a redirect to another host; the first connection is now closed before the second opens, so the download needs less memory, and every step (which host, how many bytes, how long, why it stopped) is written to the event log (`GET /api/log`), including the reason when an install fails. A failure is also reported on the dashboard.

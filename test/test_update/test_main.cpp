@@ -111,6 +111,24 @@ void test_a_release_is_read_for_its_version_and_firmware() {
   TEST_ASSERT_TRUE(info.pageUrl.find("releases/tag") != std::string::npos);
 }
 
+void test_the_checksum_comes_from_the_release_api_when_it_reports_one() {
+  const std::string hash(64, 'A');
+  const std::string json =
+      "{\"tag_name\":\"v1.0.0\",\"assets\":[{\"name\":\"jiggler-esp32.bin\",\"browser_download_url\":\"https://x/jiggler-esp32.bin\",\"size\":2,\"digest\":\"sha256:" + hash + "\"}]}";
+  ReleaseInfo info;
+  TEST_ASSERT_EQUAL_STRING("", parseRelease(json, info).c_str());
+  TEST_ASSERT_EQUAL_STRING(std::string(64, 'a').c_str(), info.sha256.c_str());   // lowercase, as the device compares it
+  for (const char* bad : {"", "md5:abcd", "sha256:short", "sha256:zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"}) {
+    const std::string j = std::string("{\"tag_name\":\"v1.0.0\",\"assets\":[{\"name\":\"jiggler-esp32.bin\",\"browser_download_url\":\"https://x/a.bin\",\"size\":2,\"digest\":\"") + bad + "\"}]}";
+    ReleaseInfo i2;
+    TEST_ASSERT_EQUAL_STRING("", parseRelease(j, i2).c_str());
+    TEST_ASSERT_TRUE_MESSAGE(i2.sha256.empty(), bad);                              // an odd digest is ignored, not trusted
+  }
+  ReleaseInfo none;
+  parseRelease(kRelease, none);
+  TEST_ASSERT_TRUE(none.sha256.empty());                                           // older API answers have none: the .sha256 file is the fallback
+}
+
 void test_release_problems_have_their_own_codes() {
   ReleaseInfo info;
   TEST_ASSERT_EQUAL_STRING("bad_release", parseRelease("nope", info).c_str());
@@ -558,6 +576,7 @@ int main() {
   RUN_TEST(test_versions_parse_and_compare);
   RUN_TEST(test_repository_addresses);
   RUN_TEST(test_a_release_is_read_for_its_version_and_firmware);
+  RUN_TEST(test_the_checksum_comes_from_the_release_api_when_it_reports_one);
   RUN_TEST(test_release_problems_have_their_own_codes);
   RUN_TEST(test_the_official_firmware_file_wins_over_other_bin_files);
   RUN_TEST(test_settings_default_persist_and_validate);

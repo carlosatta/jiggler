@@ -72,6 +72,7 @@ class GithubSource : public jig::ReleaseSource {
     filter["assets"][0]["name"] = true;
     filter["assets"][0]["browser_download_url"] = true;
     filter["assets"][0]["size"] = true;
+    filter["assets"][0]["digest"] = true;
     JsonDocument doc;
     const DeserializationError err = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
     http.end();
@@ -134,12 +135,13 @@ class HttpsInstaller : public jig::FirmwareInstaller {
   jig::InstallResult install(const jig::ReleaseInfo& release, const std::function<void(uint32_t, uint32_t)>& progress) override {
     jig::InstallResult out;
     diagf("Update: installing %s (%u bytes), heap %u", release.version.c_str(), static_cast<unsigned>(release.binSize), static_cast<unsigned>(ESP.getFreeHeap()));
-    std::string expected;
-    if (!release.sha256Url.empty()) {
+    std::string expected = release.sha256;  // from the release information: no extra connections
+    if (expected.empty() && !release.sha256Url.empty()) {
       const std::string err = fetchChecksum(release.sha256Url, expected);
       if (!err.empty()) return fail(out, err);
       diagf("Update: checksum file read");
     }
+    diagf("Update: checksum %s", expected.empty() ? "not available, the image is only checked by the device" : "known");
 
     Connection c;
     int code = 0;

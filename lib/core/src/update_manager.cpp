@@ -36,6 +36,18 @@ bool endsWith(const std::string& s, const std::string& suffix) {
   return s.size() >= suffix.size() && s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
+// "sha256:<64 hex digits>", as the release API reports an asset's digest, to lowercase hex; "" if it is anything else.
+std::string hexDigest(const std::string& digest) {
+  const std::string prefix = "sha256:";
+  if (digest.size() != prefix.size() + 64 || digest.compare(0, prefix.size(), prefix) != 0) return "";
+  std::string hex = digest.substr(prefix.size());
+  for (char& ch : hex) {
+    if (!std::isxdigit(static_cast<unsigned char>(ch))) return "";
+    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+  }
+  return hex;
+}
+
 std::string messageFor(const std::string& code) {
   if (code == "bad_release") return "the release information could not be read";
   if (code == "not_a_release") return "the latest release is a draft or a pre-release";
@@ -143,6 +155,7 @@ std::string parseRelease(const std::string& json, ReleaseInfo& out) {
       binName = name;
       info.binUrl = url;
       info.binSize = asset["size"] | 0u;
+      info.sha256 = hexDigest(asset["digest"] | "");
     }
   }
   if (info.binUrl.empty()) return "no_firmware";
