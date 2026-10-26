@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.4
+
+- No change to how the device works. This is the first release a 0.7.3 device can install from the dashboard (System → Firmware updates), since 0.7.3 is the first version whose installer completes.
+
 ## 0.7.3
 
 - **Installing from the repository now completes.** In 0.7.2 the download stopped half way (or crashed near the end) because the device did not have enough free memory for the secure connections. Three changes: the Bluetooth stack is shut down for the download (it holds most of the spare memory) and the device restarts afterwards, whether the install worked or not (if it failed, the reason is kept and shown on the dashboard after the restart); the release's SHA-256 is taken from the release information (GitHub reports each file's `digest`), so the separate `.sha256` file is only fetched when that is missing, which cuts four secure connections to two; and the install runs on a temporary task with a larger stack. Checked on a board: 0.7.0 → 0.7.2 from this repository's release in 42 seconds.
