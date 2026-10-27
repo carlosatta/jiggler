@@ -19,6 +19,7 @@
 #include "nvs_network_store.h"
 #include "schedule.h"
 #include "token_store.h"
+#include "log_hook.h"
 #include "update_manager.h"
 #include "update_task.h"
 #include "wifi_setup.h"
@@ -110,6 +111,7 @@ void setup() {
   api.schedules = &schedules;
   api.clock = &clockStore;
   api.button = &buttonStore;
+  jig::setLogSink([](const std::string& line) { diagf("%s", line.c_str()); });
   api.log = &eventLog;
   api.updates = &updates;
   // An install needs the memory the Bluetooth stack holds: it is shut down for the download, and the device restarts
@@ -141,8 +143,12 @@ void loop() {
   }
   if (now - lastAliveLog >= 300000) {
     lastAliveLog = now;
-    diagf("alive: heap %u (lowest %u), Bluetooth %s, link %s", static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
-          jig::bluetoothStateName(bluetoothState), ble.connected() ? "up" : "down");
+    const jig::ScheduleStatus sched = schedules.status();
+    const jig::RunState run = controller.status().runState;
+    diagf("alive: heap %u (lowest %u), Bluetooth %s, link %s, jiggler %s, window %s, paired %d", static_cast<unsigned>(ESP.getFreeHeap()),
+          static_cast<unsigned>(ESP.getMinFreeHeap()), jig::bluetoothStateName(bluetoothState), ble.connected() ? "up" : "down",
+          run == jig::RunState::Running ? "running" : run == jig::RunState::Paused ? "paused" : "stopped", sched.active ? "open" : "closed",
+          ble.pairedCount());
   }
   if (now - lastScheduleTick >= 1000) {
     lastScheduleTick = now;

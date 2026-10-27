@@ -204,13 +204,22 @@ var JigLib = (function () {
     return { text: lead, tone: u.error ? 'bad' : u.available ? 'ok' : 'idle', canInstall: !!u.available, working: false };
   }
 
+  // What Status says while the jiggler is stopped, given the `schedule` object of /api/status.
+  function stoppedNote(sched) {
+    if (sched && sched.active && sched.ownerStopped)
+      return 'Not running. A schedule window is open, but the jiggler was stopped on purpose, so it stays stopped until the next window opens. Press Start to run it now.';
+    if (sched && sched.active && sched.blocked) return 'Not running. A schedule window is open, but no computer is paired yet.';
+    if (sched && sched.active) return 'A schedule window is open: the jiggler is starting.';
+    return 'Not running. Press Start to keep the computer awake.';
+  }
+
   // The address people see for a repository: "github.com/owner/repo".
   function repoLabel(url) { return String(url || '').replace(/^https?:\/\//, ''); }
 
   return { DAYS: DAYS, DAY_LABELS: DAY_LABELS, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, fmtSince: fmtSince, hex4: hex4,
     connectionView: connectionView, checkNewToken: checkNewToken, minutesUntil: minutesUntil, runForMinutes: runForMinutes,
     stopsAt: stopsAt, describeDays: describeDays, scheduleEnd: scheduleEnd, scheduleSummary: scheduleSummary,
-    ACTION_LABELS: ACTION_LABELS, describeJitter: describeJitter, clockLine: clockLine, describeUpdate: describeUpdate, repoLabel: repoLabel,
+    ACTION_LABELS: ACTION_LABELS, describeJitter: describeJitter, clockLine: clockLine, describeUpdate: describeUpdate, repoLabel: repoLabel, stoppedNote: stoppedNote,
     endFromDuration: endFromDuration, durationFromEnd: durationFromEnd, describeRepeat: describeRepeat };
 })();
 

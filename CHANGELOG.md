@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.5
+
+- **Fix: a schedule window that was open did not keep the jiggler running.** A window used to act only when it opened or closed, so if the jiggler stopped inside an open window for any reason other than you stopping it (a timed run that ended, the paired computer missing for an instant, a restart that raced the Bluetooth stack), it stayed stopped until the next window, even though Schedule said the window was open. Now, inside an open window, a jiggler that stopped by itself is started again within a second. **A stop you asked for is still respected**: Stop on the dashboard, the button, the API, or a "stop" action. It counts only until the jiggler is running again (so Stop followed by a one-minute run, whose end is not a stop you asked for, runs again).
+- **Status says why.** While the jiggler is stopped inside an open window, Status now says "A schedule window is open, but the jiggler was stopped on purpose, so it stays stopped until the next window opens. Press Start to run it now." (`schedule.ownerStopped` in the API), instead of only "Not running".
+- **The event log records the decisions**: every start, stop and pause of the jiggler (and why: time limit, no paired computer), each schedule window opening and closing, actions, and saves. The 5-minute heartbeat now includes the jiggler state, whether a window is open, and the number of paired computers. `GET /api/log` shows them, so a case like "the window is open but nothing runs" can be explained afterwards.
+- Checked on a board, in the browser: boot with the window open (runs), Stop (stays stopped, with the explanation), Start, a one-minute run inside the window (runs again afterwards), and a temporary window that opened (jiggler started) and closed (stopped).
+
 ## 0.7.4
 
 - No change to how the device works. This is the first release a 0.7.3 device can install from the dashboard (System → Firmware updates), since 0.7.3 is the first version whose installer completes.

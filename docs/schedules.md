@@ -46,7 +46,7 @@ The times are read in the device's **timezone**, which you pick in **System → 
 
 ### How it behaves
 
-- **Edges, not enforcement.** A window starts the jiggler when it opens and stops it when the last open window closes. If you stop it by hand in the middle of a window it stays stopped until the next window opens; if you start it by hand outside a window it keeps running until you stop it.
+- **A window starts the jiggler when it opens, keeps it running while it is open, and stops it when the last open window closes.** If the jiggler stops by itself inside an open window (a timed run ended, the paired computer was missing for a moment) it is started again within a second. **A stop you asked for is respected**: if you press Stop (dashboard, button, API) or a "stop" action runs, it stays stopped until the next window opens, and Status says so ("the jiggler was stopped on purpose"). If you start it again by hand, the schedule is back in charge. If you start it by hand outside a window, it keeps running until you stop it.
 - **Saving a window that is open right now starts the jiggler.** A window you add or change is looked at afresh when you save: if the time is inside it, the jiggler starts at once (and a limited schedule counts that as a run). Entries you did not touch keep what they were doing, so a jiggler you stopped by hand inside an untouched window stays stopped. Saving never stops a running jiggler that is outside every window.
 - **After a restart** the schedule is in charge: once the device knows the time, the jiggler matches whether a window is open. Actions are not replayed.
 - **A run is counted when its window opens**, even if you stop the jiggler by hand during it. A window already open when the board restarts is not counted twice.

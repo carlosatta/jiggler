@@ -48,6 +48,7 @@ class Controller {
   CmdResult pauseFor(uint32_t minutes);  // pause, then resume by itself; 1..kMaxRunMinutes; errors: invalid_minutes, not_running
   CmdResult resume();                    // end a pause now, keeping any time limit; error: not_paused
   void stop();
+  uint32_t userStops() const;  // how many times stop() was called: lets a schedule tell a stop someone asked for from one the jiggler did itself
   CmdResult moveNow();
   CmdResult updateConfig(const ConfigPatch& patch);
 
@@ -66,6 +67,7 @@ class Controller {
   mutable std::mutex mutex_;
 
   Config config_;
+  uint32_t userStops_ = 0;
   RunState state_ = RunState::Stopped;
   uint32_t dueMs_ = 0;
   uint32_t stopAtMs_ = 0;

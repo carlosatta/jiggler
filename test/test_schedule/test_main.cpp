@@ -741,6 +741,124 @@ void test_action_json_round_trip_and_validation() {
   }
 }
 
+// What the board went through: a reboot at 17:15 on a Monday inside the weekday window, the evening, the night, and the
+// next morning, one engine tick per second and the controller ticking too, with the owner's real schedules.
+void test_a_weekday_morning_window_starts_the_jiggler_after_an_evening_reboot() {
+  Env e;
+  Schedule workdays = entry("workdays", kWeekdays, 8 * 60 + 30, 570);
+  workdays.jitterMin = 5;
+  Schedule pause = action("action-pause", kWeekdays, 13 * 60 + 30, ScheduleAction::Pause, 5);
+  Schedule resume = action("action-resume", kWeekdays, 14 * 60 + 30, ScheduleAction::Resume, 10);
+  e.setSchedules({workdays, pause, resume});
+  ScheduleEngine boot(e.clock, e.controller, e.blobs, e.clockStore);   // the reboot: a new engine, the same storage
+  boot.begin();
+  uint32_t secs = 0;
+  auto at = [&](int weekday, int day, int hour, int minute) { return LocalTime{static_cast<uint8_t>(weekday), static_cast<uint16_t>(hour * 60 + minute), static_cast<uint32_t>(day)}; };
+  auto run = [&](int weekday, int day, int hour, int minute) {            // one minute of one-second ticks
+    e.clock.local = at(weekday, day, hour, minute);
+    for (int i = 0; i < 60; ++i) {
+      e.clock.now = (secs++) * 1000u;
+      boot.tick();
+      e.controller.tick();
+    }
+  };
+  e.controller.stop();
+  for (int m = 17 * 60 + 15; m < 24 * 60; ++m) {                          // Monday evening, from the reboot
+    run(0, 20752, m / 60, m % 60);
+    if (m == 17 * 60 + 16) TEST_ASSERT_TRUE_MESSAGE(e.running(), "the window is open at the reboot: running");
+    if (m == 18 * 60 + 8) TEST_ASSERT_FALSE_MESSAGE(e.running(), "the window has closed");
+  }
+  for (int m = 0; m < 9 * 60; ++m) {                                      // Tuesday until 09:00
+    run(1, 20753, m / 60, m % 60);
+    if (m == 8 * 60) TEST_ASSERT_FALSE_MESSAGE(e.running(), "before the window");
+    if (m == 8 * 60 + 40) TEST_ASSERT_TRUE_MESSAGE(e.running(), "the window opened at about 08:30: the jiggler must be running");
+  }
+  TEST_ASSERT_TRUE(e.running());
+}
+
+void test_a_jiggler_that_stops_inside_an_open_window_for_another_reason_is_started_again() {
+  Env e;
+  e.setSchedules({entry("work", kWeekdays, 9 * 60, 120)});          // 09:00-11:00
+  e.controller.stop();
+  e.tickAt(0, 8, 59);
+  e.tickAt(0, 9, 0);
+  TEST_ASSERT_TRUE(e.running());
+  e.controller.startFor(1);                                          // a one minute run, started by hand inside the window
+  e.clock.now += 61000;
+  e.controller.tick();                                               // its time is up: the controller stops by itself
+  TEST_ASSERT_FALSE(e.running());
+  e.tickAt(0, 9, 5);                                                 // the window is still open: it runs again
+  TEST_ASSERT_TRUE(e.running());
+  TEST_ASSERT_FALSE(e.engine.status().ownerStopped);
+}
+
+void test_losing_the_paired_computer_for_a_moment_does_not_leave_the_jiggler_stopped() {
+  Env e;
+  e.setSchedules({entry("work", kWeekdays, 9 * 60, 120)});
+  e.controller.stop();
+  e.tickAt(0, 9, 0);
+  TEST_ASSERT_TRUE(e.running());
+  e.clock.paired = false;                                            // the bond count reads zero for an instant
+  e.controller.tick();
+  TEST_ASSERT_FALSE(e.running());
+  e.tickAt(0, 9, 1);                                                 // nothing to run for: it waits, and says why
+  TEST_ASSERT_FALSE(e.running());
+  TEST_ASSERT_EQUAL_STRING("no_computer_paired", e.engine.status().blocked.c_str());
+  e.clock.paired = true;
+  e.tickAt(0, 9, 2);
+  TEST_ASSERT_TRUE(e.running());
+}
+
+void test_a_stop_by_the_owner_inside_the_window_is_respected_until_the_next_window() {
+  Env e;
+  e.setSchedules({entry("work", kWeekdays, 9 * 60, 120)});
+  e.controller.stop();
+  e.tickAt(0, 9, 0);
+  TEST_ASSERT_TRUE(e.running());
+  e.controller.stop();                                               // the owner presses Stop
+  for (int m = 1; m < 60; ++m) e.tickAt(0, 9, m);
+  TEST_ASSERT_FALSE(e.running());
+  TEST_ASSERT_TRUE(e.engine.status().ownerStopped);                  // the page can say "you stopped it"
+  e.tickAt(0, 11, 0);                                                // the window closes
+  TEST_ASSERT_FALSE(e.engine.status().ownerStopped);
+  e.tickAt(1, 8, 59);
+  e.tickAt(1, 9, 0);                                                 // the next window opens
+  TEST_ASSERT_TRUE(e.running());
+}
+
+void test_a_stop_action_inside_the_window_is_respected() {
+  Env e;
+  e.setSchedules({entry("work", kWeekdays, 9 * 60, 480), action("lunch", kWeekdays, 12 * 60, ScheduleAction::Stop)});
+  e.controller.stop();
+  e.tickAt(0, 9, 0);
+  TEST_ASSERT_TRUE(e.running());
+  e.tickAt(0, 11, 59);
+  e.tickAt(0, 12, 0);                                                // the owner's rule stops it
+  for (int m = 1; m < 60; ++m) e.tickAt(0, 12, m);
+  for (int m = 0; m < 60; ++m) e.tickAt(0, 13, m);
+  TEST_ASSERT_FALSE(e.running());
+}
+
+void test_a_stop_by_the_owner_stops_counting_once_the_owner_starts_it_again() {
+  Env e;
+  e.setSchedules({entry("work", kWeekdays, 9 * 60, 120)});
+  e.controller.stop();
+  e.tickAt(0, 9, 0);
+  TEST_ASSERT_TRUE(e.running());
+  e.controller.stop();                                               // the owner stops it...
+  e.tickAt(0, 9, 5);
+  TEST_ASSERT_TRUE(e.engine.status().ownerStopped);
+  e.controller.startFor(1);                                          // ...then starts a one minute run
+  e.tickAt(0, 9, 6);
+  TEST_ASSERT_TRUE(e.running());
+  TEST_ASSERT_FALSE(e.engine.status().ownerStopped);
+  e.clock.now += 61000;
+  e.controller.tick();                                               // the run ends by itself
+  TEST_ASSERT_FALSE(e.running());
+  e.tickAt(0, 9, 8);                                                 // the window is still open: running again
+  TEST_ASSERT_TRUE(e.running());
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_repeat_count_is_validated);
@@ -785,6 +903,12 @@ int main() {
   RUN_TEST(test_an_action_with_jitter_fires_at_the_shifted_minute);
   RUN_TEST(test_an_action_with_a_count_turns_itself_off_after_the_last_one);
   RUN_TEST(test_action_json_round_trip_and_validation);
+  RUN_TEST(test_a_weekday_morning_window_starts_the_jiggler_after_an_evening_reboot);
+  RUN_TEST(test_a_jiggler_that_stops_inside_an_open_window_for_another_reason_is_started_again);
+  RUN_TEST(test_losing_the_paired_computer_for_a_moment_does_not_leave_the_jiggler_stopped);
+  RUN_TEST(test_a_stop_by_the_owner_inside_the_window_is_respected_until_the_next_window);
+  RUN_TEST(test_a_stop_action_inside_the_window_is_respected);
+  RUN_TEST(test_a_stop_by_the_owner_stops_counting_once_the_owner_starts_it_again);
   RUN_TEST(test_schedule_routes_and_status_extras);
   return UNITY_END();
 }

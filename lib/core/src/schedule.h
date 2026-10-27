@@ -54,6 +54,7 @@ struct ScheduleStatus {
   bool active = false;  // some enabled window is open right now
   size_t enabledCount = 0;
   std::string blocked;  // "no_computer_paired" while an open window cannot start the jiggler yet; else empty
+  bool ownerStopped = false;  // a window is open, but the jiggler was stopped on purpose since it opened: it stays stopped until the next window
 };
 
 // The random shift (minutes, -jitterMin..+jitterMin) of one time of one entry on one day. Deterministic, so a
@@ -101,6 +102,7 @@ class ScheduleEngine {
   std::vector<bool> open_;  // per schedule: its window was open at the previous evaluation (to spot openings and closings)
   std::optional<int64_t> lastAbs_;  // the minute of the previous evaluation, for the actions
   bool unsaved_ = false;    // a countdown changed and could not be stored yet; tick() retries
+  uint32_t stopsAtOpen_ = 0;  // Controller::userStops() the last time the jiggler was seen running in an open window: a later change means the owner stopped it
   bool startPending_ = false;  // a window opened but the jiggler could not start (no computer paired yet): retry while it is open
 };
 

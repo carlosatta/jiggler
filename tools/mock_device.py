@@ -58,6 +58,8 @@ class Device:
         self.disc_seconds = 180
         self.off_on_disconnect = True
         self.button_gpio = 0
+        self.window_open = False
+        self.owner_stopped = False
         self.upd = {"mode": "manual", "checkTime": "03:00", "repoUrl": "https://github.com/carlosatta/jiggler", "latest": None, "checked_at": None,
                     "busy_until": None, "kind": None, "error": None}
         self.schedules = [{"id": "workdays", "enabled": True, "kind": "window", "days": ["mon", "tue", "wed", "thu", "fri"], "start": "09:00",
@@ -73,6 +75,13 @@ class Device:
         self.connected_since = None
         self.peers = []
         self.bonded_at_open = None
+        self.window_open = name == "windowstopped"
+        self.owner_stopped = name == "windowstopped"
+        if name == "windowstopped":
+            self.peers = [{"address": "02:00:00:00:00:01", "label": "Computer 1"}]
+            self.connected_since = now - 600
+            self.state = "stopped"
+            return True
         if name == "firstrun":
             self.state = "stopped"
             self.stop_at = None
@@ -192,7 +201,7 @@ class Device:
                 "resumesInMs": int((self.resume_at - now) * 1000) if self.state == "paused" and self.resume_at else None,
                 "update": {"mode": self.upd["mode"], "available": self.update_json()["available"], "version": (self.upd["latest"] or {}).get("version"), "state": self.update_json()["state"]},
                 "time": self.time_json(),
-                "schedule": {"active": False, "enabledCount": sum(1 for s in self.schedules if s["enabled"]), "blocked": None},
+                "schedule": {"active": self.window_open, "enabledCount": sum(1 for s in self.schedules if s["enabled"]), "blocked": None, "ownerStopped": self.window_open and self.owner_stopped and self.state == "stopped"},
                 "moveCount": self.moves, "lastMoveAgoMs": int((now - self.last_move) * 1000), "lastMoveAt": int(self.last_move),
                 "config": self.config, "bluetooth": summary,
                 "device": {"version": "0.5.0", "bleName": "Bluetooth Mouse", "bleAddress": "02:aa:bb:cc:00:01"}}

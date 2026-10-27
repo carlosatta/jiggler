@@ -253,3 +253,11 @@ test('repoLabel drops the scheme', () => {
   assert.equal(JigLib.repoLabel('https://github.com/carlosatta/jiggler'), 'github.com/carlosatta/jiggler');
   assert.equal(JigLib.repoLabel(''), '');
 });
+
+test('stoppedNote explains a stopped jiggler inside an open schedule window', () => {
+  assert.match(JigLib.stoppedNote({ active: true, ownerStopped: true, blocked: null }), /stopped on purpose.*next window opens.*Press Start/);
+  assert.match(JigLib.stoppedNote({ active: true, ownerStopped: false, blocked: 'no_computer_paired' }), /no computer is paired/);
+  assert.match(JigLib.stoppedNote({ active: true, ownerStopped: false, blocked: null }), /is starting/);
+  assert.equal(JigLib.stoppedNote({ active: false, ownerStopped: false, blocked: null }), 'Not running. Press Start to keep the computer awake.');
+  assert.equal(JigLib.stoppedNote(undefined), 'Not running. Press Start to keep the computer awake.');
+});

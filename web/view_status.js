@@ -70,7 +70,7 @@
         text += ' · stops at ' + JigLib.stopsAt(left0, new Date());
       }
       next.textContent = text + '.';
-    } else if (!running) next.textContent = 'Not running. Press Start to keep the computer awake.';
+    } else if (!running) next.textContent = JigLib.stoppedNote(s.schedule);
     else {
       var parts = [];
       if (!s.mouseConnected && s.msToNextMove === 0) parts.push('Waiting for a computer to connect.');

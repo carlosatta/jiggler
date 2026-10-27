@@ -1,5 +1,7 @@
 #include "controller.h"
 
+#include "log_hook.h"
+
 namespace jig {
 
 Controller::Controller(Platform& platform, Rng& rng, ConfigStore& store)
@@ -51,11 +53,14 @@ CmdResult noComputer() {
 
 CmdResult Controller::start() {
   std::lock_guard<std::mutex> lock(mutex_);
+  const RunState before = state_;
   CmdResult r = startLocked();
   if (r.ok) {
     hasStopAt_ = false;
     hasResumeAt_ = false;
   }
+  if (r.ok && before != RunState::Running) logEvent("Jiggler: started");
+  else if (!r.ok) logEvent("Jiggler: could not start (" + r.error + ")");
   return r;
 }
 
@@ -94,6 +99,7 @@ CmdResult Controller::startLocked() {
 void Controller::pause() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (state_ != RunState::Running) return;
+  logEvent("Jiggler: paused");
   pausedRemainingMs_ = remainingMsLocked();
   state_ = RunState::Paused;
   hasResumeAt_ = false;  // a time limit, if any, keeps running: it is a moment, not a stopwatch
@@ -133,8 +139,15 @@ CmdResult Controller::resume() {
   return startLocked();
 }
 
+uint32_t Controller::userStops() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return userStops_;
+}
+
 void Controller::stop() {
   std::lock_guard<std::mutex> lock(mutex_);
+  userStops_++;
+  if (state_ != RunState::Stopped) logEvent("Jiggler: stopped");
   state_ = RunState::Stopped;
   hasStopAt_ = false;
   hasResumeAt_ = false;
@@ -175,6 +188,7 @@ CmdResult Controller::updateConfig(const ConfigPatch& patch) {
 std::optional<Plan> Controller::tick() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (hasStopAt_ && static_cast<int32_t>(platform_.nowMs() - stopAtMs_) >= 0) {
+    if (state_ != RunState::Stopped) logEvent("Jiggler: stopped (the time limit of the run ended)");
     state_ = RunState::Stopped;
     hasStopAt_ = false;
     hasResumeAt_ = false;
@@ -184,6 +198,7 @@ std::optional<Plan> Controller::tick() {
     startLocked();  // the pause is over
   }
   if (state_ != RunState::Stopped && !platform_.computerPaired()) {  // every computer was forgotten
+    logEvent("Jiggler: stopped (no paired computer)");
     state_ = RunState::Stopped;
     hasStopAt_ = false;
     hasResumeAt_ = false;

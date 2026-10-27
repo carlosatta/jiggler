@@ -90,7 +90,7 @@ See [bluetooth.md](bluetooth.md) for the states and the pairing policy. `GET /ap
 
 ## Schedules
 
-See [schedules.md](schedules.md). `GET /api/status` also carries `"schedule": {active, enabledCount, blocked}`; `blocked` is `"no_computer_paired"` while an open window cannot start the jiggler yet, else `null`.
+See [schedules.md](schedules.md). `GET /api/status` also carries `"schedule": {active, enabledCount, blocked, ownerStopped}`; `blocked` is `"no_computer_paired"` while an open window cannot start the jiggler yet, else `null`; `ownerStopped` is true while a window is open but the jiggler was stopped on purpose (it stays stopped until the next window).
 
 | Method | Path | Description |
 |---|---|---|

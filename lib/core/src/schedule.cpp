@@ -1,5 +1,7 @@
 #include "schedule.h"
 
+#include "log_hook.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -255,6 +257,7 @@ std::string scheduleStatusToJson(const ScheduleStatus& s) {
   doc["enabledCount"] = s.enabledCount;
   if (s.blocked.empty()) doc["blocked"] = nullptr;
   else doc["blocked"] = s.blocked;
+  doc["ownerStopped"] = s.ownerStopped;
   std::string out;
   serializeJson(doc, out);
   return out;
@@ -310,6 +313,7 @@ CmdResult ScheduleEngine::replace(const ScheduleSettings& requested) {
   for (size_t i = 0; i < next.schedules.size(); ++i)
     for (size_t j = 0; j < settings_.schedules.size(); ++j)
       if (sameSchedule(next.schedules[i], settings_.schedules[j])) carried[i] = open_[j];
+  logEvent("Schedule: saved " + std::to_string(next.schedules.size()) + " entries");
   settings_ = next;
   unsaved_ = false;
   first_ = false;  // the owner has just looked at the schedules; from here only edges count
@@ -415,16 +419,30 @@ void ScheduleEngine::tick() {
   }
   if (changed) saveLocked();
 
+  const bool stopped = controller_.status().runState == RunState::Stopped;
   if (first_ || open != wasOpen_) {
+    logEvent(std::string("Schedule: ") + (first_ ? "first look, " : "") + (open ? "a window is open" : "no window is open"));
     if (open) startPending_ = !controller_.start().ok;
     else {
       controller_.stop();
       startPending_ = false;
     }
+    stopsAtOpen_ = controller_.userStops();  // stops from here on are the owner's
   } else if (open && startPending_) {
     startPending_ = !controller_.start().ok;
+  } else if (open && controller_.userStops() == stopsAtOpen_ && stopped) {
+    // Inside an open window the jiggler is supposed to run. It stopped, and nobody asked it to (a timed run ended, the
+    // paired computer was missing for a moment...): start it again. A stop the owner asked for is left alone.
+    logEvent("Schedule: the window is open and the jiggler had stopped by itself: starting it again");
+    startPending_ = !controller_.start().ok;
   }
-  for (ScheduleAction a : due) runLocked(a);
+  // A stop counts as the owner's only until the jiggler is seen running again (the owner started it, or it was started
+  // for them): after that, a stop that nobody asked for is the jiggler's own and is made up for.
+  if (open && controller_.status().runState != RunState::Stopped) stopsAtOpen_ = controller_.userStops();
+  for (ScheduleAction a : due) {
+    logEvent(std::string("Schedule: action ") + scheduleActionName(a));
+    runLocked(a);
+  }
   first_ = false;
   wasOpen_ = open;
   lastAbs_ = absNow;
@@ -437,6 +455,7 @@ ScheduleStatus ScheduleEngine::status() const {
   const auto now = platform_.localTime(clock_.posixTz());
   if (now) s.active = anyWindowOpenLocked(*now);
   if (s.active && startPending_) s.blocked = "no_computer_paired";
+  s.ownerStopped = s.active && !startPending_ && controller_.userStops() != stopsAtOpen_ && controller_.status().runState == RunState::Stopped;
   return s;
 }
 
