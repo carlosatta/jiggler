@@ -159,6 +159,9 @@ class Device:
                                  "connected": connected and p is self.peers[0]})
         return out
 
+    def installing(self):
+        return self.upd["kind"] == "install"  # the download; the device answers again once it restarts
+
     def update_json(self):
         u = self.upd
         now = time.time()
@@ -174,7 +177,7 @@ class Device:
         state = "checking" if u["kind"] == "check" else "installing" if u["kind"] == "install" else "restarting" if u["kind"] == "restarting" else "idle"
         progress = 0
         if state == "installing" and u["busy_until"]:
-            progress = max(0, min(99, int(100 - (u["busy_until"] - now) / 4.0 * 100)))
+            progress = max(0, min(99, int(100 - (u["busy_until"] - now) / 20.0 * 100)))
         elif state == "restarting":
             progress = 100
         return {"mode": u["mode"], "checkTime": u["checkTime"], "repoUrl": u["repoUrl"], "defaultRepoUrl": "https://github.com/carlosatta/jiggler", "current": "0.6.0",
@@ -209,6 +212,7 @@ class Device:
 
 DEV = None
 PAGE = None
+INSTALLING_PAGE = b"<!doctype html><meta charset=utf-8><meta http-equiv=refresh content=15><title>Installing</title><body><h1>Installing new firmware</h1><p>This page comes back by itself.</p>"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -258,6 +262,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def route(self, method):
         path = self.path.split("?")[0]
+        # Like the device from 0.7.7 on: while firmware downloads, only the progress is answered, so that building
+        # an answer cannot take the memory the secure download needs.
+        if not path.startswith("/__") and DEV.installing() and not (method == "GET" and path == "/api/updates"):
+            if path.startswith("/api/") or path == "/mcp":
+                return self.send(503, {"error": "installing", "message": "the device is installing new firmware; it answers again when it restarts"})
+            return self.send(503, INSTALLING_PAGE, "text/html")
         if method == "GET" and path == "/":
             return self.send(200, PAGE, "text/html")
         if method == "GET" and path == "/manifest.webmanifest":
@@ -364,6 +374,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/time/set" and method == "POST":
             d.time_source = "manual"
             return self.send(200, {"timezone": d.tz, "ntpServer": d.ntp, "status": d.time_json()})
+        if path == "/api/updates" and method == "GET" and d.installing():
+            u = d.update_json()
+            return self.send(200, {"state": u["state"], "progress": u["progress"]})
         if path == "/api/updates" and method in ("GET", "PUT"):
             if method == "PUT":
                 b = body or {}
@@ -391,7 +404,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/updates/install" and method == "POST":
             if not d.update_json()["available"]:
                 return self.err(409, "no_update", "", "there is no newer version to install: check for updates first")
-            d.upd["kind"] = "install"; d.upd["busy_until"] = time.time() + 4
+            d.upd["kind"] = "install"; d.upd["busy_until"] = time.time() + 20  # long enough to watch the dashboard behave
             return self.send(202, d.update_json())
         if path == "/api/button":
             gpios = [0, 4, 5, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33]

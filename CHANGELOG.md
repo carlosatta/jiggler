@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.8
+
+- **One question instead of two while an install runs.** 0.7.7 stopped the dashboard's status poll but left the System page asking for the progress on its own, so the device still answered about twice a second. Now `App.poll` is the only thing that asks, every five seconds, and it hands the answer to the page. Checked in a browser against the mock device: one refused status request, then four small progress reads in eighteen seconds, and the page picks up the restart by itself.
+
 ## 0.7.7
 
 - **Fix: an install no longer dies because someone is watching it.** Downloading firmware needs about 20 KB of memory in one block for the secure connection, and every ordinary answer the device builds (the status object, the dashboard page) competes for it. With the dashboard open on a phone, or any client polling, the download would stop part way and the device would restart on the old version, sometimes without even recording why. From the moment the download starts until the device restarts, the device now answers `GET /api/updates` with two fields (`{"state","progress"}`) and refuses everything else with a short `503 {"error":"installing"}`; `/` answers with a small page that reloads itself.

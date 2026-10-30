@@ -885,6 +885,10 @@ var App = (function () {
     inFlight = true;
     call('GET', '/api/updates').then(function (res) {
       if (res.status === 503) return;
+      if (res.status === 200 && res.data) {
+        // the one poller while an install runs: views get the answer instead of asking for it themselves
+        Object.keys(views).forEach(function (n) { if (views[n].onUpdate) views[n].onUpdate(res.data); });
+      }
       if (res.data && res.data.state === 'restarting') { installing = false; waitForDevice(); return; }
       if (res.status === 200 && res.data && res.data.state !== 'installing') {
         installing = false;   // it ended without a restart: a failure the device survived
@@ -1846,10 +1850,12 @@ var App = (function () {
     repoLink.textContent = JigLib.repoLabel(upd.repoUrl);
     if (upd.state === 'restarting' && !restartWatching) { restartWatching = true; App.waitForDevice(); }
     clearTimeout(updTimer);
-    // An install leaves the device almost no memory: ask three times less often than for a check.
-    if (d.working && !$('view-system').hidden) updTimer = setTimeout(loadUpdates, upd.state === 'installing' ? 4500 : 1500);
+    // While an install runs the device is left alone: App.poll asks for the progress every few seconds and hands
+    // it here through onUpdate, so this view does not ask for it as well.
+    if (d.working && !App.installing() && !$('view-system').hidden) updTimer = setTimeout(loadUpdates, 1500);
   }
   function loadUpdates() {
+    if (App.installing()) return;  // App.poll is the only one asking while an install runs; it feeds onUpdate
     App.call('GET', '/api/updates').then(function (res) {
       if (res.status !== 200) return;
       upd = JigLib.mergeUpdate(upd, res.data);  // while installing the device answers with state and progress only
@@ -1899,7 +1905,9 @@ var App = (function () {
 
   App.view('system', {
     load: function () { loadNetwork(); loadTime(); loadButton(); loadUpdates(); if (App.status()) { renderInfo(App.status()); renderTimeNow(App.status()); } },
-    onStatus: function (s) { renderInfo(s); renderTimeNow(s); }
+    onStatus: function (s) { renderInfo(s); renderTimeNow(s); },
+    // While an install runs, App.poll is the only thing asking the device anything; this is its answer.
+    onUpdate: function (u) { upd = JigLib.mergeUpdate(upd, u); renderUpdates(); }
   });
 })();
 

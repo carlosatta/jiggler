@@ -147,6 +147,10 @@ var App = (function () {
     inFlight = true;
     call('GET', '/api/updates').then(function (res) {
       if (res.status === 503) return;
+      if (res.status === 200 && res.data) {
+        // the one poller while an install runs: views get the answer instead of asking for it themselves
+        Object.keys(views).forEach(function (n) { if (views[n].onUpdate) views[n].onUpdate(res.data); });
+      }
       if (res.data && res.data.state === 'restarting') { installing = false; waitForDevice(); return; }
       if (res.status === 200 && res.data && res.data.state !== 'installing') {
         installing = false;   // it ended without a restart: a failure the device survived
