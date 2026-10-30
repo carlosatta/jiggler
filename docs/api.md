@@ -83,7 +83,7 @@ See [bluetooth.md](bluetooth.md) for the states and the pairing policy. `GET /ap
 | DELETE | `/api/bluetooth/pairing` | Close Discovery |
 | POST | `/api/bluetooth/disable` | Switch Bluetooth off: disconnects the computer, closes Discovery, silences the radio. Stored |
 | POST | `/api/bluetooth/enable` | Switch Bluetooth on |
-| PUT | `/api/bluetooth/settings` | `{"discoverySeconds":300,"offWhenComputerDisconnects":false}` (30–600 s; both optional) |
+| PUT | `/api/bluetooth/settings` | `{"discoverySeconds":300,"offWhenComputerDisconnects":true}` (30–600 s; both optional; the switch-off is off by default) |
 | PUT | `/api/bluetooth/peers/<id>` | Rename a paired computer: `{"label":"Office desktop"}` (1–32 chars) |
 | DELETE | `/api/bluetooth/peers/<id>` | Forget one computer (`404 not_found` if unknown) |
 | DELETE | `/api/bluetooth/peers` | Forget all computers. Discovery stays closed until you open it |

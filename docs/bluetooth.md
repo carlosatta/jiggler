@@ -34,9 +34,11 @@ To pair the very first computer on a new board you need either the board in your
 
 **Turn Bluetooth off** (`POST /api/bluetooth/disable`, MCP `disable_bluetooth`, or a schedule action) disconnects the computer, closes Discovery and silences the radio. Pairings are kept. **Turn Bluetooth on** (`POST /api/bluetooth/enable`) lets the paired computers find the device and reconnect by themselves. The choice is stored, so a restart does not undo it.
 
-The same happens when you press *Disconnect* in the **computer's own Bluetooth menu** while the setting **Turn Bluetooth off when the computer itself disconnects** is ticked (it is by default): the board sees the computer end the connection and switches Bluetooth off, because otherwise the computer reconnects at once (macOS does). Untick it, or `PUT /api/bluetooth/settings {"offWhenComputerDisconnects": false}`, and the device just goes back to Waiting.
+When the **computer itself** ends the connection — *Disconnect* in its own Bluetooth menu, going to sleep, or its Bluetooth being switched off — the device goes back to **Waiting** and keeps advertising, so that computer reconnects by itself when it comes back, like any other mouse. That is the default.
 
-> **Sleep.** Some computers disconnect Bluetooth devices on their own when they go to sleep, and the board cannot tell that apart from you pressing Disconnect. With the setting ticked, Bluetooth then switches off, and the computer cannot reconnect after waking until you turn it on again from the dashboard. If that happens to you, untick the setting.
+The setting **Turn Bluetooth off when the computer itself disconnects** changes it (`PUT /api/bluetooth/settings {"offWhenComputerDisconnects": true}`): the board then switches Bluetooth off until you turn it on again, and the event log says why. Tick it if you want *Disconnect* on the computer to stick, because otherwise the computer reconnects at once (macOS does). A board updated from a version before 0.7.6, where the setting was ticked by default, has it turned off once; if you tick it yourself afterwards, that choice is kept.
+
+> **Sleep.** A computer going to sleep sends exactly what it sends when you press Disconnect, and the board cannot tell the two apart. With the setting ticked, closing the lid switches Bluetooth off, and the computer cannot reconnect after waking until you turn it on again from the dashboard. That is why it is off by default.
 
 A peripheral cannot tell a deliberate "Connect" click on the computer from its automatic reconnection, so while Bluetooth is off nothing can connect, not even by hand.
 

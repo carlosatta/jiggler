@@ -14,7 +14,7 @@ An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, contro
 - The owner opens **Discovery** (dashboard, API, MCP, a schedule action, or holding the button for 5 to 10 seconds). It lasts 180 seconds by default (30 to 600, configurable), closes by itself or when a computer pairs, and can be stopped early.
 - A computer that tries to pair while it is closed is refused.
 - The dashboard shows which computer is connected and since when; computers can be renamed, forgotten, disconnected.
-- Four Bluetooth states: **Off** (radio silent), **Waiting** (on; only paired computers can find and reach the device, it is not discoverable), **Discovery** (a new computer can pair) and **Connected**. Switching Bluetooth off (dashboard, API, MCP, a schedule action, or the computer's own Disconnect when the setting says so) is stored.
+- Four Bluetooth states: **Off** (radio silent), **Waiting** (on; only paired computers can find and reach the device, it is not discoverable), **Discovery** (a new computer can pair) and **Connected**. Switching Bluetooth off (dashboard, API, MCP, a schedule action, or the computer's own Disconnect when the setting says so, which it does not by default: a computer that disconnects or sleeps reconnects by itself) is stored.
 - Everything except the dashboard page itself requires the API token.
 
 ## 3. Movement

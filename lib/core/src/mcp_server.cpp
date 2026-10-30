@@ -282,7 +282,7 @@ void fillExtTools(JsonArray tools, const ApiContext& ctx) {
       addTool(tools, t.name, "Change the Bluetooth settings.", &schema);
       JsonObject p = schema["properties"].to<JsonObject>();
       addNumberProp(p, "discoverySeconds", "integer", 30, 600, "How long Discovery stays open (default 180).");
-      addProp(p, "offWhenComputerDisconnects", "boolean", "Switch Bluetooth off when the computer itself ends the connection (default true).");
+      addProp(p, "offWhenComputerDisconnects", "boolean", "Switch Bluetooth off when the computer itself ends the connection (default false: it reconnects by itself).");
     } else if (name == "forget_computer") {
       addTool(tools, t.name, "Forget one paired computer (it will have to pair again). Use the id from get_bluetooth.", &schema);
       addProp(schema["properties"].to<JsonObject>(), "id", "string", "The computer id from get_bluetooth.");

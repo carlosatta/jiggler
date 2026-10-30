@@ -64,7 +64,7 @@ const char* bluetoothStateName(BluetoothState state);
 struct BluetoothSettings {
   bool enabled = true;
   uint32_t discoverySeconds = kDefaultPairingSec;  // 30..600
-  bool offWhenComputerDisconnects = true;          // the computer's own "Disconnect" switches Bluetooth off
+  bool offWhenComputerDisconnects = false;         // when set, the computer's own "Disconnect" switches Bluetooth off
 };
 
 struct BluetoothStatus {

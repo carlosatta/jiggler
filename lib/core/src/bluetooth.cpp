@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cctype>
 
+#include "log_hook.h"
+
 namespace jig {
 
 namespace {
@@ -17,6 +19,9 @@ uint32_t msUntil(uint32_t until, uint32_t now) {
 
 constexpr const char* kLabelsKey = "peers";
 constexpr const char* kSettingsKey = "btsettings";
+// Stamped on every settings blob this version writes. A blob without it was written before the device started
+// behaving like an ordinary mouse (see begin()).
+constexpr uint32_t kSettingsVersion = 1;
 
 bool validDiscoverySeconds(uint32_t s) { return s >= kMinPairingSec && s <= kMaxPairingSec; }
 
@@ -86,6 +91,14 @@ void BluetoothManager::begin() {
       if (doc["discoverySeconds"].is<uint32_t>() && validDiscoverySeconds(doc["discoverySeconds"].as<uint32_t>()))
         settings_.discoverySeconds = doc["discoverySeconds"].as<uint32_t>();
       if (doc["offWhenComputerDisconnects"].is<bool>()) settings_.offWhenComputerDisconnects = doc["offWhenComputerDisconnects"].as<bool>();
+      // Settings saved before this version: back then the computer's own Disconnect switched Bluetooth off by
+      // default, and since a computer going to sleep sends the same thing, the device could not be reached again
+      // after the lid was closed. Turn that off once and stamp the blob, so a later deliberate choice is kept.
+      // The radio is left as it was found: only the owner switches it back on.
+      if (doc["v"].isNull()) {
+        settings_.offWhenComputerDisconnects = false;
+        saveSettingsLocked();  // a failed write just means the next boot migrates again
+      }
     }
   }
   applyLocked();
@@ -97,10 +110,12 @@ void BluetoothManager::tick() {
   expireLocked();
   if (link_.takePeerDisconnectRequest() && settings_.enabled && settings_.offWhenComputerDisconnects && !windowOpen_ &&
       !link_.bondedAddresses().empty()) {
-    // The computer ended the connection on purpose; left on, it would reconnect at once.
+    // The computer ended the connection on purpose; left on, it would reconnect at once. Off by default: see the
+    // migration in begin().
     settings_.enabled = false;
     connectedSince_.clear();
     saveSettingsLocked();
+    logEvent("Bluetooth: switched off, the computer ended the connection");
   }
   applyLocked();
 }
@@ -217,6 +232,7 @@ CmdResult BluetoothManager::stopPairing() {
 
 bool BluetoothManager::saveSettingsLocked() {
   JsonDocument doc;
+  doc["v"] = kSettingsVersion;
   doc["enabled"] = settings_.enabled;
   doc["discoverySeconds"] = settings_.discoverySeconds;
   doc["offWhenComputerDisconnects"] = settings_.offWhenComputerDisconnects;

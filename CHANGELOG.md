@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.6
+
+- **The device now behaves like an ordinary mouse when the computer disconnects.** Closing the lid, letting the computer sleep or switching its Bluetooth off used to switch Bluetooth off on the board as well, so the computer could not reconnect when it came back until you turned it on again from the dashboard: a computer going to sleep sends exactly what it sends when you press *Disconnect*, and the board cannot tell them apart. The device now stays in **Waiting** and keeps advertising, and the computer reconnects by itself, like any other mouse.
+- **The setting is still there, now off by default.** Tick **Turn Bluetooth off when the computer itself disconnects** on Computers (`offWhenComputerDisconnects`, also in `/api/status` and MCP) if you want *Disconnect* on the computer to stick. A board updated from an earlier version, where it was ticked by default, has it turned off once at the first boot; tick it again and that choice is kept. The radio is left as it was found: if your board is on **Off** because the old behaviour switched it off, turn it on once from the dashboard, the button or the API.
+- When the setting is ticked and it fires, the event log says why ("Bluetooth: switched off, the computer ended the connection"), instead of only the raw disconnect reason.
+
 ## 0.7.5
 
 - **Fix: a schedule window that was open did not keep the jiggler running.** A window used to act only when it opened or closed, so if the jiggler stopped inside an open window for any reason other than you stopping it (a timed run that ended, the paired computer missing for an instant, a restart that raced the Bluetooth stack), it stayed stopped until the next window, even though Schedule said the window was open. Now, inside an open window, a jiggler that stopped by itself is started again within a second. **A stop you asked for is still respected**: Stop on the dashboard, the button, the API, or a "stop" action. It counts only until the jiggler is running again (so Stop followed by a one-minute run, whose end is not a stop you asked for, runs again).

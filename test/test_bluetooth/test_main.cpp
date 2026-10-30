@@ -4,11 +4,13 @@
 
 #include <algorithm>
 #include <string>
+#include <vector>
 
 #include "api_ex.h"
 #include "bluetooth.h"
 #include "controller.h"
 #include "fakes.h"
+#include "log_hook.h"
 
 using namespace jig;
 
@@ -241,13 +243,70 @@ void test_settings_report_a_full_storage() {
   TEST_ASSERT_EQUAL_UINT32(180, e.bt.settings().discoverySeconds);
 }
 
-void test_the_computer_disconnecting_can_be_left_alone() {
-  Env e({kA});
-  TEST_ASSERT_TRUE(e.bt.updateSettings(std::nullopt, false).ok);
-  e.link.peerRequestedDisconnect = true;
-  e.bt.tick();
-  TEST_ASSERT_TRUE(e.link.enabled);
-  TEST_ASSERT_TRUE(BluetoothState::Waiting == e.bt.status().state);
+void test_settings_written_before_this_version_lose_the_switch_off_on_disconnect() {
+  FakeClock clock;
+  FakeBleLink link;
+  link.bonded = {kA};
+  MemBlobStore blobs;
+  // the shape the old firmware wrote: no version, and the switch-off was the default
+  blobs.put("btsettings", "{\"enabled\":true,\"discoverySeconds\":240,\"offWhenComputerDisconnects\":true}");
+  BluetoothManager bt(clock, link, blobs);
+  bt.begin();
+  TEST_ASSERT_FALSE(bt.settings().offWhenComputerDisconnects);
+  TEST_ASSERT_EQUAL_UINT32(240, bt.settings().discoverySeconds);  // the rest of the stored settings is kept
+}
+
+void test_the_migration_runs_once_so_asking_for_the_switch_off_again_sticks() {
+  FakeClock clock;
+  FakeBleLink link;
+  link.bonded = {kA};
+  MemBlobStore blobs;
+  blobs.put("btsettings", "{\"enabled\":true,\"discoverySeconds\":180,\"offWhenComputerDisconnects\":true}");
+  BluetoothManager bt(clock, link, blobs);
+  bt.begin();
+  TEST_ASSERT_TRUE(bt.updateSettings(std::nullopt, true).ok);  // the owner wants it after all
+  BluetoothManager again(clock, link, blobs);
+  again.begin();
+  TEST_ASSERT_TRUE(again.settings().offWhenComputerDisconnects);
+}
+
+void test_the_migration_leaves_bluetooth_off_if_that_is_how_the_board_was_left() {
+  FakeClock clock;
+  FakeBleLink link;
+  link.bonded = {kA};
+  MemBlobStore blobs;
+  blobs.put("btsettings", "{\"enabled\":false,\"discoverySeconds\":180,\"offWhenComputerDisconnects\":true}");
+  BluetoothManager bt(clock, link, blobs);
+  bt.begin();
+  TEST_ASSERT_FALSE(bt.settings().offWhenComputerDisconnects);
+  TEST_ASSERT_FALSE(bt.settings().enabled);  // only the owner switches the radio back on
+  TEST_ASSERT_FALSE(link.enabled);
+}
+
+void test_a_board_with_no_stored_settings_is_not_written_to_at_boot() {
+  FakeClock clock;
+  FakeBleLink link;
+  MemBlobStore blobs;
+  BluetoothManager bt(clock, link, blobs);
+  bt.begin();
+  TEST_ASSERT_FALSE(bt.settings().offWhenComputerDisconnects);
+  TEST_ASSERT_TRUE(blobs.get("btsettings").empty());  // nothing to migrate: no write
+}
+
+void test_a_migration_that_cannot_be_saved_still_applies_and_is_retried() {
+  FakeClock clock;
+  FakeBleLink link;
+  link.bonded = {kA};
+  FlakyBlobStore blobs;
+  blobs.put("btsettings", "{\"enabled\":true,\"discoverySeconds\":180,\"offWhenComputerDisconnects\":true}");
+  blobs.failPuts = true;
+  BluetoothManager bt(clock, link, blobs);
+  bt.begin();
+  TEST_ASSERT_FALSE(bt.settings().offWhenComputerDisconnects);  // this run behaves like a mouse anyway
+  blobs.failPuts = false;
+  BluetoothManager again(clock, link, blobs);
+  again.begin();  // the stored blob was never stamped, so the next boot migrates it again
+  TEST_ASSERT_FALSE(again.settings().offWhenComputerDisconnects);
 }
 
 void test_peers_get_stable_default_labels_and_can_be_renamed() {
@@ -614,8 +673,19 @@ void test_pairing_stays_closed_when_every_bond_disappears() {
   TEST_ASSERT_FALSE(e.link.pairingOpen);
 }
 
-void test_the_computer_disconnecting_switches_bluetooth_off_like_the_dashboard_does() {
+void test_the_computer_disconnecting_leaves_bluetooth_on_like_a_real_mouse_does() {
   Env e({kA});
+  e.link.connected = {kA};
+  e.link.peerRequestedDisconnect = true;  // the computer going to sleep looks exactly like its Disconnect
+  e.link.connected.clear();
+  e.bt.tick();
+  TEST_ASSERT_TRUE(BluetoothState::Waiting == e.bt.status().state);
+  TEST_ASSERT_TRUE(e.link.enabled);  // so it can reconnect by itself when it comes back
+}
+
+void test_the_computer_disconnecting_switches_bluetooth_off_when_the_owner_asks_for_it() {
+  Env e({kA});
+  TEST_ASSERT_TRUE(e.bt.updateSettings(std::nullopt, true).ok);
   e.link.connected = {kA};
   e.link.peerRequestedDisconnect = true;
   e.link.connected.clear();
@@ -627,6 +697,19 @@ void test_the_computer_disconnecting_switches_bluetooth_off_like_the_dashboard_d
   TEST_ASSERT_FALSE(e.link.enabled);
   e.bt.enable();
   TEST_ASSERT_TRUE(e.link.enabled);
+}
+
+void test_switching_bluetooth_off_for_the_computer_says_why_in_the_log() {
+  std::vector<std::string> lines;
+  setLogSink([&lines](const std::string& line) { lines.push_back(line); });
+  Env e({kA});
+  TEST_ASSERT_TRUE(e.bt.updateSettings(std::nullopt, true).ok);
+  e.link.connected = {kA};
+  e.link.peerRequestedDisconnect = true;
+  e.bt.tick();
+  setLogSink(nullptr);
+  TEST_ASSERT_EQUAL_UINT32(1, lines.size());
+  TEST_ASSERT_TRUE(lines[0].find("the computer ended the connection") != std::string::npos);
 }
 
 void test_a_disconnect_during_a_pairing_window_is_not_a_request_to_hide() {
@@ -692,7 +775,11 @@ int main() {
   RUN_TEST(test_discovery_length_is_configurable_and_persists);
   RUN_TEST(test_off_is_remembered_across_a_restart);
   RUN_TEST(test_settings_report_a_full_storage);
-  RUN_TEST(test_the_computer_disconnecting_can_be_left_alone);
+  RUN_TEST(test_settings_written_before_this_version_lose_the_switch_off_on_disconnect);
+  RUN_TEST(test_the_migration_runs_once_so_asking_for_the_switch_off_again_sticks);
+  RUN_TEST(test_the_migration_leaves_bluetooth_off_if_that_is_how_the_board_was_left);
+  RUN_TEST(test_a_board_with_no_stored_settings_is_not_written_to_at_boot);
+  RUN_TEST(test_a_migration_that_cannot_be_saved_still_applies_and_is_retried);
   RUN_TEST(test_starting_pairing_switches_bluetooth_on);
   RUN_TEST(test_peers_get_stable_default_labels_and_can_be_renamed);
   RUN_TEST(test_rename_validation);
@@ -720,7 +807,9 @@ int main() {
   RUN_TEST(test_state_is_in_the_json_without_any_countdown_for_off);
   RUN_TEST(test_the_first_pairing_needs_a_window_like_every_other);
   RUN_TEST(test_pairing_stays_closed_when_every_bond_disappears);
-  RUN_TEST(test_the_computer_disconnecting_switches_bluetooth_off_like_the_dashboard_does);
+  RUN_TEST(test_the_computer_disconnecting_leaves_bluetooth_on_like_a_real_mouse_does);
+  RUN_TEST(test_the_computer_disconnecting_switches_bluetooth_off_when_the_owner_asks_for_it);
+  RUN_TEST(test_switching_bluetooth_off_for_the_computer_says_why_in_the_log);
   RUN_TEST(test_a_disconnect_during_a_pairing_window_is_not_a_request_to_hide);
   RUN_TEST(test_a_disconnect_with_nothing_paired_is_not_a_request_to_hide);
   RUN_TEST(test_remaining_time_never_underflows_when_the_deadline_passes_between_two_clock_reads);

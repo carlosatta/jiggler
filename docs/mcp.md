@@ -57,7 +57,7 @@ Tool failures are returned as a normal result with `isError: true` and a JSON er
 | `start_pairing` | `seconds` (30–600, optional; default the configured length) | Open Discovery (switches Bluetooth on) |
 | `disable_bluetooth` | – | Switch Bluetooth off: the device is invisible until `enable_bluetooth` |
 | `enable_bluetooth` | – | Switch Bluetooth on |
-| `set_bluetooth_settings` | `discoverySeconds`, `offWhenComputerDisconnects` | Change the Discovery length or what the computer's own Disconnect does |
+| `set_bluetooth_settings` | `discoverySeconds`, `offWhenComputerDisconnects` | Change the Discovery length or what the computer's own Disconnect does (by default nothing: it reconnects by itself) |
 | `forget_computer` | `id` | Forget one paired computer |
 
 A tool is only listed when its service is available on the device.
