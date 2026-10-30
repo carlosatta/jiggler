@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.7
+
+- **Fix: an install no longer dies because someone is watching it.** Downloading firmware needs about 20 KB of memory in one block for the secure connection, and every ordinary answer the device builds (the status object, the dashboard page) competes for it. With the dashboard open on a phone, or any client polling, the download would stop part way and the device would restart on the old version, sometimes without even recording why. From the moment the download starts until the device restarts, the device now answers `GET /api/updates` with two fields (`{"state","progress"}`) and refuses everything else with a short `503 {"error":"installing"}`; `/` answers with a small page that reloads itself.
+- **The dashboard follows along.** It stops asking for the status while an install runs, shows "Installing new firmware. The dashboard waits…", and reads the progress every 5 seconds instead of every second. The progress bar and the release link keep working, and the page reconnects by itself after the restart, as before.
+- The leftover of a failed install was confusing: the version found before the restart is only kept in memory, so Install answered "there is no newer version to install: check for updates first" while the page still showed the old "a version is available" line. With the install itself fixed this should not come up; a check sets it right.
+
 ## 0.7.6
 
 - **The device now behaves like an ordinary mouse when the computer disconnects.** Closing the lid, letting the computer sleep or switching its Bluetooth off used to switch Bluetooth off on the board as well, so the computer could not reconnect when it came back until you turned it on again from the dashboard: a computer going to sleep sends exactly what it sends when you press *Disconnect*, and the board cannot tell them apart. The device now stays in **Waiting** and keeps advertising, and the computer reconnects by itself, like any other mouse.

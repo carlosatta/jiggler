@@ -50,7 +50,7 @@ An ESP32 that keeps a computer awake by acting as a real Bluetooth mouse, contro
 
 - Status LED: off = one short flash every 3 s, waiting = slow blink, Discovery = fast blink, connected and running = solid (brief off-flash per movement), connected but stopped = two short flashes every 3 s; it also shows what releasing the button would do.
 - Button (BOOT / GPIO 0 by default, configurable): tap = start or stop the jiggler, hold 5 to 10 s and release = open Discovery, hold 30 s = switch network mode.
-- USB power. After the first USB flash, firmware updates go over WiFi (OTA): from a file, or from the project's GitHub releases (default repository `carlosatta/jiggler`, changeable), either on demand, automatically, or ignored, with the daily look at a time the owner chooses. The dashboard's About card links to the repository.
+- USB power. After the first USB flash, firmware updates go over WiFi (OTA): from a file, or from the project's GitHub releases (default repository `carlosatta/jiggler`, changeable), either on demand, automatically, or ignored, with the daily look at a time the owner chooses. While an install runs the device answers only the progress and refuses every other request, because the secure download needs the memory an answer would take. The dashboard's About card links to the repository.
 
 ## Not included for now
 

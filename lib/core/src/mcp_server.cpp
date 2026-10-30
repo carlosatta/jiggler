@@ -524,6 +524,11 @@ McpReply handleMcp(Controller& c, const std::string& body) {
   return handle(bare, false, body);
 }
 
-McpReply handleMcpEx(ApiContext& ctx, const std::string& body) { return handle(ctx, true, body); }
+McpReply handleMcpEx(ApiContext& ctx, const std::string& body) {
+  // Same reason as the REST guard in api_ex.cpp: nothing large is built while firmware downloads.
+  if (ctx.updates && ctx.updates->installActivity().active)
+    return {503, "{\"error\":\"installing\",\"message\":\"the device is installing new firmware; it answers again when it restarts\"}"};
+  return handle(ctx, true, body);
+}
 
 }  // namespace jig

@@ -169,7 +169,7 @@
   function renderUpdates() {
     if (!upd) return;
     var d = JigLib.describeUpdate(upd);
-    $('updVersion').textContent = 'Running version ' + upd.current + '.';
+    if (upd.current) $('updVersion').textContent = 'Running version ' + upd.current + '.';
     $('updInfo').textContent = d.text;
     $('updProgress').hidden = upd.state !== 'installing';
     $('updProgress').value = upd.progress || 0;
@@ -192,12 +192,13 @@
     repoLink.textContent = JigLib.repoLabel(upd.repoUrl);
     if (upd.state === 'restarting' && !restartWatching) { restartWatching = true; App.waitForDevice(); }
     clearTimeout(updTimer);
-    if (d.working && !$('view-system').hidden) updTimer = setTimeout(loadUpdates, 1500);
+    // An install leaves the device almost no memory: ask three times less often than for a check.
+    if (d.working && !$('view-system').hidden) updTimer = setTimeout(loadUpdates, upd.state === 'installing' ? 4500 : 1500);
   }
   function loadUpdates() {
     App.call('GET', '/api/updates').then(function (res) {
       if (res.status !== 200) return;
-      upd = res.data;
+      upd = JigLib.mergeUpdate(upd, res.data);  // while installing the device answers with state and progress only
       renderUpdates();
     }).catch(function () {});
   }

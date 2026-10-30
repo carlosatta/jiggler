@@ -712,13 +712,25 @@ var JigLib = (function () {
     return 'Not running. Press Start to keep the computer awake.';
   }
 
+  // While the device installs new firmware it answers GET /api/updates with two fields only (state, progress), so
+  // that building the full answer cannot take the memory the download needs. Keep what we already knew around it.
+  function mergeUpdate(prev, next) {
+    if (!next) return prev;
+    if (!prev || next.current !== undefined) return next;  // a full answer replaces what we had
+    var out = {};
+    for (var k in prev) if (Object.prototype.hasOwnProperty.call(prev, k)) out[k] = prev[k];
+    out.state = next.state;
+    out.progress = next.progress || 0;
+    return out;
+  }
+
   // The address people see for a repository: "github.com/owner/repo".
   function repoLabel(url) { return String(url || '').replace(/^https?:\/\//, ''); }
 
   return { DAYS: DAYS, DAY_LABELS: DAY_LABELS, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, fmtSince: fmtSince, hex4: hex4,
     connectionView: connectionView, checkNewToken: checkNewToken, minutesUntil: minutesUntil, runForMinutes: runForMinutes,
     stopsAt: stopsAt, describeDays: describeDays, scheduleEnd: scheduleEnd, scheduleSummary: scheduleSummary,
-    ACTION_LABELS: ACTION_LABELS, describeJitter: describeJitter, clockLine: clockLine, describeUpdate: describeUpdate, repoLabel: repoLabel, stoppedNote: stoppedNote,
+    ACTION_LABELS: ACTION_LABELS, describeJitter: describeJitter, clockLine: clockLine, describeUpdate: describeUpdate, mergeUpdate: mergeUpdate, repoLabel: repoLabel, stoppedNote: stoppedNote,
     endFromDuration: endFromDuration, durationFromEnd: durationFromEnd, describeRepeat: describeRepeat };
 })();
 
@@ -854,10 +866,40 @@ var App = (function () {
   }
 
   // ---- status polling ---------------------------------------------------------------------
+  // While the device installs new firmware it refuses everything but the progress (503 "installing"), because
+  // building an answer can take the memory the download needs. The dashboard then stops asking for the status and
+  // looks at the progress every few seconds instead, which costs the device almost nothing.
+  var installing = false, lastProbeAt = 0;
+  var kInstallProbeMs = 5000;
+
+  function enterInstalling() {
+    if (installing) return;
+    installing = true;
+    lastProbeAt = 0;
+    banner('Installing new firmware. The dashboard waits: the device restarts when it is done.', '');
+  }
+
+  function probeInstall() {
+    if (performance.now() - lastProbeAt < kInstallProbeMs) return;
+    lastProbeAt = performance.now();
+    inFlight = true;
+    call('GET', '/api/updates').then(function (res) {
+      if (res.status === 503) return;
+      if (res.data && res.data.state === 'restarting') { installing = false; waitForDevice(); return; }
+      if (res.status === 200 && res.data && res.data.state !== 'installing') {
+        installing = false;   // it ended without a restart: a failure the device survived
+        banner('');
+        reloadCurrent();
+      }
+    }).catch(function () {}).then(function () { inFlight = false; });
+  }
+
   function poll() {
     if (!token || inFlight || restarting || document.hidden) return;
+    if (installing) { probeInstall(); return; }
     inFlight = true;
     call('GET', '/api/status').then(function (res) {
+      if (res.status === 503 && res.data && res.data.error === 'installing') { enterInstalling(); return; }
       status = res.data;
       receivedAt = performance.now();
       Object.keys(views).forEach(function (n) { if (views[n].onStatus) views[n].onStatus(status); });
@@ -878,6 +920,7 @@ var App = (function () {
       fetch('/api/status', { headers: { 'Authorization': 'Bearer ' + token } }).then(function (r) {
         if (r.ok) {
           restarting = false;
+          installing = false;
           failures = 0;
           document.body.classList.remove('offline');
           banner('Device is back online.', 'good', 4000);
@@ -906,7 +949,7 @@ var App = (function () {
   return {
     $: $, el: el, labeled: labeled, clearErrors: clearErrors, showError: showError, say: say, banner: banner,
     call: call, setToken: setToken, getToken: getToken, showLogin: showLogin, confirmInline: confirmInline,
-    view: view, route: route, poll: poll, tick: tick, restartDevice: restartDevice, waitForDevice: waitForDevice, reloadCurrent: reloadCurrent,
+    view: view, route: route, poll: poll, tick: tick, installing: function () { return installing; }, restartDevice: restartDevice, waitForDevice: waitForDevice, reloadCurrent: reloadCurrent,
     status: function () { return status; }
   };
 })();
@@ -1780,7 +1823,7 @@ var App = (function () {
   function renderUpdates() {
     if (!upd) return;
     var d = JigLib.describeUpdate(upd);
-    $('updVersion').textContent = 'Running version ' + upd.current + '.';
+    if (upd.current) $('updVersion').textContent = 'Running version ' + upd.current + '.';
     $('updInfo').textContent = d.text;
     $('updProgress').hidden = upd.state !== 'installing';
     $('updProgress').value = upd.progress || 0;
@@ -1803,12 +1846,13 @@ var App = (function () {
     repoLink.textContent = JigLib.repoLabel(upd.repoUrl);
     if (upd.state === 'restarting' && !restartWatching) { restartWatching = true; App.waitForDevice(); }
     clearTimeout(updTimer);
-    if (d.working && !$('view-system').hidden) updTimer = setTimeout(loadUpdates, 1500);
+    // An install leaves the device almost no memory: ask three times less often than for a check.
+    if (d.working && !$('view-system').hidden) updTimer = setTimeout(loadUpdates, upd.state === 'installing' ? 4500 : 1500);
   }
   function loadUpdates() {
     App.call('GET', '/api/updates').then(function (res) {
       if (res.status !== 200) return;
-      upd = res.data;
+      upd = JigLib.mergeUpdate(upd, res.data);  // while installing the device answers with state and progress only
       renderUpdates();
     }).catch(function () {});
   }

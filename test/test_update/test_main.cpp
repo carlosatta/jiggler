@@ -4,6 +4,7 @@
 
 #include "api_ex.h"
 #include "fakes.h"
+#include "mcp_server.h"
 #include "update_manager.h"
 
 using namespace jig;
@@ -37,10 +38,12 @@ struct FakeInstaller : FirmwareInstaller {
   InstallResult result{true, ""};
   int calls = 0;
   std::string lastVersion;
+  std::function<void()> during;  // runs while the manager is installing, like a request arriving mid-download
   InstallResult install(const ReleaseInfo& release, const std::function<void(uint32_t, uint32_t)>& progress) override {
     calls++;
     lastVersion = release.version;
     progress(500, 1000);
+    if (during) during();
     progress(1000, 1000);
     return result;
   }
@@ -533,6 +536,82 @@ void test_changing_the_repository_forgets_what_was_found_there() {
   TEST_ASSERT_EQUAL_STRING("https://api.github.com/repos/someone/fork/releases/latest", e.source.urls.back().c_str());
 }
 
+void test_while_installing_the_api_only_answers_the_progress() {
+  Env e;
+  XorShiftRng rng{1};
+  MemStore config;
+  Controller controller{e.clock, rng, config};
+  controller.begin();
+  ApiContext ctx{controller};
+  ctx.updates = &e.manager;
+  e.check();
+  std::vector<HttpResponse> seen;
+  McpReply mcp;
+  e.installer.during = [&] {
+    seen.push_back(handleApiEx(ctx, "GET", "/api/status", ""));
+    seen.push_back(handleApiEx(ctx, "GET", "/api/config", ""));
+    seen.push_back(handleApiEx(ctx, "POST", "/api/updates/install", ""));
+    seen.push_back(handleApiEx(ctx, "GET", "/api/updates", ""));
+    mcp = handleMcpEx(ctx, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}");
+  };
+  TEST_ASSERT_TRUE(e.manager.requestInstall().ok);
+  e.manager.runPending(e.source, e.installer);
+
+  JsonDocument d;
+  for (size_t i = 0; i < 3; ++i) {  // everything that would build a large answer is refused, briefly
+    TEST_ASSERT_EQUAL_INT_MESSAGE(503, seen[i].status, std::to_string(i).c_str());
+    TEST_ASSERT_TRUE(seen[i].body.size() < 160);
+    deserializeJson(d, seen[i].body);
+    TEST_ASSERT_EQUAL_STRING("installing", d["error"].as<const char*>());
+  }
+  TEST_ASSERT_EQUAL_INT(200, seen[3].status);  // the progress stays readable
+  TEST_ASSERT_TRUE(seen[3].body.size() < 64);
+  deserializeJson(d, seen[3].body);
+  TEST_ASSERT_EQUAL_STRING("installing", d["state"].as<const char*>());
+  TEST_ASSERT_EQUAL_INT(50, d["progress"].as<int>());
+  TEST_ASSERT_TRUE(d["latest"].isNull());  // no release details, no repository address: nothing to build
+  TEST_ASSERT_EQUAL_INT(503, mcp.httpStatus);
+}
+
+void test_the_progress_answer_says_when_the_device_is_about_to_restart() {
+  Env e;
+  XorShiftRng rng{1};
+  MemStore config;
+  Controller controller{e.clock, rng, config};
+  controller.begin();
+  ApiContext ctx{controller};
+  ctx.updates = &e.manager;
+  e.check();
+  TEST_ASSERT_TRUE(e.manager.requestInstall().ok);
+  e.manager.runPending(e.source, e.installer);  // the install worked: the device is about to restart
+  HttpResponse r = handleApiEx(ctx, "GET", "/api/updates", "");
+  JsonDocument d;
+  deserializeJson(d, r.body);
+  TEST_ASSERT_EQUAL_INT(200, r.status);
+  TEST_ASSERT_EQUAL_STRING("restarting", d["state"].as<const char*>());
+  TEST_ASSERT_EQUAL_INT(100, d["progress"].as<int>());
+}
+
+void test_once_the_install_is_over_the_full_answers_come_back() {
+  Env e;
+  XorShiftRng rng{1};
+  MemStore config;
+  Controller controller{e.clock, rng, config};
+  controller.begin();
+  ApiContext ctx{controller};
+  ctx.updates = &e.manager;
+  e.check();
+  e.installer.result = {false, "the download was cut short; nothing was installed"};
+  TEST_ASSERT_TRUE(e.manager.requestInstall().ok);
+  e.manager.runPending(e.source, e.installer);
+  HttpResponse s = handleApiEx(ctx, "GET", "/api/status", "");
+  TEST_ASSERT_EQUAL_INT(200, s.status);
+  JsonDocument d;
+  deserializeJson(d, handleApiEx(ctx, "GET", "/api/updates", "").body);
+  TEST_ASSERT_EQUAL_STRING("manual", d["mode"].as<const char*>());
+  TEST_ASSERT_EQUAL_STRING("the download was cut short; nothing was installed", d["error"].as<const char*>());
+}
+
 void test_update_routes() {
   Env e;
   XorShiftRng rng{1};
@@ -621,6 +700,9 @@ int main() {
   RUN_TEST(test_ignore_mode_never_checks_by_itself_but_check_now_still_works);
   RUN_TEST(test_automatic_mode_installs_at_the_chosen_time);
   RUN_TEST(test_changing_the_repository_forgets_what_was_found_there);
+  RUN_TEST(test_while_installing_the_api_only_answers_the_progress);
+  RUN_TEST(test_the_progress_answer_says_when_the_device_is_about_to_restart);
+  RUN_TEST(test_once_the_install_is_over_the_full_answers_come_back);
   RUN_TEST(test_update_routes);
   return UNITY_END();
 }

@@ -141,6 +141,14 @@ See [schedules.md](schedules.md). `GET /api/status` also carries `"schedule": {a
 
 `blocked` is true when that version was installed earlier but the device is still running something else; automatic mode then does not try again. This is separate from `POST /api/update` (singular) below, which uploads a file.
 
+**While an install runs the device answers almost nothing.** A secure download needs about 20 KB of memory in one block, and building an ordinary answer can take that block away and cost the install. So from the moment the download starts until the device restarts:
+
+- `GET /api/updates` answers `200 {"state":"installing","progress":42}` — those two fields and nothing else.
+- Every other `/api/*` path and `/mcp` answer `503 {"error":"installing"}`.
+- `GET /` and the icons answer `503` with a small page that reloads itself.
+
+Ask for the progress every few seconds, not every second, and do not poll anything else: the dashboard does the same.
+
 ## Firmware update from a file
 
 | Method | Path | Description |

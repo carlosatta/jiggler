@@ -95,6 +95,14 @@ struct UpdateStatus {
   std::string error;       // the last check or install failed
 };
 
+// What an install in flight looks like to the rest of the device. Reading it costs nothing: three scalars behind
+// the mutex, no strings, no copies, because it is read on the way into every HTTP request.
+struct InstallActivity {
+  bool active = false;  // firmware is downloading, or it is written and the device is about to restart
+  UpdateState state = UpdateState::Idle;
+  uint8_t progress = 0;
+};
+
 // Looks for new releases of the project, tells the owner, and installs them when asked or when set to automatic.
 // The network work is done by a worker that calls runPending(); everything else here only records and decides.
 // Thread-safe.
@@ -106,6 +114,7 @@ class UpdateManager {
   UpdateStatus status();
   std::string statusJson();   // GET /api/updates
   std::string summaryJson();  // the small object in /api/status
+  InstallActivity installActivity();  // for the request guard: see handleApiEx
   std::string defaultRepoUrl() const { return kDefaultRepoUrl; }
 
   CmdResult updateSettings(std::optional<UpdateMode> mode, std::optional<std::string> repoUrl,

@@ -128,10 +128,40 @@ var App = (function () {
   }
 
   // ---- status polling ---------------------------------------------------------------------
+  // While the device installs new firmware it refuses everything but the progress (503 "installing"), because
+  // building an answer can take the memory the download needs. The dashboard then stops asking for the status and
+  // looks at the progress every few seconds instead, which costs the device almost nothing.
+  var installing = false, lastProbeAt = 0;
+  var kInstallProbeMs = 5000;
+
+  function enterInstalling() {
+    if (installing) return;
+    installing = true;
+    lastProbeAt = 0;
+    banner('Installing new firmware. The dashboard waits: the device restarts when it is done.', '');
+  }
+
+  function probeInstall() {
+    if (performance.now() - lastProbeAt < kInstallProbeMs) return;
+    lastProbeAt = performance.now();
+    inFlight = true;
+    call('GET', '/api/updates').then(function (res) {
+      if (res.status === 503) return;
+      if (res.data && res.data.state === 'restarting') { installing = false; waitForDevice(); return; }
+      if (res.status === 200 && res.data && res.data.state !== 'installing') {
+        installing = false;   // it ended without a restart: a failure the device survived
+        banner('');
+        reloadCurrent();
+      }
+    }).catch(function () {}).then(function () { inFlight = false; });
+  }
+
   function poll() {
     if (!token || inFlight || restarting || document.hidden) return;
+    if (installing) { probeInstall(); return; }
     inFlight = true;
     call('GET', '/api/status').then(function (res) {
+      if (res.status === 503 && res.data && res.data.error === 'installing') { enterInstalling(); return; }
       status = res.data;
       receivedAt = performance.now();
       Object.keys(views).forEach(function (n) { if (views[n].onStatus) views[n].onStatus(status); });
@@ -152,6 +182,7 @@ var App = (function () {
       fetch('/api/status', { headers: { 'Authorization': 'Bearer ' + token } }).then(function (r) {
         if (r.ok) {
           restarting = false;
+          installing = false;
           failures = 0;
           document.body.classList.remove('offline');
           banner('Device is back online.', 'good', 4000);
@@ -180,7 +211,7 @@ var App = (function () {
   return {
     $: $, el: el, labeled: labeled, clearErrors: clearErrors, showError: showError, say: say, banner: banner,
     call: call, setToken: setToken, getToken: getToken, showLogin: showLogin, confirmInline: confirmInline,
-    view: view, route: route, poll: poll, tick: tick, restartDevice: restartDevice, waitForDevice: waitForDevice, reloadCurrent: reloadCurrent,
+    view: view, route: route, poll: poll, tick: tick, installing: function () { return installing; }, restartDevice: restartDevice, waitForDevice: waitForDevice, reloadCurrent: reloadCurrent,
     status: function () { return status; }
   };
 })();

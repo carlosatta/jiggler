@@ -261,3 +261,26 @@ test('stoppedNote explains a stopped jiggler inside an open schedule window', ()
   assert.equal(JigLib.stoppedNote({ active: false, ownerStopped: false, blocked: null }), 'Not running. Press Start to keep the computer awake.');
   assert.equal(JigLib.stoppedNote(undefined), 'Not running. Press Start to keep the computer awake.');
 });
+
+test('mergeUpdate keeps what the small installing answer leaves out', () => {
+  const full = { mode: 'manual', current: '0.7.6', repoUrl: 'https://github.com/a/b', checkTime: '03:00',
+                 state: 'idle', progress: 0, latest: { version: '0.7.7' }, available: true };
+  // while installing the device answers with two fields only: the rest must survive
+  const small = JigLib.mergeUpdate(full, { state: 'installing', progress: 42 });
+  assert.equal(small.current, '0.7.6');
+  assert.equal(small.repoUrl, 'https://github.com/a/b');
+  assert.equal(small.latest.version, '0.7.7');
+  assert.equal(small.state, 'installing');
+  assert.equal(small.progress, 42);
+  assert.notEqual(small, full);  // a copy: the caller can compare
+
+  // a full answer replaces everything, including fields the small one could not clear
+  const back = JigLib.mergeUpdate(small, { mode: 'manual', current: '0.7.7', state: 'idle', progress: 0, latest: null, available: false });
+  assert.equal(back.current, '0.7.7');
+  assert.equal(back.latest, null);
+
+  // nothing known yet, or nothing to merge
+  assert.deepEqual(JigLib.mergeUpdate(null, { state: 'installing', progress: 3 }), { state: 'installing', progress: 3 });
+  assert.equal(JigLib.mergeUpdate(full, null), full);
+  assert.equal(JigLib.mergeUpdate(full, { state: 'restarting' }).progress, 0);
+});

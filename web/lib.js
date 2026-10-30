@@ -213,13 +213,25 @@ var JigLib = (function () {
     return 'Not running. Press Start to keep the computer awake.';
   }
 
+  // While the device installs new firmware it answers GET /api/updates with two fields only (state, progress), so
+  // that building the full answer cannot take the memory the download needs. Keep what we already knew around it.
+  function mergeUpdate(prev, next) {
+    if (!next) return prev;
+    if (!prev || next.current !== undefined) return next;  // a full answer replaces what we had
+    var out = {};
+    for (var k in prev) if (Object.prototype.hasOwnProperty.call(prev, k)) out[k] = prev[k];
+    out.state = next.state;
+    out.progress = next.progress || 0;
+    return out;
+  }
+
   // The address people see for a repository: "github.com/owner/repo".
   function repoLabel(url) { return String(url || '').replace(/^https?:\/\//, ''); }
 
   return { DAYS: DAYS, DAY_LABELS: DAY_LABELS, tr: tr, fmtDuration: fmtDuration, fmtAgo: fmtAgo, fmtSince: fmtSince, hex4: hex4,
     connectionView: connectionView, checkNewToken: checkNewToken, minutesUntil: minutesUntil, runForMinutes: runForMinutes,
     stopsAt: stopsAt, describeDays: describeDays, scheduleEnd: scheduleEnd, scheduleSummary: scheduleSummary,
-    ACTION_LABELS: ACTION_LABELS, describeJitter: describeJitter, clockLine: clockLine, describeUpdate: describeUpdate, repoLabel: repoLabel, stoppedNote: stoppedNote,
+    ACTION_LABELS: ACTION_LABELS, describeJitter: describeJitter, clockLine: clockLine, describeUpdate: describeUpdate, mergeUpdate: mergeUpdate, repoLabel: repoLabel, stoppedNote: stoppedNote,
     endFromDuration: endFromDuration, durationFromEnd: durationFromEnd, describeRepeat: describeRepeat };
 })();
 

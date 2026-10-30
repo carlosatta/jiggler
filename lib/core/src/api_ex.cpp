@@ -1,5 +1,7 @@
 #include "api_ex.h"
 
+#include <cstdio>
+
 namespace jig {
 
 namespace {
@@ -334,10 +336,29 @@ HttpResponse scriptsRoute(ApiContext& ctx, const std::string& method, const std:
   return json(405, errorJson("method_not_allowed"));
 }
 
+// While new firmware downloads, memory is the scarcest thing on the device: the secure connection needs about
+// 20 KB in one block, and an answer built here (the status object, the event log, the dashboard page) can take
+// that block away and cost the install. So everything is refused with one fixed sentence until it is over, and
+// only the progress is answered, from three scalars. Losing a minute of dashboard is worth a download that ends.
+constexpr const char* kInstallingBody =
+    "{\"error\":\"installing\",\"message\":\"the device is installing new firmware; it answers again when it restarts\"}";
+
+InstallActivity installInFlight(ApiContext& ctx) { return ctx.updates ? ctx.updates->installActivity() : InstallActivity{}; }
+
+HttpResponse installAnswer(const InstallActivity& install, const std::string& method, const std::string& path) {
+  if (path == "/api/updates" && method == "GET") {
+    char buf[56];
+    snprintf(buf, sizeof buf, "{\"state\":\"%s\",\"progress\":%u}", updateStateName(install.state), static_cast<unsigned>(install.progress));
+    return json(200, buf);
+  }
+  return json(503, kInstallingBody);
+}
+
 }  // namespace
 
 HttpResponse handleApiEx(ApiContext& ctx, const std::string& method, const std::string& path,
                          const std::string& body) {
+  if (const InstallActivity install = installInFlight(ctx); install.active) return installAnswer(install, method, path);
   if (path == "/api/status" && method == "GET") return statusWithExtras(ctx, handleApi(ctx.controller, method, path, body));
   if (path == "/api/bluetooth" || path.rfind("/api/bluetooth/", 0) == 0) return bluetoothRoute(ctx, method, path, body);
   if (path == "/api/token") return tokenRoute(ctx, method, body);

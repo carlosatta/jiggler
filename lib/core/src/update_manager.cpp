@@ -278,6 +278,15 @@ std::string UpdateManager::statusJson() {
   return out;
 }
 
+InstallActivity UpdateManager::installActivity() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  InstallActivity a;
+  a.active = state_ == UpdateState::Installing || state_ == UpdateState::Restarting;
+  a.state = state_;
+  a.progress = progress_;
+  return a;
+}
+
 std::string UpdateManager::summaryJson() {
   const UpdateStatus s = status();
   JsonDocument doc;

@@ -25,6 +25,25 @@ struct UpdateState {
 };
 
 void setError(UpdateState* st, const char* message) { snprintf(st->error, sizeof(st->error), "%s", message); }
+
+// What a browser gets while firmware downloads. Kept in flash and sent as is: serving the real dashboard means
+// 60 KB through the async server's buffers, and the secure download needs that memory more than the page does.
+const char kInstallingPage[] =
+    "<!doctype html><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\">"
+    "<meta http-equiv=refresh content=15><title>Installing</title>"
+    "<body style=\"font:16px system-ui;margin:3rem;max-width:30rem\"><h1>Installing new firmware</h1>"
+    "<p>The device is downloading and writing the new version, and answers again once it has restarted. "
+    "This page comes back by itself.</p>";
+
+bool installing(jig::ApiContext& api) { return api.updates && api.updates->installActivity().active; }
+
+void sendInstalling(AsyncWebServerRequest* req) {
+  AsyncWebServerResponse* res = req->beginResponse(503, "text/html", reinterpret_cast<const uint8_t*>(kInstallingPage), sizeof(kInstallingPage) - 1);
+  res->addHeader("Cache-Control", "no-store");
+  res->addHeader("Retry-After", "15");
+  req->send(res);
+}
+
 }  // namespace
 
 struct HttpServer::Impl {
@@ -166,7 +185,8 @@ struct HttpServer::Impl {
   bool captive = false;
 
   void servePng(const char* path, const uint8_t* data, size_t size) {
-    server.on(path, HTTP_GET, [data, size](AsyncWebServerRequest* req) {
+    server.on(path, HTTP_GET, [this, data, size](AsyncWebServerRequest* req) {
+      if (api.updates && api.updates->installActivity().active) return sendInstalling(req);
       AsyncWebServerResponse* res = req->beginResponse(200, "image/png", data, size);
       res->addHeader("Cache-Control", "public, max-age=86400");
       req->send(res);
@@ -180,12 +200,14 @@ HttpServer::~HttpServer() = default;
 void HttpServer::begin(bool captive) {
   Impl* s = impl_.get();
   s->captive = captive;
-  s->server.on("/", HTTP_GET, [](AsyncWebServerRequest* req) {
+  s->server.on("/", HTTP_GET, [s](AsyncWebServerRequest* req) {
+    if (installing(s->api)) return sendInstalling(req);
     AsyncWebServerResponse* res = req->beginResponse(200, "text/html", reinterpret_cast<const uint8_t*>(kDashboardHtml), sizeof(kDashboardHtml) - 1);  // streamed from flash, never copied to the heap
     res->addHeader("Cache-Control", "no-store");
     req->send(res);
   });
-  s->server.on("/manifest.webmanifest", HTTP_GET, [](AsyncWebServerRequest* req) {
+  s->server.on("/manifest.webmanifest", HTTP_GET, [s](AsyncWebServerRequest* req) {
+    if (installing(s->api)) return sendInstalling(req);
     AsyncWebServerResponse* res = req->beginResponse(200, "application/manifest+json", reinterpret_cast<const uint8_t*>(webassets::kManifest), sizeof(webassets::kManifest) - 1);
     res->addHeader("Cache-Control", "public, max-age=86400");
     req->send(res);
